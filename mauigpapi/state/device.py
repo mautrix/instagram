@@ -21,7 +21,10 @@ import string
 import time
 import json
 
-from mautrix.types import SerializableAttrs, field, dataclass
+from attr import dataclass
+import attr
+
+from mautrix.types import SerializableAttrs
 
 builds = json.loads(pkgutil.get_data("mauigpapi.state", "samples/builds.json"))
 descriptors = json.loads(pkgutil.get_data("mauigpapi.state", "samples/devices.json"))
@@ -32,7 +35,7 @@ class AndroidDevice(SerializableAttrs['AndroidDevice']):
     id: Optional[str] = None
     descriptor: Optional[str] = None
     uuid: Optional[str] = None
-    phone_id: Optional[str] = field(default=None, json="phoneId")
+    phone_id: Optional[str] = attr.ib(default=None, metadata={"json": "phoneId"})
     # Google Play advertising ID
     adid: Optional[str] = None
     build: Optional[str] = None

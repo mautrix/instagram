@@ -16,7 +16,9 @@
 import pkgutil
 import json
 
-from mautrix.types import SerializableAttrs, dataclass
+from attr import dataclass
+
+from mautrix.types import SerializableAttrs
 
 default_capabilities = json.loads(pkgutil.get_data("mauigpapi.state",
                                                    "samples/supported-capabilities.json"))

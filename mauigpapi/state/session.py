@@ -15,17 +15,20 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from typing import Optional, Union
 
-from mautrix.types import SerializableAttrs, dataclass, field
+from attr import dataclass
+import attr
+
+from mautrix.types import SerializableAttrs
 
 
 @dataclass
 class AndroidSession(SerializableAttrs['AndroidSession']):
-    eu_dc_enabled: Optional[bool] = field(default=None, json="euDCEnabled")
-    thumbnail_cache_busting_value: int = field(default=1000, json="thumbnailCacheBustingValue")
-    ads_opt_out: bool = field(default=None, json="adsOptOut")
+    eu_dc_enabled: Optional[bool] = attr.ib(default=None, metadata={"json": "euDCEnabled"})
+    thumbnail_cache_busting_value: int = attr.ib(default=1000, metadata={"json": "thumbnailCacheBustingValue"})
+    ads_opt_out: bool = attr.ib(default=None, metadata={"json": "adsOptOut"})
 
-    ig_www_claim: Optional[str] = field(default=None, json="igWWWClaim")
+    ig_www_claim: Optional[str] = attr.ib(default=None, metadata={"json": "igWWWClaim"})
     authorization: Optional[str] = None
-    password_encryption_pubkey: Optional[str] = field(default=None, json="passwordEncryptionPubKey")
-    password_encryption_key_id: Union[None, str, int] = field(default=None, json="passwordEncryptionKeyId")
-    region_hint: Optional[str] = field(default=None, json="regionHint")
+    password_encryption_pubkey: Optional[str] = attr.ib(default=None, metadata={"json": "passwordEncryptionPubKey"})
+    password_encryption_key_id: Union[None, str, int] = attr.ib(default=None, metadata={"json": "passwordEncryptionKeyId"})
+    region_hint: Optional[str] = attr.ib(default=None, metadata={"json": "regionHint"})

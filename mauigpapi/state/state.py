@@ -18,9 +18,12 @@ from uuid import UUID
 import random
 import time
 
-from mautrix.types import SerializableAttrs, field, dataclass
+from attr import dataclass
+import attr
 
-from ..errors import IGNoCheckpointError, IGCookieNotFoundError
+from mautrix.types import SerializableAttrs
+
+from ..errors import IGNoCheckpointError, IGCookieNotFoundError, IGUserIDNotFoundError
 from .device import AndroidDevice
 from .session import AndroidSession
 from .application import AndroidApplication
@@ -29,15 +32,15 @@ from .cookies import Cookies
 
 @dataclass
 class AndroidState(SerializableAttrs['AndroidState']):
-    device: AndroidDevice = field(factory=lambda: AndroidDevice())
-    session: AndroidSession = field(factory=lambda: AndroidSession())
-    application: AndroidApplication = field(factory=lambda: AndroidApplication())
+    device: AndroidDevice = attr.ib(factory=lambda: AndroidDevice())
+    session: AndroidSession = attr.ib(factory=lambda: AndroidSession())
+    application: AndroidApplication = attr.ib(factory=lambda: AndroidApplication())
     # experiments: AndroidExperiments
     client_session_id_lifetime: int = 1_200_000
     pigeon_session_id_lifetime: int = 1_200_000
     challenge: 'Optional[ChallengeStateResponse]' = None
-    _challenge_path: Optional[str] = field(default=None, json="challenge_path")
-    cookies: Cookies = field(factory=lambda: Cookies())
+    _challenge_path: Optional[str] = attr.ib(default=None, metadata={"json": "challenge_path"})
+    cookies: Cookies = attr.ib(factory=lambda: Cookies())
 
     @property
     def client_session_id(self) -> str:

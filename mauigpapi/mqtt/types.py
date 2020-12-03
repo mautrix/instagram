@@ -16,7 +16,10 @@
 from typing import Dict, Any, List, Optional
 import json
 
-from mautrix.types import SerializableAttrs, SerializableEnum, JSON, dataclass, field
+from attr import dataclass
+import attr
+
+from mautrix.types import SerializableAttrs, SerializableEnum, JSON
 
 from .subscription import GraphQLQueryID
 
@@ -128,7 +131,7 @@ class TypingStatus(SerializableEnum):
     VISUAL = 2
 
 
-@dataclass
+@dataclass(kw_only=True)
 class CommandResponsePayload(SerializableAttrs['CommandResponsePayload']):
     client_context: Optional[str] = None
     item_id: Optional[str] = None
@@ -136,7 +139,7 @@ class CommandResponsePayload(SerializableAttrs['CommandResponsePayload']):
     thread_id: Optional[str] = None
 
 
-@dataclass
+@dataclass(kw_only=True)
 class CommandResponse(SerializableAttrs['CommandResponse']):
     action: str
     status: str
@@ -144,14 +147,14 @@ class CommandResponse(SerializableAttrs['CommandResponse']):
     payload: CommandResponsePayload
 
 
-@dataclass
+@dataclass(kw_only=True)
 class IrisPayloadData(SerializableAttrs['IrisPayloadData']):
     op: Operation
     path: str
     value: str
 
 
-@dataclass
+@dataclass(kw_only=True)
 class IrisPayload(SerializableAttrs['IrisPayload']):
     data: List[IrisPayloadData]
     message_type: int
@@ -168,20 +171,20 @@ class ViewMode(SerializableEnum):
     PERMANENT = "permanent"
 
 
-@dataclass
+@dataclass(kw_only=True)
 class CreativeConfig(SerializableAttrs['CreativeConfig']):
     capture_type: str
     camera_facing: str
     should_render_try_it_on: bool
 
 
-@dataclass
+@dataclass(kw_only=True)
 class CreateModeAttribution(SerializableAttrs['CreateModeAttribution']):
     type: str
     name: str
 
 
-@dataclass
+@dataclass(kw_only=True)
 class ImageVersion(SerializableAttrs['ImageVersion']):
     width: int
     height: int
@@ -189,12 +192,12 @@ class ImageVersion(SerializableAttrs['ImageVersion']):
     estimated_scan_sizes: Optional[List[int]] = None
 
 
-@dataclass
+@dataclass(kw_only=True)
 class ImageVersions(SerializableAttrs['ImageVersions']):
     candidates: List[ImageVersion]
 
 
-@dataclass
+@dataclass(kw_only=True)
 class VideoVersion(SerializableAttrs['VideoVersion']):
     type: int
     width: int
@@ -215,7 +218,7 @@ class MediaType(SerializableEnum):
     SHOWREEL_NATIVE = 12
 
 
-@dataclass
+@dataclass(kw_only=True)
 class RegularMediaItem(SerializableAttrs['RegularMediaItem']):
     id: str
     image_versions2: Optional[ImageVersions] = None
@@ -229,7 +232,7 @@ class RegularMediaItem(SerializableAttrs['RegularMediaItem']):
     create_mode_attribution: Optional[CreateModeAttribution] = None
 
 
-@dataclass
+@dataclass(kw_only=True)
 class FriendshipStatus(SerializableAttrs['FriendshipStatus']):
     following: bool
     outgoing_request: bool
@@ -237,13 +240,13 @@ class FriendshipStatus(SerializableAttrs['FriendshipStatus']):
     is_restricted: bool
 
 
-@dataclass
+@dataclass(kw_only=True)
 class MinimalUser(SerializableAttrs['MinimalUser']):
     pk: int
     username: str
 
 
-@dataclass
+@dataclass(kw_only=True)
 class User(MinimalUser, SerializableAttrs['User']):
     full_name: str
     is_private: bool
@@ -256,7 +259,7 @@ class User(MinimalUser, SerializableAttrs['User']):
     friendship_status: FriendshipStatus
 
 
-@dataclass
+@dataclass(kw_only=True)
 class Caption(SerializableAttrs['Caption']):
     pk: int
     user_id: int
@@ -275,7 +278,7 @@ class Caption(SerializableAttrs['Caption']):
     media_id: int
 
 
-@dataclass
+@dataclass(kw_only=True)
 class MediaShareItem(SerializableAttrs['MediaShareItem']):
     taken_at: int
     pk: int
@@ -306,7 +309,7 @@ class MediaShareItem(SerializableAttrs['MediaShareItem']):
     organic_tracking_token: str
 
 
-@dataclass
+@dataclass(kw_only=True)
 class ReplayableMediaItem(SerializableAttrs['ReplayableMediaItem']):
     view_mode: ViewMode
     seen_count: int
@@ -314,14 +317,14 @@ class ReplayableMediaItem(SerializableAttrs['ReplayableMediaItem']):
     replay_expiring_at_us: Optional[Any] = None
 
 
-@dataclass
+@dataclass(kw_only=True)
 class VisualMedia(ReplayableMediaItem, SerializableAttrs['VisualMedia']):
     url_expire_at_secs: int
     playback_duration_secs: int
     media: RegularMediaItem
 
 
-@dataclass
+@dataclass(kw_only=True)
 class AudioInfo(SerializableAttrs['AudioInfo']):
     audio_src: str
     duration: int
@@ -329,7 +332,7 @@ class AudioInfo(SerializableAttrs['AudioInfo']):
     waveform_sampling_frequence_hz: int
 
 
-@dataclass
+@dataclass(kw_only=True)
 class VoiceMediaData(SerializableAttrs['VoiceMediaData']):
     id: str
     audio: AudioInfo
@@ -340,12 +343,12 @@ class VoiceMediaData(SerializableAttrs['VoiceMediaData']):
     media_type: MediaType = MediaType.AUDIO
 
 
-@dataclass
+@dataclass(kw_only=True)
 class VoiceMediaItem(ReplayableMediaItem, SerializableAttrs['VoiceMediaItem']):
     media: VoiceMediaData
 
 
-@dataclass
+@dataclass(kw_only=True)
 class AnimatedMediaImage(SerializableAttrs['AnimatedMediaImage']):
     height: str
     mp4: str
@@ -357,12 +360,12 @@ class AnimatedMediaImage(SerializableAttrs['AnimatedMediaImage']):
     width: str
 
 
-@dataclass
+@dataclass(kw_only=True)
 class AnimatedMediaImages(SerializableAttrs['AnimatedMediaImages']):
     fixed_height: Optional[AnimatedMediaImage] = None
 
 
-@dataclass
+@dataclass(kw_only=True)
 class AnimatedMediaItem(SerializableAttrs['AnimatedMediaItem']):
     id: str
     is_random: str
@@ -370,7 +373,7 @@ class AnimatedMediaItem(SerializableAttrs['AnimatedMediaItem']):
     images: AnimatedMediaImages
 
 
-@dataclass
+@dataclass(kw_only=True)
 class MessageSyncMessage(SerializableAttrs['MessageSyncMessage']):
     thread_id: str
     item_id: Optional[str] = None
@@ -392,19 +395,19 @@ class MessageSyncMessage(SerializableAttrs['MessageSyncMessage']):
     reactions: Optional[dict] = None
 
 
-@dataclass
+@dataclass(kw_only=True)
 class MessageSyncEvent(SerializableAttrs['MessageSyncEvent']):
     iris: IrisPayload
     message: MessageSyncMessage
 
 
-@dataclass
+@dataclass(kw_only=True)
 class PubsubPublishMetadata(SerializableAttrs['PubsubPublishMetadata']):
     publish_time_ms: str
     topic_publish_id: int
 
 
-@dataclass
+@dataclass(kw_only=True)
 class PubsubBasePayload(SerializableAttrs['PubsubBasePayload']):
     lazy: bool
     event: str = "patch"
@@ -412,7 +415,7 @@ class PubsubBasePayload(SerializableAttrs['PubsubBasePayload']):
     num_endpoints: Optional[int] = None
 
 
-@dataclass
+@dataclass(kw_only=True)
 class ActivityIndicatorData(SerializableAttrs['ActivityIndicatorData']):
     timestamp: str
     sender_id: str
@@ -428,20 +431,20 @@ class ActivityIndicatorData(SerializableAttrs['ActivityIndicatorData']):
         return super().deserialize(data)
 
 
-@dataclass
+@dataclass(kw_only=True)
 class PubsubPayloadData(SerializableAttrs['PubsubPayloadData']):
-    double_publish: bool = field(json="doublePublish")
+    double_publish: bool = attr.ib(metadata={"json": "doublePublish"})
     value: ActivityIndicatorData
     path: str
     op: Operation = Operation.ADD
 
 
-@dataclass
+@dataclass(kw_only=True)
 class PubsubPayload(PubsubBasePayload, SerializableAttrs['PubsubPayload']):
     data: List[PubsubPayloadData]
 
 
-@dataclass
+@dataclass(kw_only=True)
 class PubsubEvent(SerializableAttrs['PubsubEvent']):
     base: PubsubBasePayload
     data: PubsubPayloadData
@@ -449,7 +452,7 @@ class PubsubEvent(SerializableAttrs['PubsubEvent']):
     activity_indicator_id: str
 
 
-@dataclass
+@dataclass(kw_only=True)
 class AppPresenceEvent(SerializableAttrs['AppPresenceEvent']):
     user_id: str
     is_active: bool
@@ -457,24 +460,24 @@ class AppPresenceEvent(SerializableAttrs['AppPresenceEvent']):
     in_threads: List[Any]
 
 
-@dataclass
+@dataclass(kw_only=True)
 class AppPresenceEventPayload(SerializableAttrs['AppPresenceEventPayload']):
     presence_event: AppPresenceEvent
 
 
-@dataclass
+@dataclass(kw_only=True)
 class ZeroProductProvisioningEvent(SerializableAttrs['ZeroProductProvisioningEvent']):
     device_id: str
     product_name: str
     zero_provisioned_time: str
 
 
-@dataclass
+@dataclass(kw_only=True)
 class RealtimeZeroProvisionPayload(SerializableAttrs['RealtimeZeroProvisionPayload']):
     zero_product_provisioning_event: ZeroProductProvisioningEvent
 
 
-@dataclass
+@dataclass(kw_only=True)
 class ClientConfigUpdateEvent(SerializableAttrs['ClientConfigUpdateEvent']):
     publish_id: str
     client_config_name: str
@@ -482,7 +485,7 @@ class ClientConfigUpdateEvent(SerializableAttrs['ClientConfigUpdateEvent']):
     client_subscription_id: str = GraphQLQueryID.clientConfigUpdate
 
 
-@dataclass
+@dataclass(kw_only=True)
 class ClientConfigUpdatePayload(SerializableAttrs['ClientConfigUpdatePayload']):
     client_config_update_event: ClientConfigUpdateEvent
 
@@ -490,14 +493,14 @@ class ClientConfigUpdatePayload(SerializableAttrs['ClientConfigUpdatePayload']):
 RealtimeDirectData = ActivityIndicatorData
 
 
-@dataclass
+@dataclass(kw_only=True)
 class RealtimeDirectEvent(SerializableAttrs['RealtimeDirectEvent']):
     op: Operation
     path: str
     value: RealtimeDirectData
 
 
-@dataclass
+@dataclass(kw_only=True)
 class LiveVideoCommentUser(SerializableAttrs['LiveVideoCommentUser']):
     pk: str
     username: str
@@ -508,7 +511,7 @@ class LiveVideoCommentUser(SerializableAttrs['LiveVideoCommentUser']):
     profile_pic_id: Optional[str] = None
 
 
-@dataclass
+@dataclass(kw_only=True)
 class LiveVideoSystemComment(SerializableAttrs['LiveVideoSystemComment']):
     pk: str
     created_at: int
@@ -517,7 +520,7 @@ class LiveVideoSystemComment(SerializableAttrs['LiveVideoSystemComment']):
     user: LiveVideoCommentUser
 
 
-@dataclass
+@dataclass(kw_only=True)
 class LiveVideoComment(SerializableAttrs['LiveVideoComment']):
     pk: str
     user_id: str
@@ -533,7 +536,7 @@ class LiveVideoComment(SerializableAttrs['LiveVideoComment']):
     user: LiveVideoCommentUser
 
 
-@dataclass
+@dataclass(kw_only=True)
 class LiveVideoCommentEvent(SerializableAttrs['LiveVideoCommentEvent']):
     client_subscription_id: str
     live_seconds_per_comment: int
@@ -550,6 +553,6 @@ class LiveVideoCommentEvent(SerializableAttrs['LiveVideoCommentEvent']):
     system_comments: Optional[List[LiveVideoSystemComment]] = None
 
 
-@dataclass
+@dataclass(kw_only=True)
 class LiveVideoCommentPayload(SerializableAttrs['LiveVideoCommentPayload']):
     live_video_comment_event: LiveVideoCommentEvent
