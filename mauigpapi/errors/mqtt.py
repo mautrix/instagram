@@ -13,29 +13,16 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
+from .base import IGError
 
-class IGError(Exception):
+
+class IGMQTTError(IGError):
     pass
 
 
-class NotLoggedIn(IGError):
+class NotLoggedIn(IGMQTTError):
     pass
 
 
-class NotConnected(IGError):
+class NotConnected(IGMQTTError):
     pass
-
-
-class IGUserIDNotFoundError(IGError):
-    def __init__(self, message: str = "Could not extract userid (pk)"):
-        super().__init__(message)
-
-
-class IGCookieNotFoundError(IGError):
-    def __init__(self, key: str) -> None:
-        super().__init__(f"Cookie '{key}' not found")
-
-
-class IGNoCheckpointError(IGError):
-    def __init__(self, message: str = "No checkpoint data available"):
-        super().__init__(message)

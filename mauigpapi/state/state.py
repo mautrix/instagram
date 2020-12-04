@@ -27,6 +27,7 @@ from ..errors import IGNoCheckpointError, IGCookieNotFoundError, IGUserIDNotFoun
 from .device import AndroidDevice
 from .session import AndroidSession
 from .application import AndroidApplication
+from .experiments import AndroidExperiments
 from .cookies import Cookies
 
 
@@ -35,7 +36,7 @@ class AndroidState(SerializableAttrs['AndroidState']):
     device: AndroidDevice = attr.ib(factory=lambda: AndroidDevice())
     session: AndroidSession = attr.ib(factory=lambda: AndroidSession())
     application: AndroidApplication = attr.ib(factory=lambda: AndroidApplication())
-    # experiments: AndroidExperiments
+    experiments: AndroidExperiments = attr.ib(factory=lambda: AndroidExperiments())
     client_session_id_lifetime: int = 1_200_000
     pigeon_session_id_lifetime: int = 1_200_000
     challenge: 'Optional[ChallengeStateResponse]' = None
@@ -69,6 +70,10 @@ class AndroidState(SerializableAttrs['AndroidState']):
         if not self._challenge_path:
             raise IGNoCheckpointError()
         return self._challenge_path
+
+    @challenge_path.setter
+    def challenge_path(self, val: str) -> None:
+        self._challenge_path = val
 
     def _gen_temp_uuid(self, seed: str, lifetime: int) -> UUID:
         rand = random.Random(f"{seed}{self.device.id}{round(time.time() * 1000 / lifetime)}")

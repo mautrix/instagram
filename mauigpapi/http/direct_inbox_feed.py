@@ -13,23 +13,10 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import Optional, Any
-
-from attr import dataclass
-from mautrix.types import SerializableAttrs
+from typing import Optional
 
 from .base import BaseAndroidAPI
-
-
-@dataclass
-class DirectInboxResponse(SerializableAttrs['DirectInboxFeedResponse']):
-    status: str
-    seq_id: int
-    snapshot_at_ms: int
-    pending_requests_total: int
-    # TODO
-    inbox: Any
-    most_recent_inviter: Any = None
+from ..types import DirectInboxResponse
 
 
 class DirectInboxAPI(BaseAndroidAPI):

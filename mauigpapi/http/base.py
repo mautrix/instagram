@@ -13,15 +13,21 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import Optional, Dict
+from typing import Optional, Dict, Any
 import random
 import time
+import json
 
 from aiohttp import ClientSession, ClientResponse
 from yarl import URL
-from mautrix.types import JSON
+from mautrix.types import JSON, Serializable
 
 from ..state import AndroidState
+from ..errors import (IGActionSpamError, IGNotFoundError, IGRateLimitError, IGCheckpointError,
+                      IGUserHasLoggedOutError, IGLoginRequiredError, IGPrivateUserError,
+                      IGSentryBlockError, IGInactiveUserError, IGResponseError,
+                      IGLoginBadPasswordError, IGLoginInvalidUserError,
+                      IGLoginTwoFactorRequiredError)
 
 
 class BaseAndroidAPI:
@@ -33,12 +39,23 @@ class BaseAndroidAPI:
         self.http = ClientSession(cookie_jar=state.cookies.jar)
         self.state = state
 
+    @staticmethod
+    def sign(req: Any, filter_nulls: bool = False) -> Dict[str, str]:
+        if isinstance(req, Serializable):
+            req = req.serialize()
+        if isinstance(req, dict):
+            def remove_nulls(d: dict) -> dict:
+                return {k: v for k, v in d.items() if v is not None}
+
+            req = json.dumps(req, object_hook=remove_nulls if filter_nulls else None)
+        return {"signed_body": f"SIGNATURE.{req}"}
+
     @property
     def headers(self) -> Dict[str, str]:
         headers = {
             "User-Agent": self.state.user_agent,
             "X-Ads-Opt-Out": str(int(self.state.session.ads_opt_out)),
-            #"X-DEVICE--ID": self.state.device.uuid,
+            # "X-DEVICE--ID": self.state.device.uuid,
             "X-CM-Bandwidth-KBPS": "-1.000",
             "X-CM-Latency": "-1.000",
             "X-IG-App-Locale": self.state.device.language,
@@ -50,7 +67,7 @@ class BaseAndroidAPI:
             "X-IG-Bandwidth-TotalBytes-B": "0",
             "X-IG-Bandwidth-TotalTime-MS": "0",
             "X-IG-EU-DC-ENABLED": (str(self.state.session.eu_dc_enabled).lower()
-                                   if self.state.session.eu_dc_enabled else None),
+                                   if self.state.session.eu_dc_enabled is not None else None),
             "X-IG-Extended-CDN-Thumbnail-Cache-Busting-Value":
                 str(self.state.session.thumbnail_cache_busting_value),
             "X-Bloks-Version-Id": self.state.application.BLOKS_VERSION_ID,
@@ -79,10 +96,44 @@ class BaseAndroidAPI:
             await self._raise_response_error(resp)
 
     async def _raise_response_error(self, resp: ClientResponse) -> None:
-        # TODO handle all errors
-        print("Error:", resp.status)
-        print(await resp.json())
-        raise Exception("oh noes")
+        try:
+            data = await resp.json()
+        except json.JSONDecodeError:
+            data = {}
+
+        if data.get("spam", False):
+            raise IGActionSpamError(resp, data)
+        elif data.get("two_factor_required", False):
+            raise IGLoginTwoFactorRequiredError(resp, data)
+        elif resp.status == 404:
+            raise IGNotFoundError(resp, data)
+        elif resp.status == 429:
+            raise IGRateLimitError(resp, data)
+
+        message = data.get("message")
+        if isinstance(message, str):
+            if message == "challenge_required":
+                err = IGCheckpointError(resp, data)
+                self.state.challenge_path = err.url
+                raise err
+            elif message == "user_has_logged_out":
+                raise IGUserHasLoggedOutError(resp, data)
+            elif message == "login_required":
+                raise IGLoginRequiredError(resp, data)
+            elif message.lower() == "not authorized to view user":
+                raise IGPrivateUserError(resp, data)
+
+        error_type = data.get("error_type")
+        if error_type == "sentry_block":
+            raise IGSentryBlockError(resp, data)
+        elif error_type == "inactive_user":
+            raise IGInactiveUserError(resp, data)
+        elif error_type == "bad_password":
+            raise IGLoginBadPasswordError(resp, data)
+        elif error_type == "invalid_user":
+            raise IGLoginInvalidUserError(resp, data)
+
+        raise IGResponseError(resp, data)
 
     def _handle_response_headers(self, resp: ClientResponse) -> None:
         fields = {
