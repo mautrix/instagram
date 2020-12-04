@@ -90,12 +90,13 @@ class BaseAndroidAPI:
         }
         return {k: v for k, v in headers.items() if v is not None}
 
-    async def std_http_post(self, path: str, data: Optional[JSON] = None,
+    async def std_http_post(self, path: str, data: Optional[JSON] = None, raw: bool = False,
                             filter_nulls: bool = False, headers: Optional[Dict[str, str]] = None,
                             response_type: Optional[Type[T]] = JSON) -> T:
         headers = {**self.headers, **headers} if headers else self.headers
-        resp = await self.http.post(url=self.url.with_path(path), headers=headers,
-                                    data=self.sign(data, filter_nulls=filter_nulls))
+        if not raw:
+            data = self.sign(data, filter_nulls=filter_nulls)
+        resp = await self.http.post(url=self.url.with_path(path), headers=headers, data=data)
         print(f"{path} response: {await resp.text()}")
         if response_type is str or response_type is None:
             self._handle_response_headers(resp)

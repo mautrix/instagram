@@ -5,3 +5,4 @@ from .error import (SpamResponse, CheckpointResponse, CheckpointChallenge,
 from .login import LoginResponseUser, LoginResponseNametag, LoginResponse, LogoutResponse
 from .account import CurrentUser, EntityText, HDProfilePictureVersion, CurrentUserResponse
 from .direct_inbox import DirectInboxResponse
+from .upload import UploadPhotoResponse
