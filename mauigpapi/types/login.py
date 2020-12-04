@@ -13,7 +13,7 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import Any, Optional
+from typing import Any, Optional, List
 
 from attr import dataclass
 
@@ -33,14 +33,18 @@ class LoginResponseNametag(SerializableAttrs['LoginResponseNametag']):
 @dataclass
 class LoginResponseUser(BaseResponseUser, SerializableAttrs['LoginResponseUser']):
     can_boost_post: bool
-    is_business: bool
-    account_type: int
-    is_call_to_action_enabled: Any
     can_see_organic_insights: bool
     show_insights_terms: bool
     has_placed_orders: bool
     nametag: LoginResponseNametag
     allow_contacts_sync: bool
+
+    # These are from manually observed responses rather than igpapi
+    total_igtv_videos: int
+    interop_messaging_user_fbid: int
+    is_using_unified_inbox_for_direct: bool
+    can_see_primary_country_in_settings: str
+    professional_conversion_suggested_account_type: Optional[int]
 
 
 @dataclass

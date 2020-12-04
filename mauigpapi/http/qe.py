@@ -13,16 +13,33 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
+from ..errors import IGCookieNotFoundError
+from ..types import QeSyncResponse
 from .base import BaseAndroidAPI
 
 
 class QeSyncAPI(BaseAndroidAPI):
-    async def qe_sync_experiments(self) -> None:
-        await self.__sync(self.state.application.EXPERIMENTS)
+    async def qe_sync_experiments(self) -> QeSyncResponse:
+        return await self.__sync(self.state.application.EXPERIMENTS)
 
-    async def qe_sync_login_experiments(self) -> None:
-        await self.__sync(self.state.application.LOGIN_EXPERIMENTS)
+    async def qe_sync_login_experiments(self) -> QeSyncResponse:
+        return await self.__sync(self.state.application.LOGIN_EXPERIMENTS)
 
-    async def __sync(self, experiments: str) -> None:
-        # TODO implement
-        pass
+    async def __sync(self, experiments: str) -> QeSyncResponse:
+        try:
+            uid = self.state.cookies.user_id
+        except IGCookieNotFoundError:
+            req = {"id": self.state.device.uuid}
+        else:
+            req = {
+                "_csrftoken": self.state.cookies.csrf_token,
+                "id": uid,
+                "_uid": uid,
+                "_uuid": self.state.device.uuid,
+            }
+        req["experiments"] = experiments
+        headers = {"X-DEVICE-ID": self.state.device.uuid}
+        resp = await self.std_http_post("/api/v1/qe/sync/", data=req, headers=headers,
+                                        response_type=QeSyncResponse)
+        self.state.experiments.update(resp)
+        return resp

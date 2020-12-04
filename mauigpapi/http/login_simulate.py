@@ -65,7 +65,7 @@ class LoginSimulateAPI(AccountAPI, LogAttributionAPI, QeSyncAPI, ZRTokenAPI, Log
             await item
 
     async def _facebook_ota(self):
-        url = (self.url / "api/v1/facebook_ota/").with_query({
+        query = {
             "fields": self.state.application.FACEBOOK_OTA_FIELDS,
             "custom_user_id": self.state.cookies.user_id,
             "signed_body": "SIGNATURE.",
@@ -73,9 +73,9 @@ class LoginSimulateAPI(AccountAPI, LogAttributionAPI, QeSyncAPI, ZRTokenAPI, Log
             "version_name": self.state.application.APP_VERSION,
             "custom_app_id": self.state.application.FACEBOOK_ORCA_APPLICATION_ID,
             "custom_device_id": self.state.device.uuid,
-        })
-        resp = await self.http.get(url)
-        return await self.handle_response(resp)
+        }
+        # TODO parse response?
+        return await self.std_http_get("/api/v1/facebook_ota/", query=query)
 
     async def upgrade_login(self) -> LoginResponse:
         user_id = self.state.cookies.user_id

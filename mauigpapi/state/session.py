@@ -16,19 +16,18 @@
 from typing import Optional, Union
 
 from attr import dataclass
-import attr
 
 from mautrix.types import SerializableAttrs
 
 
 @dataclass
 class AndroidSession(SerializableAttrs['AndroidSession']):
-    eu_dc_enabled: Optional[bool] = attr.ib(default=None, metadata={"json": "euDCEnabled"})
-    thumbnail_cache_busting_value: int = attr.ib(default=1000, metadata={"json": "thumbnailCacheBustingValue"})
-    ads_opt_out: bool = attr.ib(default=None, metadata={"json": "adsOptOut"})
+    eu_dc_enabled: Optional[bool] = None
+    thumbnail_cache_busting_value: int = 1000
+    ads_opt_out: bool = False
 
-    ig_www_claim: Optional[str] = attr.ib(default=None, metadata={"json": "igWWWClaim"})
+    ig_www_claim: Optional[str] = None
     authorization: Optional[str] = None
-    password_encryption_pubkey: Optional[str] = attr.ib(default=None, metadata={"json": "passwordEncryptionPubKey"})
-    password_encryption_key_id: Union[None, str, int] = attr.ib(default=None, metadata={"json": "passwordEncryptionKeyId"})
-    region_hint: Optional[str] = attr.ib(default=None, metadata={"json": "regionHint"})
+    password_encryption_pubkey: Optional[str] = None
+    password_encryption_key_id: Union[None, str, int] = None
+    region_hint: Optional[str] = None

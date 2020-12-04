@@ -83,5 +83,5 @@ class LauncherSyncAPI(BaseAndroidAPI):
         })
 
     async def __sync(self, req: Dict[str, Any]):
-        resp = await self.http.get(self.url / "api/v1/launcher/sync/", data=self.sign(req))
-        return await self.handle_response(resp)
+        # TODO parse response?
+        return await self.std_http_post("/api/v1/launcher/sync/", data=req)

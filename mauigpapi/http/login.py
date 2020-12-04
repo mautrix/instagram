@@ -21,7 +21,7 @@ import json
 import io
 
 from Crypto.PublicKey import RSA
-from Crypto.Cipher import PKCS1_OAEP, AES
+from Crypto.Cipher import PKCS1_v1_5, AES
 from Crypto.Random import get_random_bytes
 
 from ..types import LoginResponse, LoginResponseUser, LogoutResponse
@@ -50,8 +50,8 @@ class LoginAPI(BaseAndroidAPI):
             "country_codes": json.dumps([{"country_code": "1", "source": "default"}]),
             "jazoest": self._jazoest,
         }
-        resp = await self.http.post(url=self.url / "api/v1/accounts/login/", data=self.sign(req))
-        return LoginResponse.deserialize(await self.handle_response(resp))
+        return await self.std_http_post("/api/v1/accounts/login/", data=req,
+                                        response_type=LoginResponse)
 
     async def one_tap_app_login(self, user_id: str, nonce: str) -> LoginResponse:
         req = {
@@ -63,9 +63,8 @@ class LoginAPI(BaseAndroidAPI):
             "device_id": self.state.device.id,
             "login_nonce": nonce,
         }
-        resp = await self.http.post(url=self.url / "api/v1/accounts/one_tap_app_login/",
-                                    data=self.sign(req))
-        return LoginResponse.deserialize(await self.handle_response(resp))
+        return await self.std_http_post("/api/v1/accounts/one_tap_app_login/", data=req,
+                                        response_type=LoginResponse)
 
     async def two_factor_login(self, username: str, code: str, identifier: str,
                                trust_device: bool = True, method: Optional[str] = "1"
@@ -80,9 +79,8 @@ class LoginAPI(BaseAndroidAPI):
             "device_id": self.state.device.id,
             "verification_method": method,
         }
-        resp = await self.http.post(url=self.url / "api/v1/accounts/one_tap_app_login/",
-                                    data=self.sign(req))
-        return LoginResponseUser.deserialize(await self.handle_response(resp))
+        return await self.std_http_post("/api/v1/accounts/two_factor_login/", data=req,
+                                        response_type=LoginResponseUser)
 
     async def logout(self, one_tap_app_login: Optional[bool] = None) -> LogoutResponse:
         req = {
@@ -93,9 +91,8 @@ class LoginAPI(BaseAndroidAPI):
             "_uuid": self.state.device.uuid,
             "one_tap_app_login": one_tap_app_login,
         }
-        resp = await self.http.post(url=self.url / "api/v1/accounts/logout/",
-                                    data=self.sign(req))
-        return LogoutResponse.deserialize(await self.handle_response(resp))
+        return await self.std_http_post("/api/v1/accounts/logout/", data=req,
+                                        response_type=LogoutResponse)
 
     async def change_password(self, old_password: str, new_password: str):
         return self.change_password_encrypted(old_password=self._encrypt_password(old_password),
@@ -112,10 +109,8 @@ class LoginAPI(BaseAndroidAPI):
             "enc_new_password1": new_password1,
             "enc_new_password2": new_password2,
         }
-        resp = await self.http.post(self.url / "api/v1/accounts/change_password/",
-                                    data=self.sign(req))
         # TODO parse response content
-        return await self.handle_response(resp)
+        return await self.std_http_post("/api/v1/accounts/change_password/", data=req)
 
     def _encrypt_password(self, password: str) -> str:
         # Key and IV for AES encryption
@@ -125,10 +120,10 @@ class LoginAPI(BaseAndroidAPI):
         # Encrypt AES key with Instagram's RSA public key
         pubkey_bytes = base64.b64decode(self.state.session.password_encryption_pubkey)
         pubkey = RSA.import_key(pubkey_bytes)
-        cipher_rsa = PKCS1_OAEP.new(pubkey)
+        cipher_rsa = PKCS1_v1_5.new(pubkey)
         encrypted_rand_key = cipher_rsa.encrypt(rand_key)
 
-        cipher_aes = AES.new(rand_key, AES.MODE_GCM, iv=iv)
+        cipher_aes = AES.new(rand_key, AES.MODE_GCM, nonce=iv)
         # Add the current time to the additional authenticated data (AAD) section
         current_time = int(time.time())
         cipher_aes.update(str(current_time).encode("utf-8"))
@@ -144,7 +139,7 @@ class LoginAPI(BaseAndroidAPI):
         buf.write(encrypted_rand_key)
         buf.write(auth_tag)
         buf.write(encrypted_passwd)
-        encoded = base64.b64encode(buf.getvalue())
+        encoded = base64.b64encode(buf.getvalue()).decode("utf-8")
         return f"#PWD_INSTAGRAM:4:{current_time}:{encoded}"
 
     @property

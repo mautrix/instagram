@@ -18,12 +18,11 @@ from .base import BaseAndroidAPI
 
 class ZRTokenAPI(BaseAndroidAPI):
     async def zr_token_result(self):
-        url = (self.url / "api/v1/zr/token/result/").with_query({
+        query = {
             "device_id": self.state.device.id,
             "token_hash": "",
             "custom_device_id": self.state.device.uuid,
             "fetch_reason": "token_expired",
-        })
-        resp = await self.http.get(url)
+        }
         # TODO parse response content
-        return await self.handle_response(resp)
+        return await self.std_http_get("/api/v1/zr/token/result/", query=query)

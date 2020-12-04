@@ -33,31 +33,18 @@ class Cookies(Serializable):
 
     def serialize(self) -> JSON:
         return {
-            "version": "tough-cookie@4.0.0",
-            "storeType": "MemoryCookieStore",
-            "rejectPublicSuffixes": True,
-            "cookies": [{
-                **morsel,
-                "key": key,
+            morsel.key: {
+                **{k: v for k, v in morsel.items() if v},
                 "value": morsel.value,
-            } for key, morsel in self.jar.filter_cookies(ig_url).items()],
+            } for morsel in self.jar
         }
 
     @classmethod
     def deserialize(cls, raw: JSON) -> 'Cookies':
         cookie = SimpleCookie()
-        for item in raw["cookies"]:
-            key = item.pop("key")
-            cookie[key] = item.pop("value")
-            item.pop("hostOnly", None)
-            item.pop("lastAccessed", None)
-            item.pop("creation", None)
-            try:
-                # Morsel.update() is case-insensitive, but not dash-insensitive
-                item["max-age"] = item.pop("maxAge")
-            except KeyError:
-                pass
-            cookie[key].update(item)
+        for key, data in raw.items():
+            cookie[key] = data.pop("value")
+            cookie[key].update(data)
         cookies = cls()
         cookies.jar.update_cookies(cookie, ig_url)
         return cookies

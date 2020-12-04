@@ -19,10 +19,9 @@ from ..errors import IGResponseError
 
 class LogAttributionAPI(BaseAndroidAPI):
     async def log_attribution(self):
-        resp = await self.http.get(self.url / "api/v1/attribution/log_attribution/",
-                                   data=self.sign({"adid": self.state.device.adid}))
         # TODO parse response content
-        return await self.handle_response(resp)
+        return await self.std_http_post("/api/v1/attribution/log_attribution/",
+                                        data={"adid": self.state.device.adid})
 
     async def log_resurrect_attribution(self):
         req = {
@@ -31,10 +30,9 @@ class LogAttributionAPI(BaseAndroidAPI):
             "adid": self.state.device.adid,
             "_uuid": self.state.device.uuid,
         }
-        resp = await self.http.get(self.url / "api/v1/attribution/log_resurrect_attribution/",
-                                   data=self.sign(req))
         # Apparently this throws an error in the official app, so we catch it and return the error
         try:
-            return await self.handle_response(resp)
+            return await self.std_http_post("/api/v1/attribution/log_resurrect_attribution/",
+                                            data=req)
         except IGResponseError as e:
             return e

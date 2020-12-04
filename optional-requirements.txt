@@ -3,7 +3,6 @@
 
 #/e2be
 python-olm>=3,<4
-pycryptodome>=3,<4
 unpaddedbase64>=1,<2
 
 #/metrics

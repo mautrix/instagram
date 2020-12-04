@@ -14,24 +14,18 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from typing import Optional, Type, TypeVar
-import base64
-import struct
-import time
 import json
-import io
 
 from ..types import CurrentUserResponse
 from .base import BaseAndroidAPI
-
 
 T = TypeVar('T')
 
 
 class AccountAPI(BaseAndroidAPI):
     async def current_user(self) -> CurrentUserResponse:
-        url = (self.url / "api/v1/accounts/current_user/").with_query({"edit": "true"})
-        resp = await self.http.get(url)
-        return CurrentUserResponse.deserialize(await self.handle_response(resp))
+        return await self.std_http_get(f"/api/v1/accounts/current_user/", query={"edit": "true"},
+                                       response_type=CurrentUserResponse)
 
     async def set_biography(self, text: str) -> CurrentUserResponse:
         # TODO entities?
@@ -59,10 +53,8 @@ class AccountAPI(BaseAndroidAPI):
             "device_id": self.state.device.id,
             "query": query,
         }
-        resp = await self.http.post(self.url / "api/v1/accounts/send_recovery_flow_email/",
-                                    data=self.sign(req, filter_nulls=True))
         # TODO parse response content
-        return await self.handle_response(resp)
+        return await self.std_http_post(f"/api/v1/accounts/send_recovery_flow_email/", data=req)
 
     async def edit_profile(self, external_url: Optional[str] = None, gender: Optional[str] = None,
                            phone_number: Optional[str] = None, username: Optional[str] = None,
@@ -82,9 +74,8 @@ class AccountAPI(BaseAndroidAPI):
             "_uuid": self.state.device.uuid,
             **kwargs,
         }
-        resp = await self.http.post(self.url / f"api/v1/accounts/{command}",
-                                    data=self.sign(req, filter_nulls=True))
-        return response_type.deserialize(await self.handle_response(resp))
+        return await self.std_http_post(f"/api/v1/accounts/{command}/", data=req,
+                                        filter_nulls=True, response_type=response_type)
 
     async def read_msisdn_header(self, usage: str = "default"):
         req = {
@@ -94,30 +85,22 @@ class AccountAPI(BaseAndroidAPI):
         headers = {
             "X-DEVICE-ID": self.state.device.uuid,
         }
-        resp = await self.http.post(self.url / "api/v1/accounts/read_msisdn_header/",
-                                    data=self.sign(req), headers=headers)
-        # TODO parse response content
-        return await self.handle_response(resp)
+        return await self.std_http_post("/api/v1/accounts/read_msisdn_header/", data=req,
+                                        headers=headers)
 
     async def msisdn_header_bootstrap(self, usage: str = "default"):
         req = {
             "mobile_subno_usage": usage,
             "device_id": self.state.device.uuid,
         }
-        resp = await self.http.post(self.url / "api/v1/accounts/msisdn_header_bootstrap/",
-                                    data=self.sign(req))
-        # TODO parse response content
-        return await self.handle_response(resp)
+        return await self.std_http_post("/api/v1/accounts/msisdn_header_bootstrap/", data=req)
 
     async def contact_point_prefill(self, usage: str = "default"):
         req = {
             "mobile_subno_usage": usage,
             "device_id": self.state.device.uuid,
         }
-        resp = await self.http.post(self.url / "api/v1/accounts/contact_point_prefill/",
-                                    data=self.sign(req))
-        # TODO parse response content
-        return await self.handle_response(resp)
+        return await self.std_http_post("/api/v1/accounts/contact_point_prefill/", data=req)
 
     async def get_prefill_candidates(self):
         req = {
@@ -125,10 +108,8 @@ class AccountAPI(BaseAndroidAPI):
             "usages": json.dumps(["account_recovery_omnibox"]),
             "device_id": self.state.device.uuid,
         }
-        resp = await self.http.post(self.url / "api/v1/accounts/contact_point_prefill/",
-                                    data=self.sign(req))
         # TODO parse response content
-        return await self.handle_response(resp)
+        return await self.std_http_post("/api/v1/accounts/get_prefill_candidates/", data=req)
 
     async def process_contact_point_signals(self):
         req = {
@@ -139,7 +120,5 @@ class AccountAPI(BaseAndroidAPI):
             "_uuid": self.state.device.uuid,
             "google_tokens": json.dumps([]),
         }
-        resp = await self.http.post(self.url / "api/v1/accounts/process_contact_point_signals/",
-                                    data=self.sign(req))
-        # TODO parse response content
-        return await self.handle_response(resp)
+        return await self.std_http_post("/api/v1/accounts/process_contact_point_signals/",
+                                        data=req)

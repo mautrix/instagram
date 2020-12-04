@@ -13,7 +13,7 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, TypeVar, Type
 import random
 import time
 import json
@@ -28,6 +28,8 @@ from ..errors import (IGActionSpamError, IGNotFoundError, IGRateLimitError, IGCh
                       IGSentryBlockError, IGInactiveUserError, IGResponseError,
                       IGLoginBadPasswordError, IGLoginInvalidUserError,
                       IGLoginTwoFactorRequiredError)
+
+T = TypeVar('T')
 
 
 class BaseAndroidAPI:
@@ -45,9 +47,10 @@ class BaseAndroidAPI:
             req = req.serialize()
         if isinstance(req, dict):
             def remove_nulls(d: dict) -> dict:
-                return {k: v for k, v in d.items() if v is not None}
+                return {k: remove_nulls(v) if isinstance(v, dict) else v
+                        for k, v in d.items() if v is not None}
 
-            req = json.dumps(req, object_hook=remove_nulls if filter_nulls else None)
+            req = json.dumps(remove_nulls(req) if filter_nulls else req)
         return {"signed_body": f"SIGNATURE.{req}"}
 
     @property
@@ -55,7 +58,7 @@ class BaseAndroidAPI:
         headers = {
             "User-Agent": self.state.user_agent,
             "X-Ads-Opt-Out": str(int(self.state.session.ads_opt_out)),
-            # "X-DEVICE--ID": self.state.device.uuid,
+            # "X-DEVICE-ID": self.state.device.uuid,
             "X-CM-Bandwidth-KBPS": "-1.000",
             "X-CM-Latency": "-1.000",
             "X-IG-App-Locale": self.state.device.language,
@@ -86,6 +89,38 @@ class BaseAndroidAPI:
             "Connection": "close",
         }
         return {k: v for k, v in headers.items() if v is not None}
+
+    async def std_http_post(self, path: str, data: Optional[JSON] = None,
+                            filter_nulls: bool = False, headers: Optional[Dict[str, str]] = None,
+                            response_type: Optional[Type[T]] = JSON) -> T:
+        headers = {**self.headers, **headers} if headers else self.headers
+        resp = await self.http.post(url=self.url.with_path(path), headers=headers,
+                                    data=self.sign(data, filter_nulls=filter_nulls))
+        print(f"{path} response: {await resp.text()}")
+        if response_type is str or response_type is None:
+            self._handle_response_headers(resp)
+            if response_type is str:
+                return await resp.text()
+            return None
+        json_data = await self.handle_response(resp)
+        if response_type is not JSON:
+            return response_type.deserialize(json_data)
+        return json_data
+
+    async def std_http_get(self, path: str, query: Optional[Dict[str, str]] = None,
+                           headers: Optional[Dict[str, str]] = None,
+                           response_type: Optional[Type[T]] = JSON) -> T:
+        headers = {**self.headers, **headers} if headers else self.headers
+        query = {k: v for k, v in (query or {}).items() if v is not None}
+        resp = await self.http.get(url=self.url.with_path(path).with_query(query), headers=headers)
+        print(f"{path} response: {await resp.text()}")
+        if response_type is None:
+            self._handle_response_headers(resp)
+            return None
+        json_data = await self.handle_response(resp)
+        if response_type is not JSON:
+            return response_type.deserialize(json_data)
+        return json_data
 
     async def handle_response(self, resp: ClientResponse) -> JSON:
         self._handle_response_headers(resp)
@@ -144,10 +179,6 @@ class BaseAndroidAPI:
             "IG-Set-IG-U-IG-Direct-Region-Hint": "region_hint"
         }
         for header, field in fields.items():
-            try:
-                value = resp.headers[header]
-            except KeyError:
-                pass
-            else:
-                if value:
-                    setattr(self.state.session, field, value)
+            value = resp.headers.get(header)
+            if value and (header != "IG-Set-Authorization" or not value.endswith(":")):
+                setattr(self.state.session, field, value)

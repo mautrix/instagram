@@ -31,7 +31,5 @@ class DirectInboxAPI(BaseAndroidAPI):
             "persistentBadging": "true",
             "limit": limit,
         }
-        query = {k: v for k, v in query.items() if v is not None}
-        url = (self.url / "api/v1/direct_v2/inbox/").with_query(query)
-        resp = await self.http.get(url, headers=self.headers)
-        return DirectInboxResponse.deserialize(await self.handle_response(resp))
+        return await self.std_http_get("/api/v1/direct_v2/inbox/", query=query,
+                                       response_type=DirectInboxResponse)
