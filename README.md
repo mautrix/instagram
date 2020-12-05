@@ -4,7 +4,7 @@
 [![Release](https://img.shields.io/github/release/tulir/mautrix-instagram/all.svg)](https://github.com/tulir/mautrix-instagram/releases)
 [![GitLab CI](https://mau.dev/tulir/mautrix-instagram/badges/master/pipeline.svg)](https://mau.dev/tulir/mautrix-instagram/container_registry)
 
-A Matrix-Instagram puppeting bridge.
+A Matrix-Instagram DM puppeting bridge.
 
 ### [Wiki](https://github.com/tulir/mautrix-instagram/wiki)
 
