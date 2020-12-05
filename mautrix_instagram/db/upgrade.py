@@ -1,0 +1,79 @@
+# mautrix-instagram - A Matrix-Instagram puppeting bridge.
+# Copyright (C) 2020 Tulir Asokan
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+from asyncpg import Connection
+
+from mautrix.util.async_db import UpgradeTable
+
+upgrade_table = UpgradeTable()
+
+
+@upgrade_table.register(description="Initial revision")
+async def upgrade_v1(conn: Connection) -> None:
+    await conn.execute("""CREATE TABLE portal (
+        thread_id     TEXT,
+        receiver      BIGINT,
+        other_user_pk BIGINT,
+        mxid          TEXT,
+        name          TEXT,
+        encrypted     BOOLEAN NOT NULL DEFAULT false,
+        PRIMARY KEY (thread_id, receiver)
+    )""")
+    await conn.execute("""CREATE TABLE "user" (
+        mxid        VARCHAR(255) PRIMARY KEY,
+        igpk        BIGINT,
+        state       jsonb,
+        notice_room VARCHAR(255)
+    )""")
+    await conn.execute("""CREATE TABLE puppet (
+        pk            BIGINT PRIMARY KEY,
+        name          TEXT,
+        username      TEXT,
+        photo_id      TEXT,
+        photo_mxc     TEXT,
+        is_registered BOOLEAN NOT NULL DEFAULT false,
+        custom_mxid   TEXT,
+        access_token  TEXT,
+        next_batch    TEXT,
+        base_url      TEXT
+    )""")
+    await conn.execute("""CREATE TABLE user_portal (
+        "user"          BIGINT,
+        portal          TEXT,
+        portal_receiver BIGINT,
+        in_community    BOOLEAN NOT NULL DEFAULT false,
+        FOREIGN KEY (portal, portal_receiver) REFERENCES portal(thread_id, receiver)
+            ON UPDATE CASCADE ON DELETE CASCADE
+    )""")
+    await conn.execute("""CREATE TABLE message (
+        mxid     TEXT NOT NULL,
+        mx_room  TEXT NOT NULL,
+        item_id  TEXT,
+        receiver BIGINT,
+        PRIMARY KEY (item_id, receiver),
+        UNIQUE (mxid, mx_room)
+    )""")
+    await conn.execute("""CREATE TABLE reaction (
+        mxid        TEXT NOT NULL,
+        mx_room     TEXT NOT NULL,
+        ig_item_id  TEXT,
+        ig_receiver BIGINT,
+        ig_sender   BIGINT,
+        reaction    TEXT NOT NULL,
+        PRIMARY KEY (ig_item_id, ig_receiver, ig_sender),
+        FOREIGN KEY (ig_item_id, ig_receiver) REFERENCES message(item_id, receiver)
+            ON DELETE CASCADE ON UPDATE CASCADE,
+        UNIQUE (mxid, mx_room)
+    )""")
