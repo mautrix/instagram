@@ -65,11 +65,15 @@ class IGCheckpointError(IGResponseError):
         return self.body.challenge.api_path
 
 
-class IGUserHasLoggedOutError(IGResponseError):
+class IGNotLoggedInError(IGResponseError):
     body: LoginRequiredResponse
 
 
-class IGLoginRequiredError(IGResponseError):
+class IGUserHasLoggedOutError(IGNotLoggedInError):
+    body: LoginRequiredResponse
+
+
+class IGLoginRequiredError(IGNotLoggedInError):
     body: LoginRequiredResponse
 
 

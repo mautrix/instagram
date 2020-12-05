@@ -32,14 +32,13 @@ from mautrix.util.logging import TraceLogger
 
 from ..errors import NotLoggedIn, NotConnected
 from ..state import AndroidState
+from ..types import (CommandResponse, ThreadItemType, ThreadAction, ReactionStatus, TypingStatus,
+                     IrisPayload, PubsubPayload, AppPresenceEventPayload, RealtimeDirectEvent,
+                     RealtimeZeroProvisionPayload, ClientConfigUpdatePayload, MessageSyncEvent,
+                     MessageSyncMessage, LiveVideoCommentPayload, PubsubEvent)
 from .thrift import RealtimeConfig, RealtimeClientInfo, ForegroundStateConfig, IncomingMessage
 from .otclient import MQTToTClient
-from .subscription import everclear_subscriptions
-from .types import (RealtimeTopic, CommandResponse, ThreadItemType, ThreadAction, ReactionStatus,
-                    TypingStatus, IrisPayload, PubsubPayload, AppPresenceEventPayload,
-                    RealtimeDirectEvent, RealtimeZeroProvisionPayload, ClientConfigUpdatePayload,
-                    LiveVideoCommentPayload, PubsubEvent, MessageSyncEvent, MessageSyncMessage)
-from .subscription import GraphQLQueryID
+from .subscription import everclear_subscriptions, RealtimeTopic, GraphQLQueryID
 from .events import Connect, Disconnect
 
 try:
@@ -279,13 +278,13 @@ class AndroidMQTT:
 
     @staticmethod
     def _parse_realtime_sub_item(topic: str, raw: dict) -> Any:
-        if topic == GraphQLQueryID.appPresence:
+        if topic == GraphQLQueryID.APP_PRESENCE:
             return AppPresenceEventPayload.deserialize(raw).presence_event
-        elif topic == GraphQLQueryID.zeroProvision:
+        elif topic == GraphQLQueryID.ZERO_PROVISION:
             return RealtimeZeroProvisionPayload.deserialize(raw).zero_product_provisioning_event
-        elif topic == GraphQLQueryID.clientConfigUpdate:
+        elif topic == GraphQLQueryID.CLIENT_CONFIG_UPDATE:
             return ClientConfigUpdatePayload.deserialize(raw).client_config_update_event
-        elif topic == GraphQLQueryID.liveRealtimeComments:
+        elif topic == GraphQLQueryID.LIVE_REALTIME_COMMENTS:
             return LiveVideoCommentPayload.deserialize(raw).live_video_comment_event
         elif topic == "direct":
             return RealtimeDirectEvent.deserialize(raw)
@@ -293,8 +292,8 @@ class AndroidMQTT:
     def _on_realtime_sub(self, payload: bytes) -> None:
         parsed_thrift = IncomingMessage.from_thrift(payload)
         topic = parsed_thrift.topic
-        if topic not in ("direct", GraphQLQueryID.appPresence, GraphQLQueryID.zeroProvision,
-                         GraphQLQueryID.clientConfigUpdate, GraphQLQueryID.liveRealtimeComments):
+        if topic not in ("direct", GraphQLQueryID.APP_PRESENCE, GraphQLQueryID.ZERO_PROVISION,
+                         GraphQLQueryID.CLIENT_CONFIG_UPDATE, GraphQLQueryID.LIVE_REALTIME_COMMENTS):
             self.log.debug(f"Got unknown realtime sub event {topic}: {parsed_thrift.payload}")
         parsed_json = json.loads(parsed_thrift.payload)
         event = parsed_json["event"]
@@ -358,6 +357,7 @@ class AndroidMQTT:
         self._iris_seq_id = seq_id
         self._iris_snapshot_at_ms = snapshot_at_ms
 
+        self.log.debug("Connecting to Instagram MQTT")
         await self._reconnect()
         await self._dispatch(Connect())
         exit_if_not_connected = False

@@ -14,6 +14,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from typing import Optional, Dict, Any, TypeVar, Type
+import asyncio
 import random
 import time
 import json
@@ -54,7 +55,7 @@ class BaseAndroidAPI:
         return {"signed_body": f"SIGNATURE.{req}"}
 
     @property
-    def headers(self) -> Dict[str, str]:
+    def _headers(self) -> Dict[str, str]:
         headers = {
             "User-Agent": self.state.user_agent,
             "X-Ads-Opt-Out": str(int(self.state.session.ads_opt_out)),
@@ -93,7 +94,7 @@ class BaseAndroidAPI:
     async def std_http_post(self, path: str, data: Optional[JSON] = None, raw: bool = False,
                             filter_nulls: bool = False, headers: Optional[Dict[str, str]] = None,
                             response_type: Optional[Type[T]] = JSON) -> T:
-        headers = {**self.headers, **headers} if headers else self.headers
+        headers = {**self._headers, **headers} if headers else self._headers
         if not raw:
             data = self.sign(data, filter_nulls=filter_nulls)
         resp = await self.http.post(url=self.url.with_path(path), headers=headers, data=data)
@@ -103,7 +104,7 @@ class BaseAndroidAPI:
             if response_type is str:
                 return await resp.text()
             return None
-        json_data = await self.handle_response(resp)
+        json_data = await self._handle_response(resp)
         if response_type is not JSON:
             return response_type.deserialize(json_data)
         return json_data
@@ -111,19 +112,19 @@ class BaseAndroidAPI:
     async def std_http_get(self, path: str, query: Optional[Dict[str, str]] = None,
                            headers: Optional[Dict[str, str]] = None,
                            response_type: Optional[Type[T]] = JSON) -> T:
-        headers = {**self.headers, **headers} if headers else self.headers
+        headers = {**self._headers, **headers} if headers else self._headers
         query = {k: v for k, v in (query or {}).items() if v is not None}
         resp = await self.http.get(url=self.url.with_path(path).with_query(query), headers=headers)
         print(f"{path} response: {await resp.text()}")
         if response_type is None:
             self._handle_response_headers(resp)
             return None
-        json_data = await self.handle_response(resp)
+        json_data = await self._handle_response(resp)
         if response_type is not JSON:
             return response_type.deserialize(json_data)
         return json_data
 
-    async def handle_response(self, resp: ClientResponse) -> JSON:
+    async def _handle_response(self, resp: ClientResponse) -> JSON:
         self._handle_response_headers(resp)
         body = await resp.json()
         if body["status"] == "ok":

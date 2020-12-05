@@ -19,7 +19,7 @@ from attr import dataclass
 
 from mautrix.types import SerializableAttrs
 
-from .account import BaseResponseUser
+from .account import BaseFullResponseUser
 
 
 @dataclass
@@ -31,7 +31,7 @@ class LoginResponseNametag(SerializableAttrs['LoginResponseNametag']):
 
 
 @dataclass
-class LoginResponseUser(BaseResponseUser, SerializableAttrs['LoginResponseUser']):
+class LoginResponseUser(BaseFullResponseUser, SerializableAttrs['LoginResponseUser']):
     can_boost_post: bool
     can_see_organic_insights: bool
     show_insights_terms: bool
@@ -39,7 +39,6 @@ class LoginResponseUser(BaseResponseUser, SerializableAttrs['LoginResponseUser']
     nametag: LoginResponseNametag
     allow_contacts_sync: bool
 
-    # These are from manually observed responses rather than igpapi
     total_igtv_videos: int
     interop_messaging_user_fbid: int
     is_using_unified_inbox_for_direct: bool

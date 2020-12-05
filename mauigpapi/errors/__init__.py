@@ -5,4 +5,4 @@ from .response import (IGResponseError, IGActionSpamError, IGNotFoundError, IGRa
                        IGCheckpointError, IGUserHasLoggedOutError, IGLoginRequiredError,
                        IGPrivateUserError, IGSentryBlockError, IGInactiveUserError, IGLoginError,
                        IGLoginTwoFactorRequiredError, IGLoginBadPasswordError,
-                       IGLoginInvalidUserError)
+                       IGLoginInvalidUserError, IGNotLoggedInError)
