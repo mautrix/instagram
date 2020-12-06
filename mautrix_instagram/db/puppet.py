@@ -34,6 +34,8 @@ class Puppet:
     username: Optional[str]
     photo_id: Optional[str]
     photo_mxc: Optional[ContentURI]
+    name_set: bool
+    avatar_set: bool
 
     is_registered: bool
 
@@ -43,20 +45,22 @@ class Puppet:
     base_url: Optional[URL]
 
     async def insert(self) -> None:
-        q = ("INSERT INTO puppet (pk, name, username, photo_id, photo_mxc, is_registered,"
-             "                    custom_mxid, access_token, next_batch, base_url) "
-             "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)")
+        q = ("INSERT INTO puppet (pk, name, username, photo_id, photo_mxc, name_set, avatar_set,"
+             "                    is_registered, custom_mxid, access_token, next_batch, base_url) "
+             "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)")
         await self.db.execute(q, self.pk, self.name, self.username, self.photo_id, self.photo_mxc,
                               self.is_registered, self.custom_mxid, self.access_token,
                               self.next_batch, str(self.base_url) if self.base_url else None)
 
     async def update(self) -> None:
-        q = ("UPDATE puppet SET name=$2, username=$3, photo_id=$4, photo_mxc=$5, is_registered=$6,"
-             "                  custom_mxid=$7, access_token=$8, next_batch=$9, base_url=$10 "
+        q = ("UPDATE puppet SET name=$2, username=$3, photo_id=$4, photo_mxc=$5, name_set=$6,"
+             "                  avatar_set=$7, is_registered=$8, custom_mxid=$9, access_token=$10,"
+             "                  next_batch=$11, base_url=$12 "
              "WHERE pk=$1")
         await self.db.execute(q, self.pk, self.name, self.username, self.photo_id, self.photo_mxc,
-                              self.is_registered, self.custom_mxid, self.access_token,
-                              self.next_batch, str(self.base_url) if self.base_url else None)
+                              self.name_set, self.avatar_set, self.is_registered, self.custom_mxid,
+                              self.access_token, self.next_batch,
+                              str(self.base_url) if self.base_url else None)
 
     @classmethod
     def _from_row(cls, row: asyncpg.Record) -> 'Puppet':
@@ -67,7 +71,7 @@ class Puppet:
 
     @classmethod
     async def get_by_pk(cls, pk: int) -> Optional['Puppet']:
-        q = ("SELECT pk, name, username, photo_id, photo_mxc, is_registered,"
+        q = ("SELECT pk, name, username, photo_id, photo_mxc, name_set, avatar_set, is_registered,"
              "       custom_mxid, access_token, next_batch, base_url "
              "FROM puppet WHERE igpk=$1")
         row = await cls.db.fetchrow(q, pk)
@@ -77,7 +81,7 @@ class Puppet:
 
     @classmethod
     async def get_by_custom_mxid(cls, mxid: UserID) -> Optional['Puppet']:
-        q = ("SELECT pk, name, username, photo_id, photo_mxc, is_registered,"
+        q = ("SELECT pk, name, username, photo_id, photo_mxc, name_set, avatar_set, is_registered,"
              "       custom_mxid, access_token, next_batch, base_url "
              "FROM puppet WHERE custom_mxid=$1")
         row = await cls.db.fetchrow(q, mxid)
@@ -87,7 +91,7 @@ class Puppet:
 
     @classmethod
     async def all_with_custom_mxid(cls) -> List['Puppet']:
-        q = ("SELECT pk, name, username, photo_id, photo_mxc, is_registered,"
+        q = ("SELECT pk, name, username, photo_id, photo_mxc, name_set, avatar_set, is_registered,"
              "       custom_mxid, access_token, next_batch, base_url "
              "FROM puppet WHERE custom_mxid IS NOT NULL")
         rows = await cls.db.fetch(q)

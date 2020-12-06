@@ -1,0 +1,205 @@
+# mautrix-instagram - A Matrix-Instagram puppeting bridge.
+# Copyright (C) 2020 Tulir Asokan
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+#
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+from typing import Optional, Dict, AsyncIterable, Awaitable, AsyncGenerator, TYPE_CHECKING, cast
+
+from aiohttp import ClientSession
+from yarl import URL
+
+from mauigpapi.types import BaseResponseUser
+from mautrix.bridge import BasePuppet
+from mautrix.appservice import IntentAPI
+from mautrix.types import ContentURI, UserID, SyncToken, RoomID
+from mautrix.util.simple_template import SimpleTemplate
+
+from .db import Puppet as DBPuppet
+from .config import Config
+from . import portal as p
+
+if TYPE_CHECKING:
+    from .__main__ import InstagramBridge
+
+
+class Puppet(DBPuppet, BasePuppet):
+    by_pk: Dict[int, 'Puppet'] = {}
+    by_custom_mxid: Dict[UserID, 'Puppet'] = {}
+    hs_domain: str
+    mxid_template: SimpleTemplate[int]
+
+    config: Config
+
+    default_mxid_intent: IntentAPI
+    default_mxid: UserID
+
+    def __init__(self, pk: int, name: Optional[str] = None, username: Optional[str] = None,
+                 photo_id: Optional[str] = None, photo_mxc: Optional[ContentURI] = None,
+                 is_registered: bool = False, custom_mxid: Optional[UserID] = None,
+                 access_token: Optional[str] = None, next_batch: Optional[SyncToken] = None,
+                 base_url: Optional[URL] = None) -> None:
+        super().__init__(pk=pk, name=name, username=username, photo_id=photo_id, photo_mxc=photo_mxc,
+                         is_registered=is_registered, custom_mxid=custom_mxid,
+                         access_token=access_token, next_batch=next_batch, base_url=base_url)
+        self.log = self.log.getChild(str(pk))
+
+        self.default_mxid = self.get_mxid_from_id(pk)
+        self.default_mxid_intent = self.az.intent.user(self.default_mxid)
+        self.intent = self._fresh_intent()
+
+    @classmethod
+    def init_cls(cls, bridge: 'InstagramBridge') -> AsyncIterable[Awaitable[None]]:
+        cls.config = bridge.config
+        cls.loop = bridge.loop
+        cls.mx = bridge.matrix
+        cls.az = bridge.az
+        cls.hs_domain = cls.config["homeserver.domain"]
+        cls.mxid_template = SimpleTemplate(cls.config["bridge.username_template"], "userid",
+                                           prefix="@", suffix=f":{cls.hs_domain}", type=int)
+        cls.sync_with_custom_puppets = cls.config["bridge.sync_with_custom_puppets"]
+        cls.homeserver_url_map = {server: URL(url) for server, url
+                                  in cls.config["bridge.double_puppet_server_map"].items()}
+        cls.allow_discover_url = cls.config["bridge.double_puppet_allow_discovery"]
+        cls.login_shared_secret_map = {server: secret.encode("utf-8") for server, secret
+                                       in cls.config["bridge.login_shared_secret_map"].items()}
+        cls.login_device_name = "Instagram Bridge"
+        return (puppet.try_start() async for puppet in cls.all_with_custom_mxid())
+
+    def intent_for(self, portal: 'p.Portal') -> IntentAPI:
+        if portal.other_user_pk == self.pk or (self.config["bridge.backfill.invite_own_puppet"]
+                                               and portal.backfill_lock.locked):
+            return self.default_mxid_intent
+        return self.intent
+
+    async def update_info(self, info: BaseResponseUser) -> None:
+        update = False
+        update = await self._update_name(info) or update
+        update = await self._update_avatar(info) or update
+        if update:
+            await self.update()
+
+    @classmethod
+    def _get_displayname(cls, info: BaseResponseUser) -> str:
+        return cls.config["bridge.displayname_template"].format(displayname=info.full_name,
+                                                                id=info.pk, username=info.username)
+
+    async def _update_name(self, info: BaseResponseUser) -> bool:
+        name = self._get_displayname(info)
+        if name != self.name:
+            self.name = name
+            try:
+                await self.default_mxid_intent.set_displayname(self.name)
+                self.name_set = True
+            except Exception:
+                self.log.exception("Failed to update displayname")
+                self.name_set = False
+            return True
+        return False
+
+    async def _update_avatar(self, info: BaseResponseUser) -> bool:
+        if info.profile_pic_id != self.photo_id or not self.avatar_set:
+            self.photo_id = info.profile_pic_id
+            if info.profile_pic_id:
+                async with ClientSession() as sess, sess.get(info.profile_pic_url) as resp:
+                    content_type = resp.headers["Content-Type"]
+                    resp_data = await resp.read()
+                mxc = await self.default_mxid_intent.upload_media(data=resp_data,
+                                                                  mime_type=content_type,
+                                                                  filename=info.profile_pic_id)
+            else:
+                mxc = None
+            try:
+                await self.default_mxid_intent.set_avatar_url(mxc)
+                self.avatar_set = True
+                self.photo_mxc = mxc
+            except Exception:
+                self.log.exception("Failed to update avatar")
+                self.avatar_set = False
+            return True
+        return False
+
+    async def default_puppet_should_leave_room(self, room_id: RoomID) -> bool:
+        portal = await p.Portal.get_by_mxid(room_id)
+        return portal and portal.other_user_pk != self.pk
+
+    # region Database getters
+
+    def _add_to_cache(self) -> None:
+        self.by_pk[self.pk] = self
+        if self.custom_mxid:
+            self.by_custom_mxid[self.custom_mxid] = self
+
+    async def save(self) -> None:
+        await self.update()
+
+    @classmethod
+    async def get_by_mxid(cls, mxid: UserID, create: bool = True) -> Optional['Puppet']:
+        pk = cls.get_id_from_mxid(mxid)
+        if pk:
+            return await cls.get_by_pk(pk, create)
+        return None
+
+    @classmethod
+    async def get_by_custom_mxid(cls, mxid: UserID) -> Optional['Puppet']:
+        try:
+            return cls.by_custom_mxid[mxid]
+        except KeyError:
+            pass
+
+        puppet = cast(cls, await super().get_by_custom_mxid(mxid))
+        if puppet:
+            puppet._add_to_cache()
+            return puppet
+
+        return None
+
+    @classmethod
+    def get_id_from_mxid(cls, mxid: UserID) -> Optional[int]:
+        return cls.mxid_template.parse(mxid)
+
+    @classmethod
+    def get_mxid_from_id(cls, twid: int) -> UserID:
+        return UserID(cls.mxid_template.format_full(twid))
+
+    @classmethod
+    async def get_by_pk(cls, pk: int, create: bool = True) -> Optional['Puppet']:
+        try:
+            return cls.by_pk[pk]
+        except KeyError:
+            pass
+
+        puppet = cast(cls, await super().get_by_pk(pk))
+        if puppet is not None:
+            puppet._add_to_cache()
+            return puppet
+
+        if create:
+            puppet = cls(pk)
+            await puppet.insert()
+            puppet._add_to_cache()
+            return puppet
+
+        return None
+
+    @classmethod
+    async def all_with_custom_mxid(cls) -> AsyncGenerator['Puppet', None]:
+        puppets = await super().all_with_custom_mxid()
+        puppet: cls
+        for index, puppet in enumerate(puppets):
+            try:
+                yield cls.by_pk[puppet.pk]
+            except KeyError:
+                puppet._add_to_cache()
+                yield puppet
+
+    # endregion

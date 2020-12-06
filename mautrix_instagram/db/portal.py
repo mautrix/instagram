@@ -61,9 +61,13 @@ class Portal:
         return cls._from_row(row)
 
     @classmethod
-    async def get_by_thread_id(cls, thread_id: str, receiver: int = 0) -> Optional['Portal']:
+    async def get_by_thread_id(cls, thread_id: str, receiver: int,
+                               rec_must_match: bool = True) -> Optional['Portal']:
         q = ("SELECT thread_id, receiver, other_user_pk, mxid, name, encrypted "
              "FROM portal WHERE thread_id=$1 AND receiver=$2")
+        if not rec_must_match:
+            q = ("SELECT thread_id, receiver, other_user_pk, mxid, name, encrypted "
+                 "FROM portal WHERE thread_id=$1 AND (receiver=$2 OR receiver=0)")
         row = await cls.db.fetchrow(q, thread_id, receiver)
         if not row:
             return None
