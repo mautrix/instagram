@@ -71,7 +71,7 @@ class LoginPhoneVerificationSettings(SerializableAttrs['LoginPhoneVerificationSe
     max_sms_count: int
     resend_sms_delay_sec: int
     robocall_count_down_time_sec: int
-    robocall_max_after_sms: bool
+    robocall_after_max_sms: bool
 
 
 @dataclass
@@ -84,6 +84,10 @@ class LoginTwoFactorInfo(SerializableAttrs['LoginTwoFactorInfo']):
     show_messenger_code_option: bool
     show_new_login_screen: bool
     show_trusted_device_option: bool
+    should_opt_in_trusted_device_option: bool
+    pending_trusted_notification: bool
+    # TODO type
+    # sms_not_allowed_reason: Any
     phone_verification_settings: Optional[LoginPhoneVerificationSettings] = None
 
 
@@ -92,9 +96,9 @@ class LoginErrorResponse(SerializableAttrs['LoginErrorResponse']):
     message: str
     status: str
     error_type: str
-    error_title: str
-    buttons: List[LoginErrorResponseButton]
-    invalid_credentials: bool
-    two_factor_required: bool
+    error_title: Optional[str] = None
+    buttons: Optional[List[LoginErrorResponseButton]] = None
+    invalid_credentials: Optional[bool] = None
+    two_factor_required: Optional[bool] = None
     two_factor_info: Optional[LoginTwoFactorInfo] = None
     phone_verification_settings: Optional[LoginPhoneVerificationSettings] = None

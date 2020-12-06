@@ -13,12 +13,13 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
+from mautrix.bridge.commands import HelpSection, command_handler
 from mauigpapi.state import AndroidState
 from mauigpapi.http import AndroidAPI
 from mauigpapi.errors import (IGLoginTwoFactorRequiredError, IGLoginBadPasswordError,
-                              IGLoginInvalidUserError, IGLoginError)
+                              IGLoginInvalidUserError, IGBad2FACodeError)
+from mauigpapi.types import BaseResponseUser
 
-from mautrix.bridge.commands import HelpSection, command_handler
 from .typehint import CommandEvent
 
 SECTION_AUTH = HelpSection("Authentication", 10, "")
@@ -35,47 +36,48 @@ async def login(evt: CommandEvent) -> None:
         return
     username = evt.args[0]
     password = " ".join(evt.args[1:])
-    state = AndroidState()
-    state.device.generate(username)
-    api = AndroidAPI(state)
-    await api.simulate_pre_login_flow()
+    if evt.sender.command_status and evt.sender.command_status["action"] == "Login":
+        api: AndroidAPI = evt.sender.command_status["api"]
+        state: AndroidState = evt.sender.command_status["state"]
+    else:
+        evt.log.trace(f"Generating new device for {username}")
+        state = AndroidState()
+        state.device.generate(username)
+        api = AndroidAPI(state)
+        await api.simulate_pre_login_flow()
+        evt.sender.command_status = {
+            "action": "Login",
+            "room_id": evt.room_id,
+            "state": state,
+            "api": api,
+        }
     try:
         resp = await api.login(username, password)
     except IGLoginTwoFactorRequiredError as e:
         tfa_info = e.body.two_factor_info
         msg = "Username and password accepted, but you have two-factor authentication enabled.\n"
-        if tfa_info.sms_two_factor_on:
-            if tfa_info.totp_two_factor_on:
-                msg += (f"Send the code from your authenticator app "
-                        f"or one sent to {tfa_info.obfuscated_phone_number} here.")
-            else:
-                msg += f"Send the code sent to {tfa_info.obfuscated_phone_number} here."
-        elif tfa_info.totp_two_factor_on:
+        if tfa_info.totp_two_factor_on:
             msg += "Send the code from your authenticator app here."
+        elif tfa_info.sms_two_factor_on:
+            msg += f"Send the code sent to {tfa_info.obfuscated_phone_number} here."
         else:
             msg += ("Unfortunately, none of your two-factor authentication methods are currently "
                     "supported by the bridge.")
             return
         evt.sender.command_status = {
-            "action": "Login",
-            "room_id": evt.room_id,
+            **evt.sender.command_status,
             "next": enter_login_2fa,
-
             "username": tfa_info.username,
+            "is_totp": tfa_info.totp_two_factor_on,
             "2fa_identifier": tfa_info.two_factor_identifier,
-            "state": state,
-            "api": api,
         }
+        await evt.reply(msg)
     except IGLoginInvalidUserError:
         await evt.reply("Invalid username")
     except IGLoginBadPasswordError:
         await evt.reply("Incorrect password")
     else:
-        evt.sender.state = state
-        user = resp.logged_in_user
-        await evt.reply(f"Successfully logged in as {user.full_name} ([@{user.username}]"
-                        f"(https://instagram.com/{user.username}), user ID: {user.pk})")
-        await evt.sender.try_connect()
+        await _post_login(evt, api, state, resp.logged_in_user)
 
 
 async def enter_login_2fa(evt: CommandEvent) -> None:
@@ -83,19 +85,32 @@ async def enter_login_2fa(evt: CommandEvent) -> None:
     state: AndroidState = evt.sender.command_status["state"]
     identifier = evt.sender.command_status["2fa_identifier"]
     username = evt.sender.command_status["username"]
-    evt.sender.command_status = None
+    is_totp = evt.sender.command_status["is_totp"]
     try:
-        user = await api.two_factor_login(username, code="".join(evt.args), identifier=identifier)
-    except IGLoginError as e:
-        await evt.reply(f"Failed to log in: {e.body.message}")
+        resp = await api.two_factor_login(username, code="".join(evt.args), identifier=identifier,
+                                          is_totp=is_totp)
+    except IGBad2FACodeError:
+        await evt.reply("Invalid 2-factor authentication code. Please try again "
+                        "or use `$cmdprefix+sp cancel` to cancel.")
     except Exception as e:
         await evt.reply(f"Failed to log in: {e}")
         evt.log.exception("Failed to log in")
+        evt.sender.command_status = None
     else:
-        evt.sender.state = state
-        await evt.reply(f"Successfully logged in as {user.full_name} ([@{user.username}]"
-                        f"(https://instagram.com/{user.username}), user ID: {user.pk})")
-        await evt.sender.try_connect()
+        evt.sender.command_status = None
+        await _post_login(evt, api, state, resp.logged_in_user)
+
+
+async def _post_login(evt: CommandEvent, api: AndroidAPI, state: AndroidState,
+                      user: BaseResponseUser) -> None:
+    await api.simulate_post_login_flow()
+    evt.sender.state = state
+    pl = state.device.payload
+    manufacturer, model = pl["manufacturer"], pl["model"]
+    await evt.reply(f"Successfully logged in as {user.full_name} ([@{user.username}]"
+                    f"(https://instagram.com/{user.username}), user ID: {user.pk}).\n\n"
+                    f"The bridge will show up on Instagram as {manufacturer} {model}.")
+    await evt.sender.try_connect()
 
 
 @command_handler(needs_auth=True, help_section=SECTION_AUTH, help_text="Disconnect the bridge from"

@@ -32,7 +32,7 @@ class IGResponseError(IGError):
         if "message" in json:
             message = json["message"]
         type_hint = get_type_hints(type(self)).get("body", JSON)
-        if type_hint is not JSON and isinstance(type_hint, Serializable):
+        if type_hint is not JSON and issubclass(type_hint, Serializable):
             self.body = type_hint.deserialize(json)
         super().__init__(f"{prefix}: {self._message_override or message}")
 
@@ -102,4 +102,8 @@ class IGLoginBadPasswordError(IGLoginError):
 
 
 class IGLoginInvalidUserError(IGLoginError):
+    pass
+
+
+class IGBad2FACodeError(IGResponseError):
     pass

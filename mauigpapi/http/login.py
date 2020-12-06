@@ -67,8 +67,8 @@ class LoginAPI(BaseAndroidAPI):
                                         response_type=LoginResponse)
 
     async def two_factor_login(self, username: str, code: str, identifier: str,
-                               trust_device: bool = True, method: Optional[str] = "1"
-                               ) -> LoginResponseUser:
+                               trust_device: bool = True, is_totp: bool = True,
+                               ) -> LoginResponse:
         req = {
             "verification_code": code,
             "_csrftoken": self.state.cookies.csrf_token,
@@ -77,10 +77,10 @@ class LoginAPI(BaseAndroidAPI):
             "trust_this_device": "1" if trust_device else "0",
             "guid": self.state.device.uuid,
             "device_id": self.state.device.id,
-            "verification_method": method,
+            "verification_method": "0" if is_totp else "1",
         }
         return await self.std_http_post("/api/v1/accounts/two_factor_login/", data=req,
-                                        response_type=LoginResponseUser)
+                                        response_type=LoginResponse)
 
     async def logout(self, one_tap_app_login: Optional[bool] = None) -> LogoutResponse:
         req = {

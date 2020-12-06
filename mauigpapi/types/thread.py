@@ -40,7 +40,7 @@ class ThreadUserLastSeenAt(SerializableAttrs['UserLastSeenAt']):
     shh_seen_state: Dict[str, Any]
 
 
-@dataclass
+@dataclass(kw_only=True)
 class Thread(SerializableAttrs['Thread']):
     thread_id: str
     thread_v2_id: str
@@ -80,7 +80,7 @@ class Thread(SerializableAttrs['Thread']):
 
     newest_cursor: str
     oldest_cursor: str
-    next_cursor: str
+    next_cursor: Optional[str] = None
     prev_cursor: str
     last_permanent_item: ThreadItem
     items: List[ThreadItem]

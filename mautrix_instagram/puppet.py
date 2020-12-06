@@ -45,12 +45,13 @@ class Puppet(DBPuppet, BasePuppet):
 
     def __init__(self, pk: int, name: Optional[str] = None, username: Optional[str] = None,
                  photo_id: Optional[str] = None, photo_mxc: Optional[ContentURI] = None,
-                 is_registered: bool = False, custom_mxid: Optional[UserID] = None,
-                 access_token: Optional[str] = None, next_batch: Optional[SyncToken] = None,
-                 base_url: Optional[URL] = None) -> None:
-        super().__init__(pk=pk, name=name, username=username, photo_id=photo_id, photo_mxc=photo_mxc,
-                         is_registered=is_registered, custom_mxid=custom_mxid,
-                         access_token=access_token, next_batch=next_batch, base_url=base_url)
+                 name_set: bool = False, avatar_set: bool = False, is_registered: bool = False,
+                 custom_mxid: Optional[UserID] = None, access_token: Optional[str] = None,
+                 next_batch: Optional[SyncToken] = None, base_url: Optional[URL] = None) -> None:
+        super().__init__(pk=pk, name=name, username=username, photo_id=photo_id, name_set=name_set,
+                         photo_mxc=photo_mxc, avatar_set=avatar_set, is_registered=is_registered,
+                         custom_mxid=custom_mxid, access_token=access_token, next_batch=next_batch,
+                         base_url=base_url)
         self.log = self.log.getChild(str(pk))
 
         self.default_mxid = self.get_mxid_from_id(pk)
@@ -110,6 +111,8 @@ class Puppet(DBPuppet, BasePuppet):
         if info.profile_pic_id != self.photo_id or not self.avatar_set:
             self.photo_id = info.profile_pic_id
             if info.profile_pic_id:
+                # TODO if info.has_anonymous_profile_picture, we might need auth to get it
+                #      ...and we should probably download it with the device headers anyway
                 async with ClientSession() as sess, sess.get(info.profile_pic_url) as resp:
                     content_type = resp.headers["Content-Type"]
                     resp_data = await resp.read()

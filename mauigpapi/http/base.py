@@ -14,7 +14,6 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from typing import Optional, Dict, Any, TypeVar, Type
-import asyncio
 import random
 import time
 import json
@@ -26,7 +25,7 @@ from mautrix.types import JSON, Serializable
 from ..state import AndroidState
 from ..errors import (IGActionSpamError, IGNotFoundError, IGRateLimitError, IGCheckpointError,
                       IGUserHasLoggedOutError, IGLoginRequiredError, IGPrivateUserError,
-                      IGSentryBlockError, IGInactiveUserError, IGResponseError,
+                      IGSentryBlockError, IGInactiveUserError, IGResponseError, IGBad2FACodeError,
                       IGLoginBadPasswordError, IGLoginInvalidUserError,
                       IGLoginTwoFactorRequiredError)
 
@@ -169,6 +168,8 @@ class BaseAndroidAPI:
             raise IGLoginBadPasswordError(resp, data)
         elif error_type == "invalid_user":
             raise IGLoginInvalidUserError(resp, data)
+        elif error_type == "sms_code_validation_code_invalid":
+            raise IGBad2FACodeError(resp, data)
 
         raise IGResponseError(resp, data)
 

@@ -44,13 +44,17 @@ class Puppet:
     next_batch: Optional[SyncToken]
     base_url: Optional[URL]
 
+    @property
+    def _base_url_str(self) -> Optional[str]:
+        return str(self.base_url) if self.base_url else None
+
     async def insert(self) -> None:
         q = ("INSERT INTO puppet (pk, name, username, photo_id, photo_mxc, name_set, avatar_set,"
              "                    is_registered, custom_mxid, access_token, next_batch, base_url) "
              "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)")
         await self.db.execute(q, self.pk, self.name, self.username, self.photo_id, self.photo_mxc,
-                              self.is_registered, self.custom_mxid, self.access_token,
-                              self.next_batch, str(self.base_url) if self.base_url else None)
+                              self.name_set, self.avatar_set, self.is_registered, self.custom_mxid,
+                              self.access_token, self.next_batch, self._base_url_str)
 
     async def update(self) -> None:
         q = ("UPDATE puppet SET name=$2, username=$3, photo_id=$4, photo_mxc=$5, name_set=$6,"
@@ -59,8 +63,7 @@ class Puppet:
              "WHERE pk=$1")
         await self.db.execute(q, self.pk, self.name, self.username, self.photo_id, self.photo_mxc,
                               self.name_set, self.avatar_set, self.is_registered, self.custom_mxid,
-                              self.access_token, self.next_batch,
-                              str(self.base_url) if self.base_url else None)
+                              self.access_token, self.next_batch, self._base_url_str)
 
     @classmethod
     def _from_row(cls, row: asyncpg.Record) -> 'Puppet':
@@ -73,7 +76,7 @@ class Puppet:
     async def get_by_pk(cls, pk: int) -> Optional['Puppet']:
         q = ("SELECT pk, name, username, photo_id, photo_mxc, name_set, avatar_set, is_registered,"
              "       custom_mxid, access_token, next_batch, base_url "
-             "FROM puppet WHERE igpk=$1")
+             "FROM puppet WHERE pk=$1")
         row = await cls.db.fetchrow(q, pk)
         if not row:
             return None

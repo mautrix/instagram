@@ -76,6 +76,7 @@ class User(DBUser, BaseUser):
         self._metric_value = defaultdict(lambda: False)
         self._is_logged_in = False
         self._listen_task = None
+        self.command_status = None
 
     @classmethod
     def init_cls(cls, bridge: 'InstagramBridge') -> AsyncIterable[Awaitable[None]]:
@@ -107,6 +108,7 @@ class User(DBUser, BaseUser):
             await self.send_bridge_notice("You have been logged out of Instagram")
             return
         self.client = client
+        self._is_logged_in = True
         self.igpk = resp.user.pk
         self.username = resp.user.username
         self._track_metric(METRIC_LOGGED_IN, True)
@@ -234,6 +236,9 @@ class User(DBUser, BaseUser):
 
     @async_time(METRIC_MESSAGE)
     async def handle_message(self, evt: MessageSyncEvent) -> None:
+        # We don't care about messages with no sender
+        if not evt.message.user_id:
+            return
         portal = await po.Portal.get_by_thread_id(evt.message.thread_id, receiver=self.igpk)
         if not portal.mxid:
             # TODO try to find the thread?

@@ -4,5 +4,5 @@ from .state import IGUserIDNotFoundError, IGCookieNotFoundError, IGNoCheckpointE
 from .response import (IGResponseError, IGActionSpamError, IGNotFoundError, IGRateLimitError,
                        IGCheckpointError, IGUserHasLoggedOutError, IGLoginRequiredError,
                        IGPrivateUserError, IGSentryBlockError, IGInactiveUserError, IGLoginError,
-                       IGLoginTwoFactorRequiredError, IGLoginBadPasswordError,
+                       IGLoginTwoFactorRequiredError, IGLoginBadPasswordError, IGBad2FACodeError,
                        IGLoginInvalidUserError, IGNotLoggedInError)

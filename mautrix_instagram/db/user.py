@@ -38,12 +38,12 @@ class User:
         q = ('INSERT INTO "user" (mxid, igpk, state, notice_room) '
              'VALUES ($1, $2, $3, $4)')
         await self.db.execute(q, self.mxid, self.igpk,
-                              self.state.serialize() if self.state else None, self.notice_room)
+                              self.state.json() if self.state else None, self.notice_room)
 
     async def update(self) -> None:
         await self.db.execute('UPDATE "user" SET igpk=$2, state=$3, notice_room=$4 '
                               'WHERE mxid=$1', self.mxid, self.igpk,
-                              self.state.serialize() if self.state else None, self.notice_room)
+                              self.state.json() if self.state else None, self.notice_room)
 
     @classmethod
     def _from_row(cls, row: asyncpg.Record) -> 'User':
@@ -69,7 +69,7 @@ class User:
 
     @classmethod
     async def all_logged_in(cls) -> List['User']:
-        q = ("SELECT mxid, igp, state, notice_room "
+        q = ("SELECT mxid, igpk, state, notice_room "
              'FROM "user" WHERE igpk IS NOT NULL AND state IS NOT NULL')
         rows = await cls.db.fetch(q)
         return [cls._from_row(row) for row in rows]

@@ -117,7 +117,7 @@ class Portal(DBPortal, BasePortal):
             self.log.debug(f"_upsert_reaction redacting {existing.mxid} and inserting {mxid}"
                            f" (message: {message.mxid})")
             await intent.redact(existing.mx_room, existing.mxid)
-            await existing.edit(reaction=reaction, mxid=mxid, mx_room=message.mx_room)
+            await existing.edit(emoji=reaction, mxid=mxid, mx_room=message.mx_room)
         else:
             self.log.debug(f"_upsert_reaction inserting {mxid} (message: {message.mxid})")
             await DBReaction(mxid=mxid, mx_room=message.mx_room, ig_item_id=message.item_id,
@@ -240,8 +240,8 @@ class Portal(DBPortal, BasePortal):
             event_id = None
             if item.text:
                 content = TextMessageEventContent(msgtype=MessageType.TEXT, body=item.text)
-                # TODO timestamp is probably not milliseconds
-                event_id = await self._send_message(intent, content, timestamp=item.timestamp)
+                event_id = await self._send_message(intent, content,
+                                                    timestamp=item.timestamp // 1000)
             # TODO handle attachments and reactions
             if event_id:
                 await DBMessage(mxid=event_id, mx_room=self.mxid, item_id=item.item_id,
@@ -275,6 +275,7 @@ class Portal(DBPortal, BasePortal):
         # Make sure puppets who should be here are here
         for user in users:
             puppet = await p.Puppet.get_by_pk(user.pk)
+            await puppet.update_info(user)
             await puppet.intent_for(self).ensure_joined(self.mxid)
 
         # Kick puppets who shouldn't be here
