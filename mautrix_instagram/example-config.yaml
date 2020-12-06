@@ -76,7 +76,7 @@ bridge:
     # Displayname template for Instagram users.
     # {displayname} is replaced with the display name of the Instagram user.
     # {username} is replaced with the username of the Instagram user.
-    displayname_template: "{displayname} (Instagram)"
+    displayname_template: "{username} (Instagram)"
 
     # Maximum length of displayname
     displayname_max_length: 100
@@ -199,6 +199,8 @@ logging:
         mau:
             level: DEBUG
         aiohttp:
+            level: INFO
+        paho.mqtt:
             level: INFO
     root:
         level: DEBUG
