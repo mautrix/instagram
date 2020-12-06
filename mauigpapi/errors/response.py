@@ -70,11 +70,11 @@ class IGNotLoggedInError(IGResponseError):
 
 
 class IGUserHasLoggedOutError(IGNotLoggedInError):
-    body: LoginRequiredResponse
+    pass
 
 
 class IGLoginRequiredError(IGNotLoggedInError):
-    body: LoginRequiredResponse
+    pass
 
 
 class IGPrivateUserError(IGResponseError):

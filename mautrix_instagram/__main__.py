@@ -25,6 +25,7 @@ from .portal import Portal
 from .puppet import Puppet
 from .matrix import MatrixHandler
 from .version import version, linkified_version
+from . import commands
 
 
 class InstagramBridge(Bridge):
