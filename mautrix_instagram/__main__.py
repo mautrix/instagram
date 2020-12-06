@@ -25,6 +25,7 @@ from .portal import Portal
 from .puppet import Puppet
 from .matrix import MatrixHandler
 from .version import version, linkified_version
+from .web import ProvisioningAPI
 from . import commands
 
 
@@ -44,6 +45,7 @@ class InstagramBridge(Bridge):
     config: Config
     matrix: MatrixHandler
     state_store: PgBridgeStateStore
+    provisioning_api: ProvisioningAPI
 
     def make_state_store(self) -> None:
         self.state_store = PgBridgeStateStore(self.db, self.get_puppet, self.get_double_puppet)
@@ -55,6 +57,9 @@ class InstagramBridge(Bridge):
 
     def prepare_bridge(self) -> None:
         super().prepare_bridge()
+        cfg = self.config["bridge.provisioning"]
+        self.provisioning_api = ProvisioningAPI(cfg["shared_secret"])
+        self.az.app.add_subapp(cfg["prefix"], self.provisioning_api.app)
 
     async def start(self) -> None:
         await self.db.start()

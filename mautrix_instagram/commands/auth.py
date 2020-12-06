@@ -13,6 +13,8 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
+from typing import Tuple, TYPE_CHECKING
+
 from mautrix.bridge.commands import HelpSection, command_handler
 from mauigpapi.state import AndroidState
 from mauigpapi.http import AndroidAPI
@@ -22,7 +24,27 @@ from mauigpapi.types import BaseResponseUser
 
 from .typehint import CommandEvent
 
+if TYPE_CHECKING:
+    from ..user import User
+
 SECTION_AUTH = HelpSection("Authentication", 10, "")
+
+
+async def get_login_state(user: 'User', username: str) -> Tuple[AndroidAPI, AndroidState]:
+    if user.command_status and user.command_status["action"] == "Login":
+        api: AndroidAPI = user.command_status["api"]
+        state: AndroidState = user.command_status["state"]
+    else:
+        state = AndroidState()
+        state.device.generate(username)
+        api = AndroidAPI(state)
+        await api.simulate_pre_login_flow()
+        user.command_status = {
+            "action": "Login",
+            "state": state,
+            "api": api,
+        }
+    return api, state
 
 
 @command_handler(needs_auth=False, management_only=True, help_section=SECTION_AUTH,
@@ -36,21 +58,7 @@ async def login(evt: CommandEvent) -> None:
         return
     username = evt.args[0]
     password = " ".join(evt.args[1:])
-    if evt.sender.command_status and evt.sender.command_status["action"] == "Login":
-        api: AndroidAPI = evt.sender.command_status["api"]
-        state: AndroidState = evt.sender.command_status["state"]
-    else:
-        evt.log.trace(f"Generating new device for {username}")
-        state = AndroidState()
-        state.device.generate(username)
-        api = AndroidAPI(state)
-        await api.simulate_pre_login_flow()
-        evt.sender.command_status = {
-            "action": "Login",
-            "room_id": evt.room_id,
-            "state": state,
-            "api": api,
-        }
+    api, state = await get_login_state(evt.sender, username)
     try:
         resp = await api.login(username, password)
     except IGLoginTwoFactorRequiredError as e:
