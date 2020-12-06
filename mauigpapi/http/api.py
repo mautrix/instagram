@@ -1,7 +1,7 @@
-from .direct_inbox import DirectInboxAPI
+from .thread import ThreadAPI
 from .login_simulate import LoginSimulateAPI
 from .upload import UploadAPI
 
 
-class AndroidAPI(DirectInboxAPI, LoginSimulateAPI, UploadAPI):
+class AndroidAPI(ThreadAPI, LoginSimulateAPI, UploadAPI):
     pass

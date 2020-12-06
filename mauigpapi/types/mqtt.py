@@ -88,11 +88,13 @@ class IrisPayload(SerializableAttrs['IrisPayload']):
 class MessageSyncMessage(ThreadItem, SerializableAttrs['MessageSyncMessage']):
     path: str
     op: Operation = Operation.ADD
-    # TODO some or all of these might be in direct_inbox too
+
+    # These come from parsing the path
     admin_user_ids: Optional[int] = None
     approval_required_for_new_members: Optional[bool] = None
     participants: Optional[Dict[str, str]] = None
     reactions: Optional[dict] = None
+    thread_id: Optional[str] = None
 
 
 @dataclass(kw_only=True)
