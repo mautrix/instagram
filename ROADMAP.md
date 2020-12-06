@@ -2,7 +2,7 @@
 
 * Matrix → Instagram
   * [ ] Message content
-    * [ ] Text
+    * [x] Text
     * [ ] Media
       * [ ] Images
       * [ ] Videos
@@ -16,7 +16,7 @@
   * [ ] Read receipts
 * Instagram → Matrix
   * [ ] Message content
-    * [ ] Text
+    * [x] Text
     * [ ] Media
       * [ ] Images
       * [ ] Videos
@@ -28,16 +28,18 @@
   * [ ] Presence
   * [ ] Typing notifications
   * [ ] Read receipts
-  * [ ] User metadata
-    * [ ] Name
-    * [ ] Avatar
+  * [x] User metadata
+    * [x] Name
+    * [x] Avatar
 * Misc
-  * [ ] Multi-user support
-  * [ ] Shared group chat portals
+  * [x] Multi-user support
+  * [x] Shared group chat portals
   * [ ] Automatic portal creation
-    * [ ] At startup
+    * [x] At startup
     * [ ] When receiving message
   * [ ] Private chat creation by inviting Matrix puppet of Instagram user to new room
   * [ ] Option to use own Matrix account for messages sent from other Instagram clients
+    * [x] Automatic login with shared secret
+    * [ ] Manual login with `login-matrix`
 
 † Not supported on Instagram
