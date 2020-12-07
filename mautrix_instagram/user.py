@@ -19,11 +19,9 @@ from collections import defaultdict
 import asyncio
 import logging
 
-from mauigpapi.mqtt import (AndroidMQTT, Connect, Disconnect, GraphQLSubscription,
-                            SkywalkerSubscription)
-from mauigpapi.http import AndroidAPI
-from mauigpapi.state import AndroidState
-from mauigpapi.types import CurrentUser, MessageSyncEvent
+from mauigpapi import AndroidAPI, AndroidState, AndroidMQTT
+from mauigpapi.mqtt import Connect, Disconnect, GraphQLSubscription, SkywalkerSubscription
+from mauigpapi.types import CurrentUser, MessageSyncEvent, Operation
 from mauigpapi.errors import IGNotLoggedInError
 from mautrix.bridge import BaseUser
 from mautrix.types import UserID, RoomID, EventID, TextMessageEventContent, MessageType
@@ -236,16 +234,21 @@ class User(DBUser, BaseUser):
 
     @async_time(METRIC_MESSAGE)
     async def handle_message(self, evt: MessageSyncEvent) -> None:
-        # We don't care about messages with no sender
-        if not evt.message.user_id:
-            return
         portal = await po.Portal.get_by_thread_id(evt.message.thread_id, receiver=self.igpk)
         if not portal.mxid:
             # TODO try to find the thread?
             self.log.warning(f"Ignoring message to unknown thread {evt.message.thread_id}")
             return
-        sender = await pu.Puppet.get_by_pk(evt.message.user_id)
-        await portal.handle_instagram_item(self, sender, evt.message)
+        self.log.trace(f"Received message sync event {evt.message}")
+        sender = await pu.Puppet.get_by_pk(evt.message.user_id) if evt.message.user_id else None
+        if evt.message.op == Operation.ADD:
+            if not sender:
+                # I don't think we care about adds with no sender
+                return
+            await portal.handle_instagram_item(self, sender, evt.message)
+        elif evt.message.op == Operation.REMOVE:
+            # Removes don't have a sender, only the message sender can unsend messages anyway
+            await portal.handle_instagram_remove(evt.message.item_id)
 
     # @async_time(METRIC_RECEIPT)
     # async def handle_receipt(self, evt: ConversationReadEntry) -> None:

@@ -70,3 +70,7 @@ class ThreadAPI(BaseAndroidAPI):
             for item in resp.thread.items:
                 yield item
 
+    async def delete_item(self, thread_id: str, item_id: str) -> None:
+        await self.std_http_post(f"/api/v1/direct_v2/threads/{thread_id}/items/{item_id}/delete/",
+                                 data={"_csrftoken": self.state.cookies.csrf_token,
+                                       "_uuid": self.state.device.uuid})

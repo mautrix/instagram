@@ -64,6 +64,7 @@ async def upgrade_v1(conn: Connection) -> None:
         mx_room  TEXT NOT NULL,
         item_id  TEXT,
         receiver BIGINT,
+        sender   BIGINT NOT NULL,
         PRIMARY KEY (item_id, receiver),
         UNIQUE (mxid, mx_room)
     )""")

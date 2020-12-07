@@ -23,13 +23,14 @@ import asyncio
 import magic
 from yarl import URL
 
-from mauigpapi.types import Thread, ThreadUser, ThreadItem, RegularMediaItem, MediaType
+from mauigpapi.types import (Thread, ThreadUser, ThreadItem, RegularMediaItem, MediaType,
+                             ReactionStatus)
 from mautrix.appservice import AppService, IntentAPI
 from mautrix.bridge import BasePortal, NotificationDisabler
 from mautrix.types import (EventID, MessageEventContent, RoomID, EventType, MessageType, ImageInfo,
                            VideoInfo, MediaMessageEventContent, TextMessageEventContent,
                            ContentURI, EncryptedFile)
-from mautrix.errors import MatrixError
+from mautrix.errors import MatrixError, MForbidden
 from mautrix.util.simple_lock import SimpleLock
 from mautrix.util.network_retry import call_with_net_retry
 
@@ -161,6 +162,7 @@ class Portal(DBPortal, BasePortal):
             mime_type = message.info.mimetype or magic.from_buffer(data, mime=True)
             if mime_type == "image/jpeg":
                 upload_resp = await sender.client.upload_jpeg_photo(data)
+                # TODO I don't think this works
                 resp = await sender.mqtt.send_media(self.thread_id, upload_resp.upload_id,
                                                     client_context=request_id)
             else:
@@ -173,7 +175,7 @@ class Portal(DBPortal, BasePortal):
         else:
             self._msgid_dedup.appendleft(resp.payload.item_id)
             await DBMessage(mxid=event_id, mx_room=self.mxid, item_id=resp.payload.item_id,
-                            receiver=self.receiver).insert()
+                            receiver=self.receiver, sender=sender.igpk).insert()
             self._reqid_dedup.remove(request_id)
             await self._send_delivery_receipt(event_id)
             self.log.debug(f"Handled Matrix message {event_id} -> {resp.payload.item_id}")
@@ -205,16 +207,26 @@ class Portal(DBPortal, BasePortal):
             return
 
         # TODO implement
-        # reaction = await DBReaction.get_by_mxid(event_id, self.mxid)
-        # if reaction:
-        #     try:
-        #         await reaction.delete()
-        #         await sender.client.conversation(self.twid).delete_reaction(reaction.tw_msgid,
-        #                                                                     reaction.reaction)
-        #         await self._send_delivery_receipt(redaction_event_id)
-        #         self.log.trace(f"Removed {reaction} after Matrix redaction")
-        #     except Exception:
-        #         self.log.exception("Removing reaction failed")
+        reaction = await DBReaction.get_by_mxid(event_id, self.mxid)
+        if reaction:
+            try:
+                await reaction.delete()
+                await sender.mqtt.send_reaction(self.thread_id, item_id=reaction.ig_item_id,
+                                                reaction_status=ReactionStatus.DELETED, emoji="")
+                await self._send_delivery_receipt(redaction_event_id)
+                self.log.trace(f"Removed {reaction} after Matrix redaction")
+            except Exception:
+                self.log.exception("Removing reaction failed")
+            return
+
+        message = await DBMessage.get_by_mxid(event_id, self.mxid)
+        if message:
+            try:
+                await message.delete()
+                await sender.client.delete_item(self.thread_id, message.item_id)
+                self.log.trace(f"Removed {message} after Matrix redaction")
+            except Exception:
+                self.log.exception("Removing message failed")
 
     async def handle_matrix_leave(self, user: 'u.User') -> None:
         if self.is_direct:
@@ -305,11 +317,23 @@ class Portal(DBPortal, BasePortal):
             # TODO handle attachments and reactions
             if event_id:
                 await DBMessage(mxid=event_id, mx_room=self.mxid, item_id=item.item_id,
-                                receiver=self.receiver).insert()
+                                receiver=self.receiver, sender=sender.pk).insert()
                 await self._send_delivery_receipt(event_id)
                 self.log.debug(f"Handled Instagram message {item.item_id} -> {event_id}")
             else:
                 self.log.debug(f"Unhandled Instagram message {item.item_id}")
+
+    async def handle_instagram_remove(self, item_id: str) -> None:
+        message = await DBMessage.get_by_item_id(item_id, self.receiver)
+        if message is None:
+            return
+        await message.delete()
+        sender = await p.Puppet.get_by_pk(message.sender)
+        try:
+            await sender.intent_for(self).redact(self.mxid, message.mxid)
+        except MForbidden:
+            await self.main_intent.redact(self.mxid, message.mxid)
+        self.log.debug(f"Redacted {message.mxid} after Instagram unsend")
 
     # endregion
     # region Updating portal info

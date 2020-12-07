@@ -276,7 +276,7 @@ class AnimatedMediaItem(SerializableAttrs['AnimatedMediaItem']):
 class ThreadItem(SerializableAttrs['ThreadItem']):
     item_id: Optional[str] = None
     user_id: Optional[int] = None
-    timestamp: int
+    timestamp: Optional[int] = None
     item_type: Optional[ThreadItemType] = None
     is_shh_mode: bool = False
 

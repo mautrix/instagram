@@ -9,7 +9,7 @@
       * [ ] Voice messages
       * [ ] Locations
       * [ ] †Files
-  * [ ] Message redactions
+  * [x] Message redactions
   * [x] Message reactions
   * [ ] Presence
   * [ ] Typing notifications
@@ -22,7 +22,7 @@
       * [x] Videos
       * [ ] Voice messages
       * [ ] Locations
-  * [ ] Message unsend
+  * [x] Message unsend
   * [ ] Message reactions
   * [ ] Message history
   * [ ] Presence

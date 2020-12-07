@@ -223,9 +223,9 @@ class AndroidMQTT:
             subitem_key = rest[0]
             if subitem_key == "approval_required_for_new_members":
                 additional["approval_required_for_new_members"] = True
-            elif subitem_key == ["participants"]:
+            elif subitem_key == "participants":
                 additional["participants"] = {rest[1]: rest[2]}
-            elif subitem_key == ["items"]:
+            elif subitem_key == "items":
                 additional["item_id"] = rest[1]
                 # TODO wtf is this?
                 #      it has something to do with reactions
@@ -235,6 +235,7 @@ class AndroidMQTT:
                     }
             elif subitem_key in ("admin_user_ids", "activity_indicator_id"):
                 additional[subitem_key] = rest[1]
+        print("Parsed path", path, "->", additional)
         return additional
 
     def _on_message_sync(self, payload: bytes) -> None:
@@ -253,7 +254,7 @@ class AndroidMQTT:
                         **raw_message,
                         **json.loads(part.value),
                     }
-                except json.JSONDecodeError:
+                except (json.JSONDecodeError, TypeError):
                     raw_message["value"] = part.value
                 message = MessageSyncMessage.deserialize(raw_message)
                 evt = MessageSyncEvent(iris=parsed_item, message=message)
