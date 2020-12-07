@@ -115,7 +115,7 @@ class AndroidMQTT:
         self._client.on_message = self._on_message_handler
         self._client.on_publish = self._on_publish_handler
         self._client.on_connect = self._on_connect_handler
-        self._client.on_disconnect = self._on_disconnect_handler
+        # self._client.on_disconnect = self._on_disconnect_handler
         self._client.on_socket_open = self._on_socket_open
         self._client.on_socket_close = self._on_socket_close
         self._client.on_socket_register_write = self._on_socket_register_write
@@ -179,12 +179,8 @@ class AndroidMQTT:
     def _on_socket_unregister_write(self, client: MQTToTClient, _: Any, sock: socket) -> None:
         self._loop.remove_writer(sock)
 
-    def _on_disconnect_handler(self, client: MQTToTClient, _: Any, rc: int) -> None:
-        print(f"_on_disconnect_handler({rc})")
-
     def _on_connect_handler(self, client: MQTToTClient, _: Any, flags: Dict[str, Any], rc: int
                             ) -> None:
-        print(f"_on_connect_handler({flags}, {rc})")
         if rc != 0:
             err = paho.mqtt.client.connack_string(rc)
             self.log.error("MQTT Connection Error: %s (%d)", err, rc)
@@ -296,7 +292,7 @@ class AndroidMQTT:
                          GraphQLQueryID.CLIENT_CONFIG_UPDATE, GraphQLQueryID.LIVE_REALTIME_COMMENTS):
             self.log.debug(f"Got unknown realtime sub event {topic}: {parsed_thrift.payload}")
         parsed_json = json.loads(parsed_thrift.payload)
-        event = parsed_json["event"]
+        event = parsed_json.get("event", "<no event type>")
         for item in parsed_json["data"]:
             evt = self._parse_realtime_sub_item(topic, item)
             self.log.trace(f"Got realtime sub event with topic {topic}/{event}: {evt}")
@@ -330,7 +326,6 @@ class AndroidMQTT:
 
     async def _reconnect(self) -> None:
         try:
-            print("Reconnecting")
             self._client.reconnect()
         except (SocketError, OSError, WebsocketConnectionError) as e:
             # TODO custom class

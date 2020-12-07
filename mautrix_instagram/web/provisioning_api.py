@@ -69,17 +69,17 @@ class ProvisioningAPI:
             token = request.headers["Authorization"]
             token = token[len("Bearer "):]
         except KeyError:
-            raise web.HTTPBadRequest(body='{"error": "Missing Authorization header"}',
+            raise web.HTTPBadRequest(text='{"error": "Missing Authorization header"}',
                                      headers=self._headers)
         except IndexError:
-            raise web.HTTPBadRequest(body='{"error": "Malformed Authorization header"}',
+            raise web.HTTPBadRequest(text='{"error": "Malformed Authorization header"}',
                                      headers=self._headers)
         if token != self.shared_secret:
-            raise web.HTTPForbidden(body='{"error": "Invalid token"}', headers=self._headers)
+            raise web.HTTPForbidden(text='{"error": "Invalid token"}', headers=self._headers)
         try:
             user_id = request.query["user_id"]
         except KeyError:
-            raise web.HTTPBadRequest(body='{"error": "Missing user_id query param"}',
+            raise web.HTTPBadRequest(text='{"error": "Missing user_id query param"}',
                                      headers=self._headers)
 
         return u.User.get_by_mxid(UserID(user_id))
@@ -109,13 +109,13 @@ class ProvisioningAPI:
         try:
             data = await request.json()
         except json.JSONDecodeError:
-            raise web.HTTPBadRequest(body='{"error": "Malformed JSON"}', headers=self._headers)
+            raise web.HTTPBadRequest(text='{"error": "Malformed JSON"}', headers=self._headers)
 
         try:
             username = data["username"]
             password = data["password"]
         except KeyError:
-            raise web.HTTPBadRequest(body='{"error": "Missing keys"}', headers=self._headers)
+            raise web.HTTPBadRequest(text='{"error": "Missing keys"}', headers=self._headers)
 
         api, state = await get_login_state(user, username)
         try:
@@ -136,13 +136,13 @@ class ProvisioningAPI:
     async def login_2fa(self, request: web.Request) -> web.Response:
         user = await self.check_token(request)
         if not user.command_status or user.command_status["action"] != "Login":
-            raise web.HTTPNotFound(body='{"error": "No 2-factor login in progress}',
+            raise web.HTTPNotFound(text='{"error": "No 2-factor login in progress}',
                                    headers=self._headers)
 
         try:
             data = await request.json()
         except json.JSONDecodeError:
-            raise web.HTTPBadRequest(body='{"error": "Malformed JSON"}', headers=self._headers)
+            raise web.HTTPBadRequest(text='{"error": "Malformed JSON"}', headers=self._headers)
 
         try:
             username = data["username"]
@@ -150,7 +150,7 @@ class ProvisioningAPI:
             identifier = data["2fa_identifier"]
             is_totp = data["is_totp"]
         except KeyError:
-            raise web.HTTPBadRequest(body='{"error": "Missing keys"}', headers=self._headers)
+            raise web.HTTPBadRequest(text='{"error": "Missing keys"}', headers=self._headers)
 
         api: AndroidAPI = user.command_status["api"]
         state: AndroidState = user.command_status["state"]

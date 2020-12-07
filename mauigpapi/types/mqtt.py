@@ -143,7 +143,7 @@ class PubsubPayloadData(SerializableAttrs['PubsubPayloadData']):
 
 @dataclass(kw_only=True)
 class PubsubPayload(PubsubBasePayload, SerializableAttrs['PubsubPayload']):
-    data: List[PubsubPayloadData]
+    data: List[PubsubPayloadData] = attr.ib(factory=lambda: [])
 
 
 @dataclass(kw_only=True)

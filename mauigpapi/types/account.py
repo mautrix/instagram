@@ -17,7 +17,7 @@ from typing import Any, List, Optional, Dict
 
 from attr import dataclass
 
-from mautrix.types import SerializableAttrs
+from mautrix.types import SerializableAttrs, SerializableEnum
 
 
 @dataclass(kw_only=True)
@@ -71,7 +71,6 @@ class BaseFullResponseUser(BaseResponseUser, SerializableAttrs['BaseFullResponse
     is_business: bool
     # TODO enum?
     account_type: int
-    is_call_to_action_enabled: Any
 
 
 @dataclass
@@ -96,6 +95,13 @@ class ProfileEditParams(SerializableAttrs['ProfileEditParams']):
     disclaimer_text: str
 
 
+class Gender(SerializableEnum):
+    MALE = 1
+    FEMALE = 2
+    UNSET = 3
+    CUSTOM = 4
+
+
 @dataclass(kw_only=True)
 class CurrentUser(BaseFullResponseUser, SerializableAttrs['CurrentUser']):
     biography: str
@@ -108,7 +114,7 @@ class CurrentUser(BaseFullResponseUser, SerializableAttrs['CurrentUser']):
     hd_profile_pic_url_info: HDProfilePictureVersion
     show_conversion_edit_entry: bool
     birthday: Any
-    gender: int
+    gender: Gender
     custom_gender: str
     email: str
     profile_edit_params: Dict[str, ProfileEditParams]
