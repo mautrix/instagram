@@ -93,6 +93,13 @@ class BaseAndroidAPI:
         }
         return {k: v for k, v in headers.items() if v is not None}
 
+    async def raw_http_get(self, url: URL) -> ClientResponse:
+        return await self.http.get(url, headers={
+            "user-agent": self.state.user_agent,
+            "accept-language": self.state.device.language.replace("_", "-"),
+            "authorization": self.state.session.authorization,
+        })
+
     async def std_http_post(self, path: str, data: Optional[JSON] = None, raw: bool = False,
                             filter_nulls: bool = False, headers: Optional[Dict[str, str]] = None,
                             response_type: Optional[Type[T]] = JSON) -> T:

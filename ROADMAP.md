@@ -18,8 +18,8 @@
   * [ ] Message content
     * [x] Text
     * [ ] Media
-      * [ ] Images
-      * [ ] Videos
+      * [x] Images
+      * [x] Videos
       * [ ] Voice messages
       * [ ] Locations
   * [ ] Message unsend

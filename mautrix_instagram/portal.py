@@ -14,20 +14,24 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from typing import (Dict, Tuple, Optional, List, Deque, Set, Any, Union, AsyncGenerator,
-                    Awaitable, TYPE_CHECKING, cast)
+                    Awaitable, NamedTuple, TYPE_CHECKING, cast)
 from collections import deque
 from uuid import uuid4
+import mimetypes
 import asyncio
 
 import magic
+from yarl import URL
 
-from mauigpapi.types import Thread, ThreadUser, ThreadItem
+from mauigpapi.types import Thread, ThreadUser, ThreadItem, RegularMediaItem, MediaType
 from mautrix.appservice import AppService, IntentAPI
 from mautrix.bridge import BasePortal, NotificationDisabler
-from mautrix.types import (EventID, MessageEventContent, RoomID, EventType, MessageType,
-                           TextMessageEventContent)
+from mautrix.types import (EventID, MessageEventContent, RoomID, EventType, MessageType, ImageInfo,
+                           VideoInfo, MediaMessageEventContent, TextMessageEventContent,
+                           ContentURI, EncryptedFile)
 from mautrix.errors import MatrixError
 from mautrix.util.simple_lock import SimpleLock
+from mautrix.util.network_retry import call_with_net_retry
 
 from .db import Portal as DBPortal, Message as DBMessage, Reaction as DBReaction
 from .config import Config
@@ -43,6 +47,9 @@ except ImportError:
 
 StateBridge = EventType.find("m.bridge", EventType.Class.STATE)
 StateHalfShotBridge = EventType.find("uk.half-shot.bridge", EventType.Class.STATE)
+ReuploadedMediaInfo = NamedTuple('ReuploadedMediaInfo', mxc=Optional[ContentURI], url=str,
+                                 decryption_info=Optional[EncryptedFile], msgtype=MessageType,
+                                 file_name=str, info=Union[ImageInfo, VideoInfo])
 
 
 class Portal(DBPortal, BasePortal):
@@ -117,7 +124,7 @@ class Portal(DBPortal, BasePortal):
             self.log.debug(f"_upsert_reaction redacting {existing.mxid} and inserting {mxid}"
                            f" (message: {message.mxid})")
             await intent.redact(existing.mx_room, existing.mxid)
-            await existing.edit(emoji=reaction, mxid=mxid, mx_room=message.mx_room)
+            await existing.edit(reaction=reaction, mxid=mxid, mx_room=message.mx_room)
         else:
             self.log.debug(f"_upsert_reaction inserting {mxid} (message: {message.mxid})")
             await DBReaction(mxid=mxid, mx_room=message.mx_room, ig_item_id=message.item_id,
@@ -223,6 +230,59 @@ class Portal(DBPortal, BasePortal):
     # endregion
     # region Instagram event handling
 
+    async def _reupload_instagram_media(self, source: 'u.User', media: RegularMediaItem,
+                                        intent: IntentAPI) -> Optional[ReuploadedMediaInfo]:
+        if media.media_type == MediaType.IMAGE:
+            image = media.best_image
+            url = image.url
+            msgtype = MessageType.IMAGE
+            info = ImageInfo(height=image.height, width=image.width)
+        elif media.media_type == MediaType.VIDEO:
+            video = media.best_video
+            url = video.url
+            msgtype = MessageType.VIDEO
+            info = VideoInfo(height=video.height, width=video.width)
+        else:
+            return None
+        resp = await source.client.raw_http_get(URL(url))
+        data = await resp.read()
+        info.mime_type = resp.headers["Content-Type"] or magic.from_buffer(data, mime=True)
+        info.size = len(data)
+        file_name = f"{msgtype.value[2:]}{mimetypes.guess_extension(info.mime_type)}"
+
+        upload_mime_type = info.mime_type
+        upload_file_name = file_name
+        decryption_info = None
+        if self.encrypted and encrypt_attachment:
+            data, decryption_info = encrypt_attachment(data)
+            upload_mime_type = "application/octet-stream"
+            upload_file_name = None
+
+        mxc = await call_with_net_retry(intent.upload_media, data, mime_type=upload_mime_type,
+                                        filename=upload_file_name, _action="upload media")
+
+        if decryption_info:
+            decryption_info.url = mxc
+            mxc = None
+
+        return ReuploadedMediaInfo(mxc=mxc, url=url, decryption_info=decryption_info,
+                                   file_name=file_name, msgtype=msgtype, info=info)
+
+    async def _handle_instagram_media(self, source: 'u.User', intent: IntentAPI, item: ThreadItem
+                                      ) -> Optional[EventID]:
+        reuploaded = await self._reupload_instagram_media(source, item.media, intent)
+        if not reuploaded:
+            self.log.debug(f"Unsupported media type: {item.media}")
+            return None
+        content = MediaMessageEventContent(body=reuploaded.file_name, external_url=reuploaded.url,
+                                           url=reuploaded.mxc, file=reuploaded.decryption_info,
+                                           info=reuploaded.info, msgtype=reuploaded.msgtype)
+        return await self._send_message(intent, content, timestamp=item.timestamp // 1000)
+
+    async def _handle_instagram_text(self, intent: IntentAPI, item: ThreadItem) -> EventID:
+        content = TextMessageEventContent(msgtype=MessageType.TEXT, body=item.text)
+        return await self._send_message(intent, content, timestamp=item.timestamp // 1000)
+
     async def handle_instagram_item(self, source: 'u.User', sender: 'p.Puppet', item: ThreadItem
                                     ) -> None:
         if item.client_context in self._reqid_dedup:
@@ -238,16 +298,18 @@ class Portal(DBPortal, BasePortal):
             self._msgid_dedup.appendleft(item.item_id)
             intent = sender.intent_for(self)
             event_id = None
-            if item.text:
-                content = TextMessageEventContent(msgtype=MessageType.TEXT, body=item.text)
-                event_id = await self._send_message(intent, content,
-                                                    timestamp=item.timestamp // 1000)
+            if item.media:
+                event_id = await self._handle_instagram_media(source, intent, item)
+            elif item.text:
+                event_id = await self._handle_instagram_text(intent, item)
             # TODO handle attachments and reactions
             if event_id:
                 await DBMessage(mxid=event_id, mx_room=self.mxid, item_id=item.item_id,
                                 receiver=self.receiver).insert()
                 await self._send_delivery_receipt(event_id)
                 self.log.debug(f"Handled Instagram message {item.item_id} -> {event_id}")
+            else:
+                self.log.debug(f"Unhandled Instagram message {item.item_id}")
 
     # endregion
     # region Updating portal info

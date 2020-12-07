@@ -133,6 +133,30 @@ class RegularMediaItem(SerializableAttrs['RegularMediaItem']):
     creative_config: Optional[CreativeConfig] = None
     create_mode_attribution: Optional[CreateModeAttribution] = None
 
+    @property
+    def best_image(self) -> Optional[ImageVersion]:
+        if not self.image_versions2:
+            return None
+        best: Optional[ImageVersion] = None
+        for version in self.image_versions2.candidates:
+            if version.width == self.original_width and version.height == self.original_height:
+                return version
+            elif not best or (version.width * version.height > best.width * best.height):
+                best = version
+        return best
+
+    @property
+    def best_video(self) -> Optional[VideoVersion]:
+        if not self.video_versions:
+            return None
+        best: Optional[VideoVersion] = None
+        for version in self.video_versions:
+            if version.width == self.original_width and version.height == self.original_height:
+                return version
+            elif not best or (version.width * version.height > best.width * best.height):
+                best = version
+        return best
+
 
 @dataclass(kw_only=True)
 class Caption(SerializableAttrs['Caption']):
