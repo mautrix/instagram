@@ -201,6 +201,12 @@ class RealtimeDirectEvent(SerializableAttrs['RealtimeDirectEvent']):
     op: Operation
     path: str
     value: RealtimeDirectData
+    # Comes from the parent object
+    # TODO many places have this kind of event, it's usually "patch", might need an enum
+    event: Optional[str] = None
+    # Parsed from path
+    thread_id: Optional[str] = None
+    activity_indicator_id: Optional[str] = None
 
 
 @dataclass(kw_only=True)
