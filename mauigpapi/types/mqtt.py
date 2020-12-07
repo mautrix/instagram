@@ -84,6 +84,22 @@ class IrisPayload(SerializableAttrs['IrisPayload']):
     sampled: Optional[bool] = None
 
 
+@dataclass
+class Reaction(SerializableAttrs['Reaction']):
+    sender_id: int
+    timestamp: int
+    client_context: int
+    emoji: str = "❤️"
+    super_react_type: Optional[str] = None
+
+
+@dataclass
+class Reactions(SerializableAttrs['Reactions']):
+    likes_count: int = 0
+    likes: List[Reaction] = attr.ib(factory=lambda: [])
+    emojis: List[Reaction] = attr.ib(factory=lambda: [])
+
+
 @dataclass(kw_only=True)
 class MessageSyncMessage(ThreadItem, SerializableAttrs['MessageSyncMessage']):
     path: str
@@ -93,7 +109,7 @@ class MessageSyncMessage(ThreadItem, SerializableAttrs['MessageSyncMessage']):
     admin_user_ids: Optional[int] = None
     approval_required_for_new_members: Optional[bool] = None
     participants: Optional[Dict[str, str]] = None
-    reactions: Optional[dict] = None
+    reactions: Optional[Reactions] = None
     thread_id: Optional[str] = None
 
 

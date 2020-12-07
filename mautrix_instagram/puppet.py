@@ -76,6 +76,10 @@ class Puppet(DBPuppet, BasePuppet):
         cls.login_device_name = "Instagram Bridge"
         return (puppet.try_start() async for puppet in cls.all_with_custom_mxid())
 
+    @property
+    def igpk(self) -> int:
+        return self.pk
+
     def intent_for(self, portal: 'p.Portal') -> IntentAPI:
         if portal.other_user_pk == self.pk or (self.config["bridge.backfill.invite_own_puppet"]
                                                and portal.backfill_lock.locked):

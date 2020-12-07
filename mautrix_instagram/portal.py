@@ -128,7 +128,7 @@ class Portal(DBPortal, BasePortal):
         else:
             self.log.debug(f"_upsert_reaction inserting {mxid} (message: {message.mxid})")
             await DBReaction(mxid=mxid, mx_room=message.mx_room, ig_item_id=message.item_id,
-                             ig_receiver=self.receiver, ig_sender=sender.pk, reaction=reaction
+                             ig_receiver=self.receiver, ig_sender=sender.igpk, reaction=reaction
                              ).insert()
 
     # endregion

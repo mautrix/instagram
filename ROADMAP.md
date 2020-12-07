@@ -10,7 +10,7 @@
       * [ ] Locations
       * [ ] †Files
   * [ ] Message redactions
-  * [ ] Message reactions
+  * [x] Message reactions
   * [ ] Presence
   * [ ] Typing notifications
   * [ ] Read receipts
