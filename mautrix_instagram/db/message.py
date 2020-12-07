@@ -55,7 +55,7 @@ class Message:
         return cls(**row)
 
     @classmethod
-    async def get_by_item_id(cls, item_id: str, receiver: int = 0) -> Optional['Message']:
+    async def get_by_item_id(cls, item_id: str, receiver: int) -> Optional['Message']:
         row = await cls.db.fetchrow("SELECT mxid, mx_room, item_id, receiver, sender "
                                     "FROM message WHERE item_id=$1 AND receiver=$2",
                                     item_id, receiver)

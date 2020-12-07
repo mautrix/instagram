@@ -193,7 +193,9 @@ class User(DBUser, BaseUser):
             limit = len(threads)
         for i, thread in enumerate(threads):
             portal = await po.Portal.get_by_thread(thread, self.igpk)
-            if portal.mxid or i < limit:
+            if portal.mxid:
+                await portal.update_matrix_room(self, thread, backfill=True)
+            elif i < limit:
                 await portal.create_matrix_room(self, thread)
         await self.update_direct_chats()
 

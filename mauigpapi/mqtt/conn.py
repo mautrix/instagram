@@ -201,7 +201,6 @@ class AndroidMQTT:
             await self.iris_subscribe(self._iris_seq_id, self._iris_snapshot_at_ms)
 
     def _on_publish_handler(self, client: MQTToTClient, _: Any, mid: int) -> None:
-        self.log.trace(f"Received publish confirmation for {mid}")
         try:
             waiter = self._publish_waiters[mid]
         except KeyError:

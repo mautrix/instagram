@@ -24,7 +24,7 @@
       * [ ] Locations
   * [x] Message unsend
   * [ ] Message reactions
-  * [ ] Message history
+  * [x] Message history
   * [ ] Presence
   * [ ] Typing notifications
   * [ ] Read receipts

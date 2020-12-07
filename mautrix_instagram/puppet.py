@@ -81,10 +81,13 @@ class Puppet(DBPuppet, BasePuppet):
         return self.pk
 
     def intent_for(self, portal: 'p.Portal') -> IntentAPI:
-        if portal.other_user_pk == self.pk or (self.config["bridge.backfill.invite_own_puppet"]
-                                               and portal.backfill_lock.locked):
+        if portal.other_user_pk == self.pk:
             return self.default_mxid_intent
         return self.intent
+
+    def need_backfill_invite(self, portal: 'p.Portal') -> bool:
+        return (portal.other_user_pk != self.pk and self.is_real_user
+                and self.config["bridge.backfill.invite_own_puppet"])
 
     async def update_info(self, info: BaseResponseUser) -> None:
         update = False
