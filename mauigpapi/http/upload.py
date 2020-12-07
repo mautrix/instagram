@@ -20,24 +20,29 @@ import time
 import json
 
 from .base import BaseAndroidAPI
-from ..types import UploadPhotoResponse
+from ..types import UploadPhotoResponse, MediaType
 
 
 class UploadAPI(BaseAndroidAPI):
     async def upload_jpeg_photo(self, data: bytes, upload_id: Optional[str] = None,
                                 is_sidecar: bool = False, waterfall_id: Optional[str] = None,
-                                media_type: int = 1) -> UploadPhotoResponse:
+                                media_type: MediaType = MediaType.IMAGE) -> UploadPhotoResponse:
         upload_id = upload_id or str(time.time())
         name = f"{upload_id}_0_{random.randint(1000000000, 9999999999)}"
         params = {
-            "retry_context": json.dumps(
-                {"num_step_auto_retry": 0, "num_reupload": 0, "num_step_manual_retry": 0}),
-            # TODO enum?
-            "media_type": str(media_type),
+            "retry_context": json.dumps({
+                "num_step_auto_retry": 0,
+                "num_reupload": 0,
+                "num_step_manual_retry": 0,
+            }),
+            "media_type": str(media_type.value),
             "upload_id": upload_id,
             "xsharing_user_ids": json.dumps([]),
-            "image_compression": json.dumps(
-                {"lib_name": "moz", "lib_version": "3.1.m", "quality": 80}),
+            "image_compression": json.dumps({
+                "lib_name": "moz",
+                "lib_version": "3.1.m",
+                "quality": 80
+            }),
         }
         if is_sidecar:
             params["is_sidecar"] = "1"

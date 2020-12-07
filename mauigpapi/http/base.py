@@ -136,7 +136,7 @@ class BaseAndroidAPI:
     async def _handle_response(self, resp: ClientResponse) -> JSON:
         self._handle_response_headers(resp)
         body = await resp.json()
-        if body["status"] == "ok":
+        if body.get("status", "fail") == "ok":
             return body
         else:
             await self._raise_response_error(resp)

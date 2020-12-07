@@ -517,7 +517,7 @@ class AndroidMQTT:
     def send_media(self, thread_id: str, media_id: str, text: str = "", shh_mode: bool = False,
                    client_context: Optional[str] = None,
                    offline_threading_id: Optional[str] = None) -> Awaitable[CommandResponse]:
-        return self.send_item(thread_id, text=text, item_id=media_id, shh_mode=shh_mode,
+        return self.send_item(thread_id, text=text, media_id=media_id, shh_mode=shh_mode,
                               item_type=ThreadItemType.MEDIA_SHARE, client_context=client_context,
                               offline_threading_id=offline_threading_id)
 
