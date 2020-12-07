@@ -82,11 +82,7 @@ class AccountAPI(BaseAndroidAPI):
             "mobile_subno_usage": usage,
             "device_id": self.state.device.uuid,
         }
-        headers = {
-            "X-DEVICE-ID": self.state.device.uuid,
-        }
-        return await self.std_http_post("/api/v1/accounts/read_msisdn_header/", data=req,
-                                        headers=headers)
+        return await self.std_http_post("/api/v1/accounts/read_msisdn_header/", data=req)
 
     async def msisdn_header_bootstrap(self, usage: str = "default"):
         req = {

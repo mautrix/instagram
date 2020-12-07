@@ -56,37 +56,40 @@ class BaseAndroidAPI:
     @property
     def _headers(self) -> Dict[str, str]:
         headers = {
-            "User-Agent": self.state.user_agent,
-            "X-Ads-Opt-Out": str(int(self.state.session.ads_opt_out)),
-            # "X-DEVICE-ID": self.state.device.uuid,
-            "X-CM-Bandwidth-KBPS": "-1.000",
-            "X-CM-Latency": "-1.000",
-            "X-IG-App-Locale": self.state.device.language,
-            "X-IG-Device-Locale": self.state.device.language,
-            "X-Pigeon-Session-Id": self.state.pigeon_session_id,
-            "X-Pigeon-Rawclienttime": str(round(time.time(), 3)),
-            "X-IG-Connection-Speed": f"{random.randint(1000, 3700)}kbps",
-            "X-IG-Bandwidth-Speed-KBPS": "-1.000",
-            "X-IG-Bandwidth-TotalBytes-B": "0",
-            "X-IG-Bandwidth-TotalTime-MS": "0",
-            "X-IG-EU-DC-ENABLED": (str(self.state.session.eu_dc_enabled).lower()
+            "x-ads-opt-out": str(int(self.state.session.ads_opt_out)),
+            "x-device-id": self.state.device.uuid,
+            "x-ig-app-locale": self.state.device.language,
+            "x-ig-device-locale": self.state.device.language,
+            "x-pigeon-session-id": self.state.pigeon_session_id,
+            "x-pigeon-rawclienttime": str(round(time.time(), 3)),
+            "x-ig-connection-speed": f"{random.randint(1000, 3700)}kbps",
+            "x-ig-bandwidth-speed-kbps": "-1.000",
+            "x-ig-bandwidth-totalbytes-b": "0",
+            "x-ig-bandwidth-totaltime-ms": "0",
+            "x-ig-eu-dc-enabled": (str(self.state.session.eu_dc_enabled).lower()
                                    if self.state.session.eu_dc_enabled is not None else None),
-            "X-IG-Extended-CDN-Thumbnail-Cache-Busting-Value":
-                str(self.state.session.thumbnail_cache_busting_value),
-            "X-Bloks-Version-Id": self.state.application.BLOKS_VERSION_ID,
-            "X-MID": self.state.cookies.get_value("mid"),
-            "X-IG-WWW-Claim": self.state.session.ig_www_claim or "0",
-            "X-Bloks-Is-Layout-RTL": str(self.state.device.is_layout_rtl).lower(),
-            "X-IG-Connection-Type": self.state.device.connection_type,
-            "X-Ig-Capabilities": self.state.application.CAPABILITIES,
-            "X-IG-App-Id": self.state.application.FACEBOOK_ANALYTICS_APPLICATION_ID,
-            "X-IG-Device-ID": self.state.device.uuid,
-            "X-IG-Android-ID": self.state.device.id,
-            "Accept-Language": self.state.device.language.replace("_", "-"),
-            "X-FB-HTTP-Engine": "Liger",
-            "Authorization": self.state.session.authorization,
-            "Accept-Encoding": "gzip",
-            "Connection": "close",
+            "x-ig-app-startup-country": self.state.device.language.split("_")[1],
+            "x-bloks-version-id": self.state.application.BLOKS_VERSION_ID,
+            "x-ig-www-claim": self.state.session.ig_www_claim or "0",
+            "x-bloks-is-layout-rtl": str(self.state.device.is_layout_rtl).lower(),
+            "x-bloks-is-panorama-enabled": "true",
+            "x-ig-device-id": self.state.device.uuid,
+            "x-ig-android-id": self.state.device.id,
+            "x-ig-connection-type": self.state.device.connection_type,
+            "x-ig-capabilities": self.state.application.CAPABILITIES,
+            "x-ig-app-id": self.state.application.FACEBOOK_ANALYTICS_APPLICATION_ID,
+            "user-agent": self.state.user_agent,
+            "accept-language": self.state.device.language.replace("_", "-"),
+            "authorization": self.state.session.authorization,
+            "x-mid": self.state.cookies.get_value("mid"),
+            "ig-u-ig-direct-region-hint": self.state.session.region_hint,
+            "ig-u-shbid": self.state.session.shbid,
+            "ig-u-shbts": self.state.session.shbts,
+            "ig-u-ds-user-id": self.state.session.ds_user_id,
+            "ig-u-rur": self.state.session.rur,
+            "x-fb-http-engine": "Liger",
+            "x-fb-client-ip": "True",
+            "accept-encoding": "gzip",
         }
         return {k: v for k, v in headers.items() if v is not None}
 
@@ -175,11 +178,15 @@ class BaseAndroidAPI:
 
     def _handle_response_headers(self, resp: ClientResponse) -> None:
         fields = {
-            "X-IG-Set-WWW-Claim": "ig_www_claim",
-            "IG-Set-Authorization": "authorization",
-            "IG-Set-Password-Encryption-Key-ID": "password_encryption_key_id",
-            "IG-Set-Password-Encryption-Pub-Key": "password_encryption_pubkey",
-            "IG-Set-IG-U-IG-Direct-Region-Hint": "region_hint"
+            "x-ig-set-www-claim": "ig_www_claim",
+            "ig-set-authorization": "authorization",
+            "ig-set-password-encryption-key-id": "password_encryption_key_id",
+            "ig-set-password-encryption-pub-key": "password_encryption_pubkey",
+            "ig-set-ig-u-ig-direct-region-hint": "region_hint",
+            "ig-set-ig-u-shbid": "shbid",
+            "ig-set-ig-u-shbts": "shbts",
+            "ig-set-ig-u-rur": "rur",
+            "ig-set-ig-u-ds-user-id": "ds_user_id",
         }
         for header, field in fields.items():
             value = resp.headers.get(header)

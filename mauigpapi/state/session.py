@@ -31,3 +31,8 @@ class AndroidSession(SerializableAttrs['AndroidSession']):
     password_encryption_pubkey: Optional[str] = None
     password_encryption_key_id: Union[None, str, int] = None
     region_hint: Optional[str] = None
+
+    shbid: Optional[str] = None
+    shbts: Optional[str] = None
+    ds_user_id: Optional[str] = None
+    rur: Optional[str] = None

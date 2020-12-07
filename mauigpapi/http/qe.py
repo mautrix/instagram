@@ -38,8 +38,6 @@ class QeSyncAPI(BaseAndroidAPI):
                 "_uuid": self.state.device.uuid,
             }
         req["experiments"] = experiments
-        headers = {"X-DEVICE-ID": self.state.device.uuid}
-        resp = await self.std_http_post("/api/v1/qe/sync/", data=req, headers=headers,
-                                        response_type=QeSyncResponse)
+        resp = await self.std_http_post("/api/v1/qe/sync/", data=req, response_type=QeSyncResponse)
         self.state.experiments.update(resp)
         return resp
