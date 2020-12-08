@@ -290,6 +290,20 @@ class Reactions(SerializableAttrs['Reactions']):
     emojis: List[Reaction] = attr.ib(factory=lambda: [])
 
 
+@dataclass
+class Location(SerializableAttrs['Location']):
+    pk: int
+    short_name: str
+    facebook_places_id: int
+    # TODO enum?
+    external_source: str  # facebook_places
+    name: str
+    address: str
+    city: str
+    lng: float
+    lat: float
+
+
 @dataclass(kw_only=True)
 class ThreadItem(SerializableAttrs['ThreadItem']):
     item_id: Optional[str] = None
@@ -308,4 +322,5 @@ class ThreadItem(SerializableAttrs['ThreadItem']):
     animated_media: Optional[AnimatedMediaItem] = None
     visual_media: Optional[VisualMedia] = None
     media_share: Optional[MediaShareItem] = None
+    location: Optional[Location] = None
     reactions: Optional[Reactions] = None

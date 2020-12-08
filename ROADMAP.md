@@ -22,7 +22,7 @@
       * [x] Videos
       * [x] Gifs
       * [x] Voice messages
-      * [ ] Locations
+      * [x] Locations
   * [x] Message unsend
   * [x] Message reactions
   * [x] Message history

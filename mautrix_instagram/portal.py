@@ -24,12 +24,12 @@ import magic
 
 from mauigpapi.types import (Thread, ThreadUser, ThreadItem, RegularMediaItem, MediaType,
                              ReactionStatus, Reaction, AnimatedMediaItem, ThreadItemType,
-                             VoiceMediaItem)
+                             VoiceMediaItem, Location)
 from mautrix.appservice import AppService, IntentAPI
 from mautrix.bridge import BasePortal, NotificationDisabler
 from mautrix.types import (EventID, MessageEventContent, RoomID, EventType, MessageType, ImageInfo,
                            VideoInfo, MediaMessageEventContent, TextMessageEventContent, AudioInfo,
-                           ContentURI, EncryptedFile)
+                           ContentURI, EncryptedFile, LocationMessageEventContent, Format)
 from mautrix.errors import MatrixError, MForbidden
 from mautrix.util.simple_lock import SimpleLock
 from mautrix.util.network_retry import call_with_net_retry
@@ -334,6 +334,27 @@ class Portal(DBPortal, BasePortal):
         content = TextMessageEventContent(msgtype=MessageType.TEXT, body=item.text)
         return await self._send_message(intent, content, timestamp=item.timestamp // 1000)
 
+    async def _handle_instagram_location(self, intent: IntentAPI, item: ThreadItem) -> EventID:
+        loc = item.location
+        long_char = "E" if loc.lng > 0 else "W"
+        lat_char = "N" if loc.lat > 0 else "S"
+
+        body = (f"{loc.name} - {round(abs(loc.lat), 4)}° {lat_char}, "
+                f"{round(abs(loc.lng), 4)}° {long_char}")
+        url = f"https://www.openstreetmap.org/#map=15/{loc.lat}/{loc.lng}"
+
+        external_url = None
+        if loc.external_source == "facebook_places":
+            external_url = f"https://www.facebook.com/{loc.short_name}-{loc.facebook_places_id}"
+
+        content = LocationMessageEventContent(
+            msgtype=MessageType.LOCATION, geo_uri=f"geo:{loc.lat},{loc.lng}",
+            body=f"Location: {body}\n{url}", external_url=external_url)
+        content["format"] = str(Format.HTML)
+        content["formatted_body"] = f"Location: <a href='{url}'>{body}</a>"
+
+        return await self._send_message(intent, content, timestamp=item.timestamp // 1000)
+
     async def handle_instagram_item(self, source: 'u.User', sender: 'p.Puppet', item: ThreadItem,
                                     is_backfill: bool = False) -> None:
         if item.client_context in self._reqid_dedup:
@@ -359,6 +380,8 @@ class Portal(DBPortal, BasePortal):
             event_id = None
             if item.media or item.animated_media or item.voice_media:
                 event_id = await self._handle_instagram_media(source, intent, item)
+            elif item.location:
+                event_id = await self._handle_instagram_location(intent, item)
             if item.text:
                 event_id = await self._handle_instagram_text(intent, item)
             # TODO handle other attachments

@@ -12,7 +12,8 @@ from .thread_item import (ThreadItemType, ThreadItemActionLog, ViewMode, Creativ
                           CreateModeAttribution, ImageVersion, ImageVersions, VisualMedia, Caption,
                           RegularMediaItem, MediaShareItem, ReplayableMediaItem, VideoVersion,
                           AudioInfo, VoiceMediaItem, AnimatedMediaImage, AnimatedMediaImages,
-                          AnimatedMediaItem, ThreadItem, VoiceMediaData, Reaction, Reactions)
+                          AnimatedMediaItem, ThreadItem, VoiceMediaData, Reaction, Reactions,
+                          Location)
 from .thread import Thread, ThreadUser, ThreadItem, ThreadUserLastSeenAt, ThreadTheme
 from .mqtt import (Operation, ThreadAction, ReactionStatus, TypingStatus, CommandResponsePayload,
                    CommandResponse, IrisPayloadData, IrisPayload, MessageSyncMessage,
