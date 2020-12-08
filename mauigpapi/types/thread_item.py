@@ -324,3 +324,4 @@ class ThreadItem(SerializableAttrs['ThreadItem']):
     media_share: Optional[MediaShareItem] = None
     location: Optional[Location] = None
     reactions: Optional[Reactions] = None
+    like: Optional[str] = None

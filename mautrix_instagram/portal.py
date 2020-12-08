@@ -331,7 +331,7 @@ class Portal(DBPortal, BasePortal):
         return await self._send_message(intent, content, timestamp=item.timestamp // 1000)
 
     async def _handle_instagram_text(self, intent: IntentAPI, item: ThreadItem) -> EventID:
-        content = TextMessageEventContent(msgtype=MessageType.TEXT, body=item.text)
+        content = TextMessageEventContent(msgtype=MessageType.TEXT, body=item.text or item.like)
         return await self._send_message(intent, content, timestamp=item.timestamp // 1000)
 
     async def _handle_instagram_location(self, intent: IntentAPI, item: ThreadItem) -> EventID:
@@ -382,9 +382,9 @@ class Portal(DBPortal, BasePortal):
                 event_id = await self._handle_instagram_media(source, intent, item)
             elif item.location:
                 event_id = await self._handle_instagram_location(intent, item)
-            if item.text:
+            # We handle likes as text because Matrix clients do big emoji on their own.
+            if item.text or item.like:
                 event_id = await self._handle_instagram_text(intent, item)
-            # TODO handle other attachments
             if event_id:
                 msg = DBMessage(mxid=event_id, mx_room=self.mxid, item_id=item.item_id,
                                 receiver=self.receiver, sender=sender.pk)

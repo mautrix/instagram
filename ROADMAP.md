@@ -23,6 +23,8 @@
       * [x] Gifs
       * [x] Voice messages
       * [x] Locations
+      * [ ] Media share
+      * [ ] Other random types
   * [x] Message unsend
   * [x] Message reactions
   * [x] Message history
