@@ -237,9 +237,13 @@ class User(DBUser, BaseUser):
     @async_time(METRIC_MESSAGE)
     async def handle_message(self, evt: MessageSyncEvent) -> None:
         portal = await po.Portal.get_by_thread_id(evt.message.thread_id, receiver=self.igpk)
-        if not portal.mxid:
+        if not portal:
             # TODO try to find the thread?
             self.log.warning(f"Ignoring message to unknown thread {evt.message.thread_id}")
+            return
+        elif not portal.mxid:
+            # TODO create portal room?
+            self.log.warning(f"Ignoring message to thread with no room {evt.message.thread_id}")
             return
         self.log.trace(f"Received message sync event {evt.message}")
         sender = await pu.Puppet.get_by_pk(evt.message.user_id) if evt.message.user_id else None

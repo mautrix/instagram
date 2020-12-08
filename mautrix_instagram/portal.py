@@ -655,8 +655,7 @@ class Portal(DBPortal, BasePortal):
             await self.update()
             self.log.debug(f"Matrix room created: {self.mxid}")
             self.by_mxid[self.mxid] = self
-            if not self.is_direct:
-                await self._update_participants(info.users, source)
+            await self._update_participants(info.users, source)
 
             puppet = await p.Puppet.get_by_custom_mxid(source.mxid)
             if puppet:
