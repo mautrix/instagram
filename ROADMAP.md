@@ -21,7 +21,7 @@
       * [x] Images
       * [x] Videos
       * [x] Gifs
-      * [ ] Voice messages
+      * [x] Voice messages
       * [ ] Locations
   * [x] Message unsend
   * [x] Message reactions

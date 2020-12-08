@@ -230,7 +230,7 @@ class AudioInfo(SerializableAttrs['AudioInfo']):
     audio_src: str
     duration: int
     waveform_data: List[int]
-    waveform_sampling_frequence_hz: int
+    waveform_sampling_frequency_hz: int
 
 
 @dataclass(kw_only=True)
@@ -240,8 +240,8 @@ class VoiceMediaData(SerializableAttrs['VoiceMediaData']):
     organic_tracking_token: str
     user: UserIdentifier
     # TODO enum?
-    product_type: str = "direct_audio"
-    media_type: MediaType = MediaType.AUDIO
+    product_type: str  # "direct_audio"
+    media_type: MediaType  # MediaType.AUDIO
 
 
 @dataclass(kw_only=True)

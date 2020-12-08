@@ -23,11 +23,12 @@ import asyncio
 import magic
 
 from mauigpapi.types import (Thread, ThreadUser, ThreadItem, RegularMediaItem, MediaType,
-                             ReactionStatus, Reaction, AnimatedMediaItem, ThreadItemType)
+                             ReactionStatus, Reaction, AnimatedMediaItem, ThreadItemType,
+                             VoiceMediaItem)
 from mautrix.appservice import AppService, IntentAPI
 from mautrix.bridge import BasePortal, NotificationDisabler
 from mautrix.types import (EventID, MessageEventContent, RoomID, EventType, MessageType, ImageInfo,
-                           VideoInfo, MediaMessageEventContent, TextMessageEventContent, FileInfo,
+                           VideoInfo, MediaMessageEventContent, TextMessageEventContent, AudioInfo,
                            ContentURI, EncryptedFile)
 from mautrix.errors import MatrixError, MForbidden
 from mautrix.util.simple_lock import SimpleLock
@@ -47,6 +48,7 @@ except ImportError:
 
 StateBridge = EventType.find("m.bridge", EventType.Class.STATE)
 StateHalfShotBridge = EventType.find("uk.half-shot.bridge", EventType.Class.STATE)
+FileInfo = Union[AudioInfo, ImageInfo, VideoInfo]
 ReuploadedMediaInfo = NamedTuple('ReuploadedMediaInfo', mxc=Optional[ContentURI], url=str,
                                  decryption_info=Optional[EncryptedFile], msgtype=MessageType,
                                  file_name=str, info=FileInfo)
@@ -269,22 +271,29 @@ class Portal(DBPortal, BasePortal):
                          width=int(media.images.fixed_height.width))
         return await self._reupload_instagram_file(source, url, MessageType.IMAGE, info, intent)
 
+    async def _reupload_instagram_voice(self, source: 'u.User', media: VoiceMediaItem,
+                                        intent: IntentAPI) -> Optional[ReuploadedMediaInfo]:
+        url = media.media.audio.audio_src
+        info = AudioInfo(duration=media.media.audio.duration)
+        return await self._reupload_instagram_file(source, url, MessageType.AUDIO, info, intent)
+
     async def _reupload_instagram_file(self, source: 'u.User', url: str, msgtype: MessageType,
                                        info: FileInfo, intent: IntentAPI
                                        ) -> Optional[ReuploadedMediaInfo]:
         async with await source.client.raw_http_get(url) as resp:
             data = await resp.read()
-            info.mime_type = resp.headers["Content-Type"] or magic.from_buffer(data, mime=True)
+            info.mimetype = resp.headers["Content-Type"] or magic.from_buffer(data, mime=True)
         info.size = len(data)
         extension = {
             "image/webp": ".webp",
             "image/jpeg": ".jpg",
-            "video/mp4": ".mp4"
-        }.get(info.mime_type)
-        extension = extension or mimetypes.guess_extension(info.mime_type) or ""
+            "video/mp4": ".mp4",
+            "audio/mp4": ".m4a",
+        }.get(info.mimetype)
+        extension = extension or mimetypes.guess_extension(info.mimetype) or ""
         file_name = f"{msgtype.value[2:]}{extension}"
 
-        upload_mime_type = info.mime_type
+        upload_mime_type = info.mimetype
         upload_file_name = file_name
         decryption_info = None
         if self.encrypted and encrypt_attachment:
@@ -309,6 +318,8 @@ class Portal(DBPortal, BasePortal):
         elif item.animated_media:
             reuploaded = await self._reupload_instagram_animated(source, item.animated_media,
                                                                  intent)
+        elif item.voice_media:
+            reuploaded = await self._reupload_instagram_voice(source, item.voice_media, intent)
         else:
             reuploaded = None
         if not reuploaded:
@@ -346,7 +357,7 @@ class Portal(DBPortal, BasePortal):
             else:
                 intent = sender.intent_for(self)
             event_id = None
-            if item.media or item.animated_media:
+            if item.media or item.animated_media or item.voice_media:
                 event_id = await self._handle_instagram_media(source, intent, item)
             if item.text:
                 event_id = await self._handle_instagram_text(intent, item)
