@@ -14,9 +14,11 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from typing import Optional, AsyncIterable
+from uuid import uuid4
 
 from .base import BaseAndroidAPI
-from ..types import DMInboxResponse, DMThreadResponse, Thread, ThreadItem
+from ..types import (DMInboxResponse, DMThreadResponse, Thread, ThreadItem, ThreadAction,
+                     ThreadItemType, CommandResponse)
 
 
 class ThreadAPI(BaseAndroidAPI):
@@ -47,7 +49,7 @@ class ThreadAPI(BaseAndroidAPI):
             for thread in resp.inbox.threads:
                 yield thread
 
-    async def get_thread(self, thread_id: str,  cursor: Optional[str] = None, limit: int = 10,
+    async def get_thread(self, thread_id: str, cursor: Optional[str] = None, limit: int = 10,
                          direction: str = "older", seq_id: Optional[int] = None
                          ) -> DMThreadResponse:
         query = {
@@ -74,3 +76,21 @@ class ThreadAPI(BaseAndroidAPI):
         await self.std_http_post(f"/api/v1/direct_v2/threads/{thread_id}/items/{item_id}/delete/",
                                  data={"_csrftoken": self.state.cookies.csrf_token,
                                        "_uuid": self.state.device.uuid})
+
+    async def broadcast(self, thread_id: str, item_type: ThreadItemType, signed: bool = False,
+                        client_context: Optional[str] = None, **kwargs) -> CommandResponse:
+        client_context = client_context or str(uuid4())
+        form = {
+            "action": ThreadAction.SEND_ITEM.value,
+            "send_attribution": "inbox",
+            "thread_id": thread_id,
+            "client_context": client_context,
+            "_csrftoken": self.state.cookies.csrf_token,
+            "device_id": self.state.device.id,
+            "mutation_token": client_context,
+            "_uuid": self.state.device.uuid,
+            **kwargs,
+            "offline_threading_id": client_context,
+        }
+        return await self.std_http_post(f"/api/v1/direct_v2/threads/broadcast/{item_type.value}/",
+                                        data=form, raw=not signed, response_type=CommandResponse)

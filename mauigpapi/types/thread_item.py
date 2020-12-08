@@ -30,6 +30,7 @@ class ThreadItemType(SerializableEnum):
     HASHTAG = "hashtag"
     PROFILE = "profile"
     MEDIA_SHARE = "media_share"
+    CONFIGURE_PHOTO = "configure_photo"
     LOCATION = "location"
     ACTION_LOG = "action_log"
     TITLE = "title"

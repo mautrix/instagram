@@ -24,7 +24,7 @@ import magic
 from yarl import URL
 
 from mauigpapi.types import (Thread, ThreadUser, ThreadItem, RegularMediaItem, MediaType,
-                             ReactionStatus, Reaction, AnimatedMediaItem)
+                             ReactionStatus, Reaction, AnimatedMediaItem, ThreadItemType)
 from mautrix.appservice import AppService, IntentAPI
 from mautrix.bridge import BasePortal, NotificationDisabler
 from mautrix.types import (EventID, MessageEventContent, RoomID, EventType, MessageType, ImageInfo,
@@ -164,9 +164,12 @@ class Portal(DBPortal, BasePortal):
             mime_type = message.info.mimetype or magic.from_buffer(data, mime=True)
             if mime_type == "image/jpeg":
                 upload_resp = await sender.client.upload_jpeg_photo(data)
-                # TODO I don't think this works
-                resp = await sender.mqtt.send_media(self.thread_id, upload_resp.upload_id,
-                                                    client_context=request_id)
+                # TODO is it possible to do this with MQTT?
+                resp = await sender.client.broadcast(self.thread_id,
+                                                     ThreadItemType.CONFIGURE_PHOTO,
+                                                     client_context=request_id,
+                                                     upload_id=upload_resp.upload_id,
+                                                     allow_full_aspect_ratio="1")
             else:
                 # TODO add link to media for unsupported file types
                 return
@@ -278,7 +281,8 @@ class Portal(DBPortal, BasePortal):
             "image/webp": ".webp",
             "image/jpeg": ".jpg",
             "video/mp4": ".mp4"
-        }.get(info.mime_type) or mimetypes.guess_extension(info.mime_type)
+        }.get(info.mime_type)
+        extension = extension or mimetypes.guess_extension(info.mime_type) or ""
         file_name = f"{msgtype.value[2:]}{extension}"
 
         upload_mime_type = info.mime_type
@@ -304,7 +308,8 @@ class Portal(DBPortal, BasePortal):
         if item.media:
             reuploaded = await self._reupload_instagram_media(source, item.media, intent)
         elif item.animated_media:
-            reuploaded = await self._reupload_instagram_animated(source, item.animated_media, intent)
+            reuploaded = await self._reupload_instagram_animated(source, item.animated_media,
+                                                                 intent)
         else:
             reuploaded = None
         if not reuploaded:

@@ -4,7 +4,7 @@
   * [ ] Message content
     * [x] Text
     * [ ] Media
-      * [ ] Images
+      * [x] Images
       * [ ] Videos
       * [ ] Voice messages
       * [ ] Locations
