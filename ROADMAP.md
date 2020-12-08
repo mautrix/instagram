@@ -20,6 +20,7 @@
     * [ ] Media
       * [x] Images
       * [x] Videos
+      * [x] Gifs
       * [ ] Voice messages
       * [ ] Locations
   * [x] Message unsend
