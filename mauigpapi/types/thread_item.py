@@ -223,7 +223,7 @@ class MediaShareItem(RegularMediaItem, SerializableAttrs['MediaShareItem']):
     like_count: int
     has_liked: bool
     photo_of_you: bool
-    caption: Caption
+    caption: Optional[Caption] = None
     can_viewer_save: bool
     location: Optional[Location] = None
 

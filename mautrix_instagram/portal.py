@@ -354,7 +354,7 @@ class Portal(DBPortal, BasePortal):
         if share_item == item.media_share:
             prefix_text = f"Sent {share_item.user.username}'s photo"
         else:
-            prefix_text = f"Shared {share_item.user.username}'s story"
+            prefix_text = f"Sent {share_item.user.username}'s story"
         prefix = TextMessageEventContent(msgtype=MessageType.NOTICE, body=prefix_text)
         await self._send_message(intent, prefix)
         event_id = await self._handle_instagram_media(source, intent, item)
