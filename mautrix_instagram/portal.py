@@ -354,7 +354,7 @@ class Portal(DBPortal, BasePortal):
         old_reactions = {reaction.ig_sender: reaction for reaction
                          in await DBReaction.get_all_by_item_id(message.item_id, self.receiver)}
         for new_reaction in reactions:
-            old_reaction = old_reactions.get(new_reaction.sender_id)
+            old_reaction = old_reactions.pop(new_reaction.sender_id, None)
             if old_reaction and old_reaction.reaction == new_reaction.emoji:
                 continue
             puppet = await p.Puppet.get_by_pk(new_reaction.sender_id)
@@ -362,6 +362,10 @@ class Portal(DBPortal, BasePortal):
             reaction_event_id = await intent.react(self.mxid, message.mxid, new_reaction.emoji)
             await self._upsert_reaction(old_reaction, intent, reaction_event_id, message,
                                         puppet, new_reaction.emoji)
+        for old_reaction in old_reactions.values():
+            await old_reaction.delete()
+            puppet = await p.Puppet.get_by_pk(old_reaction.ig_sender)
+            await puppet.intent_for(self).redact(self.mxid, old_reaction.mxid)
 
     async def handle_instagram_update(self, item: ThreadItem) -> None:
         message = await DBMessage.get_by_item_id(item.item_id, self.receiver)
