@@ -26,7 +26,7 @@ from mautrix.util.simple_template import SimpleTemplate
 
 from .db import Puppet as DBPuppet
 from .config import Config
-from . import portal as p
+from . import portal as p, user as u
 
 if TYPE_CHECKING:
     from .__main__ import InstagramBridge
@@ -89,10 +89,10 @@ class Puppet(DBPuppet, BasePuppet):
         return (portal.other_user_pk != self.pk and self.is_real_user
                 and self.config["bridge.backfill.invite_own_puppet"])
 
-    async def update_info(self, info: BaseResponseUser) -> None:
+    async def update_info(self, info: BaseResponseUser, source: 'u.User') -> None:
         update = False
         update = await self._update_name(info) or update
-        update = await self._update_avatar(info) or update
+        update = await self._update_avatar(info, source) or update
         if update:
             await self.update()
 
@@ -114,13 +114,11 @@ class Puppet(DBPuppet, BasePuppet):
             return True
         return False
 
-    async def _update_avatar(self, info: BaseResponseUser) -> bool:
+    async def _update_avatar(self, info: BaseResponseUser, source: 'u.User') -> bool:
         if info.profile_pic_id != self.photo_id or not self.avatar_set:
             self.photo_id = info.profile_pic_id
             if info.profile_pic_id:
-                # TODO if info.has_anonymous_profile_picture, we might need auth to get it
-                #      ...and we should probably download it with the device headers anyway
-                async with ClientSession() as sess, sess.get(info.profile_pic_url) as resp:
+                async with source.client.raw_http_get(info.profile_pic_url) as resp:
                     content_type = resp.headers["Content-Type"]
                     resp_data = await resp.read()
                 mxc = await self.default_mxid_intent.upload_media(data=resp_data,

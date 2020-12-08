@@ -13,7 +13,7 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import Optional, Dict, Any, TypeVar, Type
+from typing import Optional, Dict, Any, TypeVar, Type, Union
 import random
 import time
 import json
@@ -93,11 +93,10 @@ class BaseAndroidAPI:
         }
         return {k: v for k, v in headers.items() if v is not None}
 
-    async def raw_http_get(self, url: URL) -> ClientResponse:
-        return await self.http.get(url, headers={
+    def raw_http_get(self, url: Union[URL, str]):
+        return self.http.get(url, headers={
             "user-agent": self.state.user_agent,
             "accept-language": self.state.device.language.replace("_", "-"),
-            "authorization": self.state.session.authorization,
         })
 
     async def std_http_post(self, path: str, data: Optional[JSON] = None, raw: bool = False,

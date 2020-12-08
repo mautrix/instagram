@@ -21,7 +21,6 @@ import mimetypes
 import asyncio
 
 import magic
-from yarl import URL
 
 from mauigpapi.types import (Thread, ThreadUser, ThreadItem, RegularMediaItem, MediaType,
                              ReactionStatus, Reaction, AnimatedMediaItem, ThreadItemType)
@@ -273,9 +272,9 @@ class Portal(DBPortal, BasePortal):
     async def _reupload_instagram_file(self, source: 'u.User', url: str, msgtype: MessageType,
                                        info: FileInfo, intent: IntentAPI
                                        ) -> Optional[ReuploadedMediaInfo]:
-        resp = await source.client.raw_http_get(URL(url))
-        data = await resp.read()
-        info.mime_type = resp.headers["Content-Type"] or magic.from_buffer(data, mime=True)
+        async with await source.client.raw_http_get(url) as resp:
+            data = await resp.read()
+            info.mime_type = resp.headers["Content-Type"] or magic.from_buffer(data, mime=True)
         info.size = len(data)
         extension = {
             "image/webp": ".webp",
@@ -405,12 +404,12 @@ class Portal(DBPortal, BasePortal):
     # endregion
     # region Updating portal info
 
-    async def update_info(self, thread: Thread) -> None:
+    async def update_info(self, thread: Thread, source: 'u.User') -> None:
         changed = await self._update_name(thread.thread_title)
         if changed:
             await self.update_bridge_info()
             await self.update()
-        await self._update_participants(thread.users)
+        await self._update_participants(thread.users, source)
         # TODO update power levels with thread.admin_user_ids
 
     async def _update_name(self, name: str) -> bool:
@@ -421,14 +420,14 @@ class Portal(DBPortal, BasePortal):
             return True
         return False
 
-    async def _update_participants(self, users: List[ThreadUser]) -> None:
+    async def _update_participants(self, users: List[ThreadUser], source: 'u.User') -> None:
         if not self.mxid:
             return
 
         # Make sure puppets who should be here are here
         for user in users:
             puppet = await p.Puppet.get_by_pk(user.pk)
-            await puppet.update_info(user)
+            await puppet.update_info(user, source)
             await puppet.intent_for(self).ensure_joined(self.mxid)
 
         # Kick puppets who shouldn't be here
@@ -549,7 +548,7 @@ class Portal(DBPortal, BasePortal):
             if did_join and self.is_direct:
                 await source.update_direct_chats({self.main_intent.mxid: [self.mxid]})
 
-        await self.update_info(info)
+        await self.update_info(info, source)
 
         if backfill:
             last_msg = await DBMessage.get_by_item_id(info.last_permanent_item.item_id,
@@ -573,7 +572,7 @@ class Portal(DBPortal, BasePortal):
         if self.mxid:
             await self.update_matrix_room(source, info)
             return self.mxid
-        await self.update_info(info)
+        await self.update_info(info, source)
         self.log.debug("Creating Matrix room")
         name: Optional[str] = None
         initial_state = [{
@@ -623,7 +622,7 @@ class Portal(DBPortal, BasePortal):
             self.log.debug(f"Matrix room created: {self.mxid}")
             self.by_mxid[self.mxid] = self
             if not self.is_direct:
-                await self._update_participants(info.users)
+                await self._update_participants(info.users, source)
 
             puppet = await p.Puppet.get_by_custom_mxid(source.mxid)
             if puppet:
