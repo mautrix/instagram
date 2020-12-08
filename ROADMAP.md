@@ -17,14 +17,13 @@
 * Instagram → Matrix
   * [ ] Message content
     * [x] Text
-    * [ ] Media
+    * [x] Media
       * [x] Images
       * [x] Videos
       * [x] Gifs
       * [x] Voice messages
       * [x] Locations
-      * [ ] Media share
-      * [ ] Other random types
+      * [x] Story/reel share
   * [x] Message unsend
   * [x] Message reactions
   * [x] Message history

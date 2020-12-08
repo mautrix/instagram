@@ -13,11 +13,12 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import List, Any, Optional
+from typing import List, Optional, Union, Any
 
 import attr
 from attr import dataclass
-from mautrix.types import SerializableAttrs, SerializableEnum
+from mautrix.types import SerializableAttrs, SerializableEnum, JSON
+from mautrix.types.util.serializable_attrs import _dict_to_attrs
 
 from .account import BaseResponseUser, UserIdentifier
 
@@ -123,17 +124,24 @@ class MediaType(SerializableEnum):
 
 
 @dataclass(kw_only=True)
+class ExpiredMediaItem(SerializableAttrs['ExpiredMediaItem']):
+    media_type: MediaType
+
+
+@dataclass(kw_only=True)
 class RegularMediaItem(SerializableAttrs['RegularMediaItem']):
     id: str
     image_versions2: Optional[ImageVersions] = None
     video_versions: Optional[List[VideoVersion]] = None
-    original_width: int
-    original_height: int
+    original_width: Optional[int] = None
+    original_height: Optional[int] = None
     media_type: MediaType
     media_id: Optional[int] = None
     organic_tracking_token: Optional[str] = None
     creative_config: Optional[CreativeConfig] = None
     create_mode_attribution: Optional[CreateModeAttribution] = None
+
+    # TODO carousel_media shares
 
     @property
     def best_image(self) -> Optional[ImageVersion]:
@@ -179,27 +187,37 @@ class Caption(SerializableAttrs['Caption']):
     media_id: int
 
 
+@dataclass
+class Location(SerializableAttrs['Location']):
+    pk: int
+    short_name: str
+    facebook_places_id: int
+    # TODO enum?
+    external_source: str  # facebook_places
+    name: str
+    address: str
+    city: str
+    lng: float
+    lat: float
+
+
 @dataclass(kw_only=True)
-class MediaShareItem(SerializableAttrs['MediaShareItem']):
+class MediaShareItem(RegularMediaItem, SerializableAttrs['MediaShareItem']):
     taken_at: int
     pk: int
-    id: str
     device_timestamp: int
-    media_type: MediaType
     code: str
     client_cache_key: str
     filter_type: int
-    image_versions2: ImageVersions
-    video_versions: VideoVersion
-    original_width: int
-    original_height: int
     user: BaseResponseUser
-    can_viewer_reshare: bool
+    # Not present in reel shares
+    can_viewer_reshare: Optional[bool] = None
     caption_is_edited: bool
     comment_likes_enabled: bool
     comment_threading_enabled: bool
     has_more_comments: bool
     max_num_visible_preview_comments: int
+    # preview_comments: List[TODO]
     can_view_more_preview_comments: bool
     comment_count: int
     like_count: int
@@ -207,7 +225,35 @@ class MediaShareItem(SerializableAttrs['MediaShareItem']):
     photo_of_you: bool
     caption: Caption
     can_viewer_save: bool
-    organic_tracking_token: str
+    location: Optional[Location] = None
+
+
+@dataclass
+class SharingFrictionInfo(SerializableAttrs['SharingFrictionInfo']):
+    should_have_sharing_friction: bool
+    bloks_app_url: Optional[str]
+
+
+# The fields in this class have been observed in reel share items, but may exist elsewhere too.
+# If they're observed in other types, they should be moved to MediaShareItem.
+@dataclass
+class ReelMediaShareItem(MediaShareItem, SerializableAttrs['ReelMediaShareItem']):
+    # TODO enum?
+    caption_position: int
+    is_reel_media: bool
+    timezone_offset: int
+    # likers: List[TODO]
+    can_see_insights_as_brand: bool
+    expiring_at: int
+    sharing_friction_info: SharingFrictionInfo
+    is_in_profile_grid: bool
+    profile_grid_control_enabled: bool
+    is_shop_the_look_eligible: bool
+    # TODO enum?
+    deleted_reason: int
+    integrity_review_decision: str
+    # Not present in story_share, only reel_share
+    story_is_saved_to_archive: Optional[bool] = None
 
 
 @dataclass(kw_only=True)
@@ -215,14 +261,23 @@ class ReplayableMediaItem(SerializableAttrs['ReplayableMediaItem']):
     view_mode: ViewMode
     seen_count: int
     seen_user_ids: List[int]
-    replay_expiring_at_us: Optional[Any] = None
+    replay_expiring_at_us: Optional[int] = None
 
 
 @dataclass(kw_only=True)
 class VisualMedia(ReplayableMediaItem, SerializableAttrs['VisualMedia']):
-    url_expire_at_secs: int
-    playback_duration_secs: int
-    media: RegularMediaItem
+    url_expire_at_secs: Optional[int] = None
+    playback_duration_secs: Optional[int] = None
+    media: Union[RegularMediaItem, ExpiredMediaItem]
+
+    @classmethod
+    def deserialize(cls, data: JSON) -> 'VisualMedia':
+        data = {**data}
+        if "id" not in data["media"]:
+            data["media"] = ExpiredMediaItem.deserialize(data["media"])
+        else:
+            data["media"] = RegularMediaItem.deserialize(data["media"])
+        return _dict_to_attrs(cls, data)
 
 
 @dataclass(kw_only=True)
@@ -291,17 +346,54 @@ class Reactions(SerializableAttrs['Reactions']):
 
 
 @dataclass
-class Location(SerializableAttrs['Location']):
-    pk: int
-    short_name: str
-    facebook_places_id: int
+class LinkContext(SerializableAttrs['LinkContext']):
+    link_url: str
+    link_title: str
+    link_summary: str
+    link_image_url: str
+
+
+@dataclass
+class LinkItem(SerializableAttrs['LinkItem']):
+    text: str
+    link_context: LinkContext
+    client_context: str
+    mutation_token: str
+
+
+class ReelShareType(SerializableEnum):
+    REPLY = "reply"
+    REACTION = "reaction"
+
+
+@dataclass
+class ReelShareReactionInfo(SerializableAttrs['ReelShareReactionInfo']):
+    emoji: str
+    # TODO find type
+    # intensity: Any
+
+
+@dataclass
+class ReelShareItem(SerializableAttrs['ReelShareItem']):
+    text: str
+    type: ReelShareType
+    reel_owner_id: int
+    is_reel_persisted: int
+    reel_type: str
+    media: ReelMediaShareItem
+    reaction_info: Optional[ReelShareReactionInfo] = None
+
+
+@dataclass
+class StoryShareItem(SerializableAttrs['StoryShareItem']):
+    text: str
+    is_reel_persisted: bool
     # TODO enum?
-    external_source: str  # facebook_places
-    name: str
-    address: str
-    city: str
-    lng: float
-    lat: float
+    reel_type: str  # user_reel
+    reel_id: str
+    # TODO enum?
+    story_share_type: str  # default
+    media: ReelMediaShareItem
 
 
 @dataclass(kw_only=True)
@@ -322,6 +414,9 @@ class ThreadItem(SerializableAttrs['ThreadItem']):
     animated_media: Optional[AnimatedMediaItem] = None
     visual_media: Optional[VisualMedia] = None
     media_share: Optional[MediaShareItem] = None
+    reel_share: Optional[ReelShareItem] = None
+    story_share: Optional[StoryShareItem] = None
     location: Optional[Location] = None
     reactions: Optional[Reactions] = None
     like: Optional[str] = None
+    link: Optional[LinkItem] = None

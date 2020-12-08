@@ -99,7 +99,7 @@ class MatrixHandler(BaseMatrixHandler):
     async def handle_read_receipt(self, user: 'u.User', portal: 'po.Portal', event_id: EventID,
                                   data: SingleReceiptEventContent) -> None:
         message = await DBMessage.get_by_mxid(event_id, portal.mxid)
-        if not message:
+        if not message or message.is_internal:
             return
         # TODO implement
         # user.log.debug(f"Marking messages in {portal.thread_id} read up to {message.item_id}")

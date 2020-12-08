@@ -41,7 +41,7 @@ class UserIdentifier(SerializableAttrs['UserIdentifier']):
 class BaseResponseUser(UserIdentifier, SerializableAttrs['BaseResponseUser']):
     full_name: str
     is_private: bool
-    is_verified: bool
+    is_verified: bool = False
     profile_pic_url: str
     # When this doesn't exist, the profile picture is probably the default one
     profile_pic_id: Optional[str] = None

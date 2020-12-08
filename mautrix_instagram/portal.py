@@ -24,7 +24,7 @@ import magic
 
 from mauigpapi.types import (Thread, ThreadUser, ThreadItem, RegularMediaItem, MediaType,
                              ReactionStatus, Reaction, AnimatedMediaItem, ThreadItemType,
-                             VoiceMediaItem, Location)
+                             VoiceMediaItem, ExpiredMediaItem, MediaShareItem, ReelShareType)
 from mautrix.appservice import AppService, IntentAPI
 from mautrix.bridge import BasePortal, NotificationDisabler
 from mautrix.types import (EventID, MessageEventContent, RoomID, EventType, MessageType, ImageInfo,
@@ -189,7 +189,7 @@ class Portal(DBPortal, BasePortal):
     async def handle_matrix_reaction(self, sender: 'u.User', event_id: EventID,
                                      reacting_to: EventID, emoji: str) -> None:
         message = await DBMessage.get_by_mxid(reacting_to, self.mxid)
-        if not message:
+        if not message or message.is_internal:
             self.log.debug(f"Ignoring reaction to unknown event {reacting_to}")
             return
 
@@ -226,7 +226,7 @@ class Portal(DBPortal, BasePortal):
             return
 
         message = await DBMessage.get_by_mxid(event_id, self.mxid)
-        if message:
+        if message and not message.is_internal:
             try:
                 await message.delete()
                 await sender.client.delete_item(self.thread_id, message.item_id)
@@ -252,11 +252,15 @@ class Portal(DBPortal, BasePortal):
                                         intent: IntentAPI) -> Optional[ReuploadedMediaInfo]:
         if media.media_type == MediaType.IMAGE:
             image = media.best_image
+            if not image:
+                return None
             url = image.url
             msgtype = MessageType.IMAGE
             info = ImageInfo(height=image.height, width=image.width)
         elif media.media_type == MediaType.VIDEO:
             video = media.best_video
+            if not video:
+                return None
             url = video.url
             msgtype = MessageType.VIDEO
             info = VideoInfo(height=video.height, width=video.width)
@@ -315,11 +319,25 @@ class Portal(DBPortal, BasePortal):
                                       ) -> Optional[EventID]:
         if item.media:
             reuploaded = await self._reupload_instagram_media(source, item.media, intent)
+        elif item.visual_media:
+            if isinstance(item.visual_media.media, ExpiredMediaItem):
+                # TODO send error message instead
+                return None
+            reuploaded = await self._reupload_instagram_media(source, item.visual_media.media,
+                                                              intent)
         elif item.animated_media:
             reuploaded = await self._reupload_instagram_animated(source, item.animated_media,
                                                                  intent)
         elif item.voice_media:
             reuploaded = await self._reupload_instagram_voice(source, item.voice_media, intent)
+        elif item.reel_share:
+            reuploaded = await self._reupload_instagram_media(source, item.reel_share.media,
+                                                              intent)
+        elif item.story_share:
+            reuploaded = await self._reupload_instagram_media(source, item.story_share.media,
+                                                              intent)
+        elif item.media_share:
+            reuploaded = await self._reupload_instagram_media(source, item.media_share, intent)
         else:
             reuploaded = None
         if not reuploaded:
@@ -330,9 +348,56 @@ class Portal(DBPortal, BasePortal):
                                            info=reuploaded.info, msgtype=reuploaded.msgtype)
         return await self._send_message(intent, content, timestamp=item.timestamp // 1000)
 
-    async def _handle_instagram_text(self, intent: IntentAPI, item: ThreadItem) -> EventID:
-        content = TextMessageEventContent(msgtype=MessageType.TEXT, body=item.text or item.like)
-        return await self._send_message(intent, content, timestamp=item.timestamp // 1000)
+    async def _handle_instagram_media_share(self, source: 'u.User', intent: IntentAPI,
+                                            item: ThreadItem) -> Optional[EventID]:
+        share_item = item.media_share or item.story_share.media
+        if share_item == item.media_share:
+            prefix_text = f"Sent {share_item.user.username}'s photo"
+        else:
+            prefix_text = f"Shared {share_item.user.username}'s story"
+        prefix = TextMessageEventContent(msgtype=MessageType.NOTICE, body=prefix_text)
+        await self._send_message(intent, prefix)
+        event_id = await self._handle_instagram_media(source, intent, item)
+        if share_item.caption:
+            body = f"> {share_item.caption.user.username}: {share_item.caption.text}"
+            formatted_body = (f"<blockquote><strong>{share_item.caption.user.username}</strong>"
+                              f" {share_item.caption.text}</blockquote>")
+            caption = TextMessageEventContent(msgtype=MessageType.TEXT, body=body,
+                                              formatted_body=formatted_body, format=Format.HTML)
+            await self._send_message(intent, caption)
+        return event_id
+
+    async def _handle_instagram_reel_share(self, source: 'u.User', intent: IntentAPI,
+                                           item: ThreadItem) -> Optional[EventID]:
+        if item.reel_share.type == ReelShareType.REPLY:
+            if item.reel_share.reel_owner_id == source.igpk:
+                prefix = "Replied to your story"
+            else:
+                prefix = f"Sent {item.reel_share.media.user.username}'s story"
+        elif item.reel_share.type == ReelShareType.REACTION:
+            prefix = "Reacted to your story"
+        else:
+            self.log.debug(f"Unsupported reel share type {item.reel_share.type}")
+            return None
+        prefix = TextMessageEventContent(msgtype=MessageType.NOTICE, body=prefix)
+        content = TextMessageEventContent(msgtype=MessageType.TEXT, body=item.text)
+        await self._send_message(intent, prefix)
+        fake_item_id = f"fi.mau.instagram.reel_share_item.{item.reel_share.media.pk}"
+        existing = await DBMessage.get_by_item_id(fake_item_id, self.receiver)
+        if existing:
+            # If the user already reacted or replied to the same reel share item,
+            # use a Matrix reply instead of reposting the image.
+            content.set_reply(existing.mxid)
+        else:
+            media_event_id = await self._handle_instagram_media(source, intent, item)
+            await DBMessage(mxid=media_event_id, mx_room=self.mxid, item_id=fake_item_id,
+                            receiver=self.receiver, sender=item.reel_share.media.user.pk).insert()
+        return await self._send_message(intent, content)
+
+    async def _handle_instagram_text(self, intent: IntentAPI, text: str, timestamp: int
+                                     ) -> EventID:
+        content = TextMessageEventContent(msgtype=MessageType.TEXT, body=text)
+        return await self._send_message(intent, content, timestamp=timestamp // 1000)
 
     async def _handle_instagram_location(self, intent: IntentAPI, item: ThreadItem) -> EventID:
         loc = item.location
@@ -378,13 +443,22 @@ class Portal(DBPortal, BasePortal):
             else:
                 intent = sender.intent_for(self)
             event_id = None
-            if item.media or item.animated_media or item.voice_media:
+            if item.media or item.animated_media or item.voice_media or item.visual_media:
                 event_id = await self._handle_instagram_media(source, intent, item)
             elif item.location:
                 event_id = await self._handle_instagram_location(intent, item)
-            # We handle likes as text because Matrix clients do big emoji on their own.
-            if item.text or item.like:
-                event_id = await self._handle_instagram_text(intent, item)
+            elif item.reel_share:
+                event_id = await self._handle_instagram_reel_share(source, intent, item)
+            elif item.media_share or item.story_share:
+                event_id = await self._handle_instagram_media_share(source, intent, item)
+            if item.text:
+                event_id = await self._handle_instagram_text(intent, item.text, item.timestamp)
+            elif item.like:
+                # We handle likes as text because Matrix clients do big emoji on their own.
+                event_id = await self._handle_instagram_text(intent, item.like, item.timestamp)
+            elif item.link:
+                event_id = await self._handle_instagram_text(intent, item.link.text,
+                                                             item.timestamp)
             if event_id:
                 msg = DBMessage(mxid=event_id, mx_room=self.mxid, item_id=item.item_id,
                                 receiver=self.receiver, sender=sender.pk)

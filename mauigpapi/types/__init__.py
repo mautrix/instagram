@@ -13,7 +13,8 @@ from .thread_item import (ThreadItemType, ThreadItemActionLog, ViewMode, Creativ
                           RegularMediaItem, MediaShareItem, ReplayableMediaItem, VideoVersion,
                           AudioInfo, VoiceMediaItem, AnimatedMediaImage, AnimatedMediaImages,
                           AnimatedMediaItem, ThreadItem, VoiceMediaData, Reaction, Reactions,
-                          Location)
+                          Location, ExpiredMediaItem, ReelMediaShareItem, ReelShareItem, LinkItem,
+                          ReelShareType, ReelShareReactionInfo, SharingFrictionInfo, LinkContext)
 from .thread import Thread, ThreadUser, ThreadItem, ThreadUserLastSeenAt, ThreadTheme
 from .mqtt import (Operation, ThreadAction, ReactionStatus, TypingStatus, CommandResponsePayload,
                    CommandResponse, IrisPayloadData, IrisPayload, MessageSyncMessage,

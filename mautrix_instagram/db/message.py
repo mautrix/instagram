@@ -62,3 +62,7 @@ class Message:
         if not row:
             return None
         return cls(**row)
+
+    @property
+    def is_internal(self) -> bool:
+        return self.item_id.startswith("fi.mau.instagram.")
