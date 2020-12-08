@@ -251,6 +251,8 @@ class User(DBUser, BaseUser):
         elif evt.message.op == Operation.REMOVE:
             # Removes don't have a sender, only the message sender can unsend messages anyway
             await portal.handle_instagram_remove(evt.message.item_id)
+        elif evt.message.op == Operation.REPLACE:
+            await portal.handle_instagram_update(evt.message)
 
     # @async_time(METRIC_RECEIPT)
     # async def handle_receipt(self, evt: ConversationReadEntry) -> None:

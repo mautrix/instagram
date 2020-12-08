@@ -13,7 +13,7 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import Optional, ClassVar, TYPE_CHECKING
+from typing import Optional, ClassVar, List, TYPE_CHECKING
 
 from attr import dataclass
 
@@ -68,3 +68,15 @@ class Reaction:
         if not row:
             return None
         return cls(**row)
+
+    @classmethod
+    async def count(cls, ig_item_id: str, ig_receiver: int) -> int:
+        q = "SELECT COUNT(*) FROM reaction WHERE ig_item_id=$1 AND ig_receiver=$2"
+        return await cls.db.fetchval(q, ig_item_id, ig_receiver)
+
+    @classmethod
+    async def get_all_by_item_id(cls, ig_item_id: str, ig_receiver: int) -> List['Reaction']:
+        q = ("SELECT mxid, mx_room, ig_item_id, ig_receiver, ig_sender, reaction "
+             "FROM reaction WHERE ig_item_id=$1 AND ig_receiver=$2")
+        rows = await cls.db.fetch(q, ig_item_id, ig_receiver)
+        return [cls(**row) for row in rows]

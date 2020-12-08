@@ -13,8 +13,9 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import List, Any, Dict, Optional
+from typing import List, Any, Optional
 
+import attr
 from attr import dataclass
 from mautrix.types import SerializableAttrs, SerializableEnum
 
@@ -272,6 +273,22 @@ class AnimatedMediaItem(SerializableAttrs['AnimatedMediaItem']):
     images: AnimatedMediaImages
 
 
+@dataclass
+class Reaction(SerializableAttrs['Reaction']):
+    sender_id: int
+    timestamp: int
+    client_context: int
+    emoji: str = "❤️"
+    super_react_type: Optional[str] = None
+
+
+@dataclass
+class Reactions(SerializableAttrs['Reactions']):
+    likes_count: int = 0
+    likes: List[Reaction] = attr.ib(factory=lambda: [])
+    emojis: List[Reaction] = attr.ib(factory=lambda: [])
+
+
 @dataclass(kw_only=True)
 class ThreadItem(SerializableAttrs['ThreadItem']):
     item_id: Optional[str] = None
@@ -285,9 +302,9 @@ class ThreadItem(SerializableAttrs['ThreadItem']):
     show_forward_attribution: Optional[bool] = None
     action_log: Optional[ThreadItemActionLog] = None
 
-    # These have only been observed over MQTT and not confirmed in direct_inbox
     media: Optional[RegularMediaItem] = None
     voice_media: Optional[VoiceMediaItem] = None
     animated_media: Optional[AnimatedMediaItem] = None
     visual_media: Optional[VisualMedia] = None
     media_share: Optional[MediaShareItem] = None
+    reactions: Optional[Reactions] = None

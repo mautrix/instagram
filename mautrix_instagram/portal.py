@@ -24,7 +24,7 @@ import magic
 from yarl import URL
 
 from mauigpapi.types import (Thread, ThreadUser, ThreadItem, RegularMediaItem, MediaType,
-                             ReactionStatus)
+                             ReactionStatus, Reaction)
 from mautrix.appservice import AppService, IntentAPI
 from mautrix.bridge import BasePortal, NotificationDisabler
 from mautrix.types import (EventID, MessageEventContent, RoomID, EventType, MessageType, ImageInfo,
@@ -297,8 +297,8 @@ class Portal(DBPortal, BasePortal):
         content = TextMessageEventContent(msgtype=MessageType.TEXT, body=item.text)
         return await self._send_message(intent, content, timestamp=item.timestamp // 1000)
 
-    async def handle_instagram_item(self, source: 'u.User', sender: 'p.Puppet', item: ThreadItem
-                                    ) -> None:
+    async def handle_instagram_item(self, source: 'u.User', sender: 'p.Puppet', item: ThreadItem,
+                                    is_backfill: bool = False) -> None:
         if item.client_context in self._reqid_dedup:
             self.log.debug(f"Ignoring message {item.item_id} by {item.user_id}"
                            " as it was sent by us (client_context in dedup queue)")
@@ -324,12 +324,15 @@ class Portal(DBPortal, BasePortal):
                 event_id = await self._handle_instagram_media(source, intent, item)
             elif item.text:
                 event_id = await self._handle_instagram_text(intent, item)
-            # TODO handle attachments and reactions
+            # TODO handle other attachments
             if event_id:
-                await DBMessage(mxid=event_id, mx_room=self.mxid, item_id=item.item_id,
-                                receiver=self.receiver, sender=sender.pk).insert()
+                msg = DBMessage(mxid=event_id, mx_room=self.mxid, item_id=item.item_id,
+                                receiver=self.receiver, sender=sender.pk)
+                await msg.insert()
                 await self._send_delivery_receipt(event_id)
                 self.log.debug(f"Handled Instagram message {item.item_id} -> {event_id}")
+                if is_backfill and item.reactions:
+                    await self._handle_instagram_reactions(msg, item.reactions.emojis)
             else:
                 self.log.debug(f"Unhandled Instagram message {item.item_id}")
 
@@ -344,6 +347,29 @@ class Portal(DBPortal, BasePortal):
         except MForbidden:
             await self.main_intent.redact(self.mxid, message.mxid)
         self.log.debug(f"Redacted {message.mxid} after Instagram unsend")
+
+    async def _handle_instagram_reactions(self, message: DBMessage, reactions: List[Reaction]
+                                          ) -> None:
+        old_reactions: Dict[int, DBReaction]
+        old_reactions = {reaction.ig_sender: reaction for reaction
+                         in await DBReaction.get_all_by_item_id(message.item_id, self.receiver)}
+        for new_reaction in reactions:
+            old_reaction = old_reactions.get(new_reaction.sender_id)
+            if old_reaction and old_reaction.reaction == new_reaction.emoji:
+                continue
+            puppet = await p.Puppet.get_by_pk(new_reaction.sender_id)
+            intent = puppet.intent_for(self)
+            reaction_event_id = await intent.react(self.mxid, message.mxid, new_reaction.emoji)
+            await self._upsert_reaction(old_reaction, intent, reaction_event_id, message,
+                                        puppet, new_reaction.emoji)
+
+    async def handle_instagram_update(self, item: ThreadItem) -> None:
+        message = await DBMessage.get_by_item_id(item.item_id, self.receiver)
+        if not message:
+            return
+        async with self._reaction_lock:
+            await self._handle_instagram_reactions(message, (item.reactions.emojis
+                                                             if item.reactions else []))
 
     # endregion
     # region Updating portal info
@@ -409,7 +435,7 @@ class Portal(DBPortal, BasePortal):
         async with NotificationDisabler(self.mxid, source):
             for entry in reversed(entries):
                 sender = await p.Puppet.get_by_pk(int(entry.user_id))
-                await self.handle_instagram_item(source, sender, entry)
+                await self.handle_instagram_item(source, sender, entry, is_backfill=True)
         for intent in self._backfill_leave:
             self.log.trace("Leaving room with %s post-backfill", intent.mxid)
             await intent.leave_room(self.mxid)

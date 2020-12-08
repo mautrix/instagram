@@ -23,7 +23,7 @@
       * [ ] Voice messages
       * [ ] Locations
   * [x] Message unsend
-  * [ ] Message reactions
+  * [x] Message reactions
   * [x] Message history
   * [ ] Presence
   * [ ] Typing notifications
