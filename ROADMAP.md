@@ -28,8 +28,8 @@
   * [x] Message reactions
   * [x] Message history
   * [ ] Presence
-  * [ ] Typing notifications
-  * [ ] Read receipts
+  * [x] Typing notifications
+  * [x] Read receipts
   * [x] User metadata
     * [x] Name
     * [x] Avatar

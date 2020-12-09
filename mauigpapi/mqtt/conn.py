@@ -222,8 +222,8 @@ class AndroidMQTT:
             subitem_key = rest[0]
             if subitem_key == "approval_required_for_new_members":
                 additional["approval_required_for_new_members"] = True
-            elif subitem_key == "participants":
-                additional["participants"] = {rest[1]: rest[2]}
+            elif subitem_key == "participants" and len(rest) > 2 and rest[2] == "has_seen":
+                additional["has_seen"] = int(rest[1])
             elif subitem_key == "items":
                 additional["item_id"] = rest[1]
                 # TODO wtf is this?
@@ -232,8 +232,10 @@ class AndroidMQTT:
                     additional[rest[2]] = {
                         rest[3]: rest[4],
                     }
-            elif subitem_key in ("admin_user_ids", "activity_indicator_id"):
-                additional[subitem_key] = rest[1]
+            elif subitem_key in "admin_user_ids":
+                additional["admin_user_id"] = int(rest[1])
+            elif subitem_key == "activity_indicator_id":
+                additional["activity_indicator_id"] = rest[1]
         print("Parsed path", path, "->", additional)
         return additional
 
@@ -261,8 +263,8 @@ class AndroidMQTT:
 
     def _on_pubsub(self, payload: bytes) -> None:
         parsed_thrift = IncomingMessage.from_thrift(payload)
+        self.log.trace(f"Got pubsub event {parsed_thrift.topic} / {parsed_thrift.payload}")
         message = PubsubPayload.parse_json(parsed_thrift.payload)
-        self.log.trace(f"Got pubsub event with topic {parsed_thrift.topic}: {message}")
         for data in message.data:
             match = ACTIVITY_INDICATOR_REGEX.match(data.path)
             if match:
@@ -299,14 +301,13 @@ class AndroidMQTT:
             topic = GraphQLQueryID(parsed_thrift.topic)
         except ValueError:
             topic = parsed_thrift.topic
+        self.log.trace(f"Got realtime sub event {topic} / {parsed_thrift.payload}")
         allowed = ("direct", GraphQLQueryID.APP_PRESENCE, GraphQLQueryID.ZERO_PROVISION,
                    GraphQLQueryID.CLIENT_CONFIG_UPDATE, GraphQLQueryID.LIVE_REALTIME_COMMENTS)
         if topic not in allowed:
-            self.log.debug(f"Got unknown realtime sub event {topic}: {parsed_thrift.payload}")
             return
         parsed_json = json.loads(parsed_thrift.payload)
         for evt in self._parse_realtime_sub_item(topic, parsed_json):
-            self.log.trace(f"Got realtime sub event with topic {topic}: {evt}")
             self._loop.create_task(self._dispatch(evt))
 
     def _on_message_handler(self, client: MQTToTClient, _: Any, message: MQTTMessage) -> None:

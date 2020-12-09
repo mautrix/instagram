@@ -13,7 +13,7 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import Dict, Any, List, Optional
+from typing import Any, List, Optional, Union
 import json
 
 from attr import dataclass
@@ -91,9 +91,9 @@ class MessageSyncMessage(ThreadItem, SerializableAttrs['MessageSyncMessage']):
     op: Operation = Operation.ADD
 
     # These come from parsing the path
-    admin_user_ids: Optional[int] = None
+    admin_user_id: Optional[int] = None
     approval_required_for_new_members: Optional[bool] = None
-    participants: Optional[Dict[str, str]] = None
+    has_seen: Optional[int] = None
     thread_id: Optional[str] = None
 
 
@@ -119,7 +119,7 @@ class PubsubBasePayload(SerializableAttrs['PubsubBasePayload']):
 
 @dataclass(kw_only=True)
 class ActivityIndicatorData(SerializableAttrs['ActivityIndicatorData']):
-    timestamp: str
+    timestamp: Union[int, str]
     sender_id: str
     ttl: int
     activity_status: TypingStatus

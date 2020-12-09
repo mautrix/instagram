@@ -24,7 +24,7 @@ import magic
 
 from mauigpapi.types import (Thread, ThreadUser, ThreadItem, RegularMediaItem, MediaType,
                              ReactionStatus, Reaction, AnimatedMediaItem, ThreadItemType,
-                             VoiceMediaItem, ExpiredMediaItem, MediaShareItem, ReelShareType)
+                             VoiceMediaItem, ExpiredMediaItem, MessageSyncMessage, ReelShareType)
 from mautrix.appservice import AppService, IntentAPI
 from mautrix.bridge import BasePortal, NotificationDisabler
 from mautrix.types import (EventID, MessageEventContent, RoomID, EventType, MessageType, ImageInfo,
@@ -501,13 +501,18 @@ class Portal(DBPortal, BasePortal):
             puppet = await p.Puppet.get_by_pk(old_reaction.ig_sender)
             await puppet.intent_for(self).redact(self.mxid, old_reaction.mxid)
 
-    async def handle_instagram_update(self, item: ThreadItem) -> None:
+    async def handle_instagram_update(self, item: MessageSyncMessage) -> None:
         message = await DBMessage.get_by_item_id(item.item_id, self.receiver)
         if not message:
             return
-        async with self._reaction_lock:
-            await self._handle_instagram_reactions(message, (item.reactions.emojis
-                                                             if item.reactions else []))
+        if item.has_seen:
+            puppet = await p.Puppet.get_by_pk(item.has_seen, create=False)
+            if puppet:
+                await puppet.intent_for(self).mark_read(self.mxid, message.mxid)
+        else:
+            async with self._reaction_lock:
+                await self._handle_instagram_reactions(message, (item.reactions.emojis
+                                                                 if item.reactions else []))
 
     # endregion
     # region Updating portal info

@@ -18,10 +18,12 @@ from typing import (Dict, Optional, AsyncIterable, Awaitable, AsyncGenerator, Li
 from collections import defaultdict
 import asyncio
 import logging
+import time
 
 from mauigpapi import AndroidAPI, AndroidState, AndroidMQTT
 from mauigpapi.mqtt import Connect, Disconnect, GraphQLSubscription, SkywalkerSubscription
-from mauigpapi.types import CurrentUser, MessageSyncEvent, Operation
+from mauigpapi.types import (CurrentUser, MessageSyncEvent, Operation, RealtimeDirectEvent,
+                             ActivityIndicatorData, TypingStatus)
 from mauigpapi.errors import IGNotLoggedInError
 from mautrix.bridge import BaseUser
 from mautrix.types import UserID, RoomID, EventID, TextMessageEventContent, MessageType
@@ -36,12 +38,13 @@ if TYPE_CHECKING:
     from .__main__ import InstagramBridge
 
 METRIC_MESSAGE = Summary("bridge_on_message", "calls to handle_message")
-METRIC_RECEIPT = Summary("bridge_on_receipt", "calls to handle_receipt")
+METRIC_RTD = Summary("bridge_on_rtd", "calls to handle_rtd")
 METRIC_LOGGED_IN = Gauge("bridge_logged_in", "Users logged into the bridge")
 METRIC_CONNECTED = Gauge("bridge_connected", "Bridged users connected to Instagram")
 
 
 class User(DBUser, BaseUser):
+    _activity_indicator_ids: Dict[str, int] = {}
     by_mxid: Dict[UserID, 'User'] = {}
     by_igpk: Dict[int, 'User'] = {}
     config: Config
@@ -117,6 +120,7 @@ class User(DBUser, BaseUser):
         self.mqtt.add_event_handler(Connect, self.on_connect)
         self.mqtt.add_event_handler(Disconnect, self.on_disconnect)
         self.mqtt.add_event_handler(MessageSyncEvent, self.handle_message)
+        self.mqtt.add_event_handler(RealtimeDirectEvent, self.handle_rtd)
 
         await self.update()
 
@@ -258,14 +262,30 @@ class User(DBUser, BaseUser):
         elif evt.message.op == Operation.REPLACE:
             await portal.handle_instagram_update(evt.message)
 
-    # @async_time(METRIC_RECEIPT)
-    # async def handle_receipt(self, evt: ConversationReadEntry) -> None:
-    #     portal = await po.Portal.get_by_twid(evt.conversation_id, self.twid,
-    #                                          conv_type=evt.conversation.type)
-    #     if not portal.mxid:
-    #         return
-    #     sender = await pu.Puppet.get_by_twid(self.twid)
-    #     await portal.handle_twitter_receipt(sender, int(evt.last_read_event_id))
+    @async_time(METRIC_RTD)
+    async def handle_rtd(self, evt: RealtimeDirectEvent) -> None:
+        if not isinstance(evt.value, ActivityIndicatorData):
+            return
+
+        now = int(time.time() * 1000)
+        date = int(evt.value.timestamp) // 1000
+        expiry = date + evt.value.ttl
+        if expiry < now:
+            return
+
+        if evt.activity_indicator_id in self._activity_indicator_ids:
+            return
+        # TODO clear expired items from this dict
+        self._activity_indicator_ids[evt.activity_indicator_id] = expiry
+
+        puppet = await pu.Puppet.get_by_pk(int(evt.value.sender_id))
+        portal = await po.Portal.get_by_thread_id(evt.thread_id, receiver=self.igpk)
+        if not puppet or not portal:
+            return
+
+        is_typing = evt.value.activity_status != TypingStatus.OFF
+        await puppet.intent_for(portal).set_typing(portal.mxid, is_typing=is_typing,
+                                                   timeout=evt.value.ttl)
 
     # endregion
     # region Database getters
