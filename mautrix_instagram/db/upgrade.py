@@ -32,10 +32,10 @@ async def upgrade_v1(conn: Connection) -> None:
         PRIMARY KEY (thread_id, receiver)
     )""")
     await conn.execute("""CREATE TABLE "user" (
-        mxid        VARCHAR(255) PRIMARY KEY,
+        mxid        TEXT PRIMARY KEY,
         igpk        BIGINT,
         state       jsonb,
-        notice_room VARCHAR(255)
+        notice_room TEXT
     )""")
     await conn.execute("""CREATE TABLE puppet (
         pk            BIGINT PRIMARY KEY,
