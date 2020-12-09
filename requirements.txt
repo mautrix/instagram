@@ -7,3 +7,4 @@ attrs>=19.1
 mautrix>=0.8.5,<0.9
 asyncpg>=0.20,<0.22
 pycryptodome>=3,<4
+paho-mqtt>=1.5,<2
