@@ -86,7 +86,7 @@ class Puppet(DBPuppet, BasePuppet):
         return self.intent
 
     def need_backfill_invite(self, portal: 'p.Portal') -> bool:
-        return (portal.other_user_pk != self.pk and self.is_real_user
+        return (portal.other_user_pk != self.pk and (self.is_real_user or portal.is_direct)
                 and self.config["bridge.backfill.invite_own_puppet"])
 
     async def update_info(self, info: BaseResponseUser, source: 'u.User') -> None:
