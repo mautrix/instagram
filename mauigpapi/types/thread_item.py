@@ -125,7 +125,7 @@ class MediaType(SerializableEnum):
 
 @dataclass(kw_only=True)
 class ExpiredMediaItem(SerializableAttrs['ExpiredMediaItem']):
-    media_type: MediaType
+    media_type: Optional[MediaType] = None
 
 
 @dataclass(kw_only=True)

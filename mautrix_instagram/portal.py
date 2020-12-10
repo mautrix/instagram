@@ -422,6 +422,14 @@ class Portal(DBPortal, BasePortal):
 
     async def handle_instagram_item(self, source: 'u.User', sender: 'p.Puppet', item: ThreadItem,
                                     is_backfill: bool = False) -> None:
+        try:
+            await self._handle_instagram_item(source, sender, item, is_backfill)
+        except Exception:
+            self.log.exception("Fatal error handling Instagram item")
+            self.log.trace("Item content: %s", item.serialize())
+
+    async def _handle_instagram_item(self, source: 'u.User', sender: 'p.Puppet', item: ThreadItem,
+                                    is_backfill: bool = False) -> None:
         if item.client_context in self._reqid_dedup:
             self.log.debug(f"Ignoring message {item.item_id} by {item.user_id}"
                            " as it was sent by us (client_context in dedup queue)")
