@@ -22,6 +22,10 @@ from .base import IGError
 from ..types import SpamResponse, CheckpointResponse, LoginRequiredResponse, LoginErrorResponse
 
 
+class IGChallengeWrongCodeError(IGError):
+    pass
+
+
 class IGResponseError(IGError):
     response: ClientResponse
 

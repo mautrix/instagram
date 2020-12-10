@@ -24,6 +24,7 @@ import attr
 from mautrix.types import SerializableAttrs
 
 from ..errors import IGNoCheckpointError, IGCookieNotFoundError, IGUserIDNotFoundError
+from ..types import ChallengeStateResponse
 from .device import AndroidDevice
 from .session import AndroidSession
 from .application import AndroidApplication
@@ -39,7 +40,7 @@ class AndroidState(SerializableAttrs['AndroidState']):
     experiments: AndroidExperiments = attr.ib(factory=lambda: AndroidExperiments())
     client_session_id_lifetime: int = 1_200_000
     pigeon_session_id_lifetime: int = 1_200_000
-    challenge: 'Optional[ChallengeStateResponse]' = None
+    challenge: Optional[ChallengeStateResponse] = None
     _challenge_path: Optional[str] = attr.ib(default=None, metadata={"json": "challenge_path"})
     cookies: Cookies = attr.ib(factory=lambda: Cookies())
 

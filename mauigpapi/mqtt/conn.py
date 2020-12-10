@@ -190,6 +190,7 @@ class AndroidMQTT:
         self._loop.create_task(self._post_connect())
 
     async def _post_connect(self) -> None:
+        await self._dispatch(Connect())
         self.log.debug("Re-subscribing to things after connect")
         if self._graphql_subs:
             res = await self.graphql_subscribe(self._graphql_subs)
@@ -366,7 +367,6 @@ class AndroidMQTT:
 
         self.log.debug("Connecting to Instagram MQTT")
         await self._reconnect()
-        await self._dispatch(Connect())
         exit_if_not_connected = False
 
         while True:
@@ -405,7 +405,6 @@ class AndroidMQTT:
 
                 await self._reconnect()
                 exit_if_not_connected = True
-                await self._dispatch(Connect())
             else:
                 exit_if_not_connected = False
         if self._disconnect_error:

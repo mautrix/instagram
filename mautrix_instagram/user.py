@@ -128,9 +128,11 @@ class User(DBUser, BaseUser):
         self.loop.create_task(self._try_sync())
 
     async def on_connect(self, evt: Connect) -> None:
+        self.log.debug("Connected to Instagram")
         self._track_metric(METRIC_CONNECTED, True)
 
     async def on_disconnect(self, evt: Disconnect) -> None:
+        self.log.debug("Disconnected from Instagram")
         self._track_metric(METRIC_CONNECTED, False)
 
     # TODO this stuff could probably be moved to mautrix-python

@@ -19,7 +19,8 @@ from mautrix.bridge.commands import HelpSection, command_handler
 from mauigpapi.state import AndroidState
 from mauigpapi.http import AndroidAPI
 from mauigpapi.errors import (IGLoginTwoFactorRequiredError, IGLoginBadPasswordError,
-                              IGLoginInvalidUserError, IGBad2FACodeError)
+                              IGLoginInvalidUserError, IGBad2FACodeError, IGCheckpointError,
+                              IGChallengeWrongCodeError)
 from mauigpapi.types import BaseResponseUser
 
 from .typehint import CommandEvent
@@ -80,6 +81,14 @@ async def login(evt: CommandEvent) -> None:
             "2fa_identifier": tfa_info.two_factor_identifier,
         }
         await evt.reply(msg)
+    except IGCheckpointError:
+        await api.challenge_auto(reset=True)
+        evt.sender.command_status = {
+            **evt.sender.command_status,
+            "next": enter_login_security_code,
+        }
+        await evt.reply("Username and password accepted, but Instagram wants to verify it's really"
+                        " you. Please confirm the login and enter the security code here.")
     except IGLoginInvalidUserError:
         await evt.reply("Invalid username")
     except IGLoginBadPasswordError:
@@ -100,11 +109,40 @@ async def enter_login_2fa(evt: CommandEvent) -> None:
     except IGBad2FACodeError:
         await evt.reply("Invalid 2-factor authentication code. Please try again "
                         "or use `$cmdprefix+sp cancel` to cancel.")
+    except IGCheckpointError:
+        await api.challenge_auto(reset=True)
+        evt.sender.command_status = {
+            **evt.sender.command_status,
+            "next": enter_login_security_code,
+        }
+        await evt.reply("2-factor authentication code accepted, but Instagram wants to verify it's"
+                        " really you. Please confirm the login and enter the security code here.")
     except Exception as e:
         await evt.reply(f"Failed to log in: {e}")
         evt.log.exception("Failed to log in")
         evt.sender.command_status = None
     else:
+        evt.sender.command_status = None
+        await _post_login(evt, api, state, resp.logged_in_user)
+
+
+async def enter_login_security_code(evt: CommandEvent) -> None:
+    api: AndroidAPI = evt.sender.command_status["api"]
+    state: AndroidState = evt.sender.command_status["state"]
+    try:
+        resp = await api.challenge_send_security_code("".join(evt.args))
+    except IGChallengeWrongCodeError as e:
+        await evt.reply(f"Incorrect security code: {e}")
+    except Exception as e:
+        await evt.reply(f"Failed to log in: {e}")
+        evt.log.exception("Failed to log in")
+        evt.sender.command_status = None
+    else:
+        if not resp.logged_in_user:
+            evt.log.error(f"Didn't get logged_in_user in challenge response "
+                          f"after entering security code: {resp.serialize()}")
+            await evt.reply("An unknown error occurred. Please check the bridge logs.")
+            return
         evt.sender.command_status = None
         await _post_login(evt, api, state, resp.logged_in_user)
 
