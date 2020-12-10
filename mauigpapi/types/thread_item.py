@@ -236,12 +236,13 @@ class SharingFrictionInfo(SerializableAttrs['SharingFrictionInfo']):
 
 # The fields in this class have been observed in reel share items, but may exist elsewhere too.
 # If they're observed in other types, they should be moved to MediaShareItem.
-@dataclass
+@dataclass(kw_only=True)
 class ReelMediaShareItem(MediaShareItem, SerializableAttrs['ReelMediaShareItem']):
     # TODO enum?
     caption_position: int
     is_reel_media: bool
-    timezone_offset: int
+    # Apparently sometimes not present
+    timezone_offset: Optional[int] = None
     # likers: List[TODO]
     can_see_insights_as_brand: bool
     expiring_at: int
