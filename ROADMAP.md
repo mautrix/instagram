@@ -15,7 +15,7 @@
   * [ ] Typing notifications
   * [ ] Read receipts
 * Instagram → Matrix
-  * [ ] Message content
+  * [x] Message content
     * [x] Text
     * [x] Media
       * [x] Images
@@ -43,5 +43,6 @@
   * [ ] Option to use own Matrix account for messages sent from other Instagram clients
     * [x] Automatic login with shared secret
     * [ ] Manual login with `login-matrix`
+  * [x] End-to-bridge encryption in Matrix rooms
 
 † Not supported on Instagram

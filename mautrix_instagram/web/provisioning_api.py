@@ -36,9 +36,10 @@ class ProvisioningAPI:
     log: TraceLogger = logging.getLogger("mau.web.provisioning")
     app: web.Application
 
-    def __init__(self, shared_secret: str) -> None:
+    def __init__(self, shared_secret: str, device_seed: str) -> None:
         self.app = web.Application()
         self.shared_secret = shared_secret
+        self.device_seed = device_seed
         self.app.router.add_get("/api/whoami", self.status)
         self.app.router.add_options("/api/login", self.login_options)
         self.app.router.add_options("/api/login/2fa", self.login_options)
@@ -113,7 +114,7 @@ class ProvisioningAPI:
         except KeyError:
             raise web.HTTPBadRequest(text='{"error": "Missing keys"}', headers=self._headers)
 
-        api, state = await get_login_state(user, username)
+        api, state = await get_login_state(user, username, self.device_seed)
         try:
             resp = await api.login(username, password)
         except IGLoginTwoFactorRequiredError as e:
@@ -133,7 +134,7 @@ class ProvisioningAPI:
         except IGLoginBadPasswordError:
             return web.json_response(data={"status": "incorrect-password"},
                                      status=403, headers=self._acao_headers)
-        return await self._finish_login(user, api, state, resp.logged_in_user)
+        return await self._finish_login(user, state, resp.logged_in_user)
 
     async def _get_user(self, request: web.Request, check_state: bool = False
                         ) -> Tuple['u.User', JSON]:
@@ -174,7 +175,7 @@ class ProvisioningAPI:
                 "status": "checkpoint",
                 "response": e.body.serialize(),
             }, status=202, headers=self._acao_headers)
-        return await self._finish_login(user, api, state, resp.logged_in_user)
+        return await self._finish_login(user, state, resp.logged_in_user)
 
     async def login_checkpoint(self, request: web.Request) -> web.Response:
         user, data = await self._get_user(request, check_state=True)
@@ -192,11 +193,10 @@ class ProvisioningAPI:
             return web.json_response(data={
                 "status": "incorrect-challenge-code",
             }, status=403, headers=self._acao_headers)
-        return await self._finish_login(user, api, state, resp.logged_in_user)
+        return await self._finish_login(user, state, resp.logged_in_user)
 
-    async def _finish_login(self, user: 'u.User', api: AndroidAPI, state: AndroidState,
-                            resp_user: BaseResponseUser) -> web.Response:
-        await api.simulate_post_login_flow()
+    async def _finish_login(self, user: 'u.User', state: AndroidState, resp_user: BaseResponseUser
+                            ) -> web.Response:
         user.state = state
         pl = state.device.payload
         manufacturer, model = pl["manufacturer"], pl["model"]
@@ -205,7 +205,7 @@ class ProvisioningAPI:
             "status": "logged-in",
             "device_displayname": f"{manufacturer} {model}",
             "user": resp_user.serialize(),
-        }, status=200, headers=self._headers)
+        }, status=200, headers=self._acao_headers)
 
     async def logout(self, request: web.Request) -> web.Response:
         user = await self.check_token(request)

@@ -44,6 +44,10 @@ class AndroidState(SerializableAttrs['AndroidState']):
     _challenge_path: Optional[str] = attr.ib(default=None, metadata={"json": "challenge_path"})
     cookies: Cookies = attr.ib(factory=lambda: Cookies())
 
+    def __attrs_post_init__(self) -> None:
+        if self.application.APP_VERSION_CODE != AndroidApplication().APP_VERSION_CODE:
+            self.application = AndroidApplication()
+
     @property
     def client_session_id(self) -> str:
         return str(self._gen_temp_uuid("clientSessionId", self.client_session_id_lifetime))

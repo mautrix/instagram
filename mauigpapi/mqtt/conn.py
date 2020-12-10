@@ -435,9 +435,9 @@ class AndroidMQTT:
             return await fut
 
     async def iris_subscribe(self, seq_id: int, snapshot_at_ms: int) -> None:
+        self.log.debug(f"Requesting iris subscribe {seq_id}/{snapshot_at_ms}")
         resp = await self.request(RealtimeTopic.SUB_IRIS, RealtimeTopic.SUB_IRIS_RESPONSE,
-                                  {"seq_id": seq_id, "snapshot_at_ms": snapshot_at_ms,
-                                   "snapshot_app_version": "message"})
+                                  {"seq_id": seq_id, "snapshot_at_ms": snapshot_at_ms})
         self.log.debug("Iris subscribe response: %s", resp.payload.decode("utf-8"))
 
     def graphql_subscribe(self, subs: Set[str]) -> asyncio.Future:

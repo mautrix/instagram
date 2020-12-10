@@ -74,6 +74,7 @@ class User(DBUser, BaseUser):
         self.is_whitelisted, self.is_admin, self.permission_level = perms
         self.log = self.log.getChild(self.mxid)
         self.client = None
+        self.mqtt = None
         self.username = None
         self.dm_update_lock = asyncio.Lock()
         self._metric_value = defaultdict(lambda: False)
@@ -100,8 +101,12 @@ class User(DBUser, BaseUser):
         except Exception:
             self.log.exception("Error while connecting to Instagram")
 
+    @property
+    def api_log(self) -> TraceLogger:
+        return self.ig_base_log.getChild("http").getChild(self.mxid)
+
     async def connect(self) -> None:
-        client = AndroidAPI(self.state, log=self.ig_base_log.getChild("http").getChild(self.mxid))
+        client = AndroidAPI(self.state, log=self.api_log)
 
         try:
             resp = await client.current_user()
@@ -222,6 +227,11 @@ class User(DBUser, BaseUser):
         await self.update()
 
     async def logout(self) -> None:
+        if self.client:
+            try:
+                await self.client.logout(one_tap_app_login=False)
+            except Exception:
+                self.log.debug("Exception logging out", exc_info=True)
         if self.mqtt:
             self.mqtt.disconnect()
         self._track_metric(METRIC_CONNECTED, False)
@@ -236,6 +246,7 @@ class User(DBUser, BaseUser):
         self.client = None
         self.mqtt = None
         self.state = None
+        self.igpk = None
         self._is_logged_in = False
         await self.update()
 

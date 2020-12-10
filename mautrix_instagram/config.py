@@ -50,6 +50,10 @@ class Config(BaseBridgeConfig):
         copy("metrics.enabled")
         copy("metrics.listen_port")
 
+        copy("instagram.device_seed")
+        if base["instagram.device_seed"] == "generate":
+            base["instagram.device_seed"] = self._new_token()
+
         copy("bridge.username_template")
         copy("bridge.displayname_template")
 

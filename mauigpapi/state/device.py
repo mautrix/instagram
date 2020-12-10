@@ -13,7 +13,7 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import Optional
+from typing import Optional, Union
 from uuid import UUID
 import pkgutil
 import random
@@ -70,7 +70,7 @@ class AndroidDevice(SerializableAttrs['AndroidDevice']):
             "model": model,
         }
 
-    def generate(self, seed: str) -> None:
+    def generate(self, seed: Union[str, bytes]) -> None:
         rand = random.Random(seed)
         self.id = f"android-{''.join(rand.choices(string.hexdigits, k=16))}"
         self.descriptor = rand.choice(descriptors)

@@ -14,6 +14,8 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from typing import Tuple, TYPE_CHECKING
+import hashlib
+import hmac
 
 from mautrix.bridge.commands import HelpSection, command_handler
 from mauigpapi.state import AndroidState
@@ -31,15 +33,17 @@ if TYPE_CHECKING:
 SECTION_AUTH = HelpSection("Authentication", 10, "")
 
 
-async def get_login_state(user: 'User', username: str) -> Tuple[AndroidAPI, AndroidState]:
+async def get_login_state(user: 'User', username: str, seed: str
+                          ) -> Tuple[AndroidAPI, AndroidState]:
     if user.command_status and user.command_status["action"] == "Login":
         api: AndroidAPI = user.command_status["api"]
         state: AndroidState = user.command_status["state"]
     else:
         state = AndroidState()
-        state.device.generate(username)
-        api = AndroidAPI(state)
-        await api.simulate_pre_login_flow()
+        seed = hmac.new(seed.encode("utf-8"), username.encode("utf-8"), hashlib.sha256).digest()
+        state.device.generate(seed)
+        api = AndroidAPI(state, log=user.api_log)
+        await api.qe_sync_login_experiments()
         user.command_status = {
             "action": "Login",
             "state": state,
@@ -59,7 +63,7 @@ async def login(evt: CommandEvent) -> None:
         return
     username = evt.args[0]
     password = " ".join(evt.args[1:])
-    api, state = await get_login_state(evt.sender, username)
+    api, state = await get_login_state(evt.sender, username, evt.config["instagram.device_seed"])
     try:
         resp = await api.login(username, password)
     except IGLoginTwoFactorRequiredError as e:
@@ -94,7 +98,7 @@ async def login(evt: CommandEvent) -> None:
     except IGLoginBadPasswordError:
         await evt.reply("Incorrect password")
     else:
-        await _post_login(evt, api, state, resp.logged_in_user)
+        await _post_login(evt, state, resp.logged_in_user)
 
 
 async def enter_login_2fa(evt: CommandEvent) -> None:
@@ -123,7 +127,7 @@ async def enter_login_2fa(evt: CommandEvent) -> None:
         evt.sender.command_status = None
     else:
         evt.sender.command_status = None
-        await _post_login(evt, api, state, resp.logged_in_user)
+        await _post_login(evt, state, resp.logged_in_user)
 
 
 async def enter_login_security_code(evt: CommandEvent) -> None:
@@ -144,12 +148,10 @@ async def enter_login_security_code(evt: CommandEvent) -> None:
             await evt.reply("An unknown error occurred. Please check the bridge logs.")
             return
         evt.sender.command_status = None
-        await _post_login(evt, api, state, resp.logged_in_user)
+        await _post_login(evt, state, resp.logged_in_user)
 
 
-async def _post_login(evt: CommandEvent, api: AndroidAPI, state: AndroidState,
-                      user: BaseResponseUser) -> None:
-    await api.simulate_post_login_flow()
+async def _post_login(evt: CommandEvent, state: AndroidState, user: BaseResponseUser) -> None:
     evt.sender.state = state
     pl = state.device.payload
     manufacturer, model = pl["manufacturer"], pl["model"]

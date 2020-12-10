@@ -26,8 +26,13 @@ default_capabilities = json.loads(pkgutil.get_data("mauigpapi.state",
 
 @dataclass
 class AndroidApplication(SerializableAttrs['AndroidApplication']):
-    APP_VERSION: str = "167.1.0.25.120"
-    APP_VERSION_CODE: str = "259829117"
+    # TODO these newer versions make the iris subscribe stop working for some reason
+    # APP_VERSION: str = "168.0.0.40.355"
+    # APP_VERSION_CODE: str = "261079771"
+    # APP_VERSION: str = "167.1.0.25.120"
+    # APP_VERSION_CODE: str = "259829117"
+    APP_VERSION: str = "159.0.0.29.122"
+    APP_VERSION_CODE: str = "244390482"
     BREADCRUMB_KEY: str = "iN4$aGr0m"
     FACEBOOK_ANALYTICS_APPLICATION_ID: str = "567067343352427"
     FACEBOOK_OTA_FIELDS: str = (
