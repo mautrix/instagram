@@ -16,6 +16,7 @@
 from typing import Any, List, Optional, Dict
 
 from attr import dataclass
+import attr
 
 from mautrix.types import SerializableAttrs, SerializableEnum
 
@@ -110,7 +111,7 @@ class CurrentUser(BaseFullResponseUser, SerializableAttrs['CurrentUser']):
     biography_product_mentions: List[Any]
     external_url: str
     has_biography_translation: bool = False
-    hd_profile_pic_versions: List[HDProfilePictureVersion]
+    hd_profile_pic_versions: List[HDProfilePictureVersion] = attr.ib(factory=lambda: [])
     hd_profile_pic_url_info: HDProfilePictureVersion
     show_conversion_edit_entry: bool
     birthday: Any

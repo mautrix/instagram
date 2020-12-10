@@ -29,6 +29,7 @@ from mautrix.bridge import BaseUser
 from mautrix.types import UserID, RoomID, EventID, TextMessageEventContent, MessageType
 from mautrix.appservice import AppService
 from mautrix.util.opt_prometheus import Summary, Gauge, async_time
+from mautrix.util.logging import TraceLogger
 
 from .db import User as DBUser, Portal as DBPortal
 from .config import Config
@@ -44,6 +45,7 @@ METRIC_CONNECTED = Gauge("bridge_connected", "Bridged users connected to Instagr
 
 
 class User(DBUser, BaseUser):
+    ig_base_log: TraceLogger = logging.getLogger("mau.instagram")
     _activity_indicator_ids: Dict[str, int] = {}
     by_mxid: Dict[UserID, 'User'] = {}
     by_igpk: Dict[int, 'User'] = {}
@@ -99,7 +101,7 @@ class User(DBUser, BaseUser):
             self.log.exception("Error while connecting to Instagram")
 
     async def connect(self) -> None:
-        client = AndroidAPI(self.state)
+        client = AndroidAPI(self.state, log=self.ig_base_log.getChild("http").getChild(self.mxid))
 
         try:
             resp = await client.current_user()
@@ -116,7 +118,7 @@ class User(DBUser, BaseUser):
         self.by_igpk[self.igpk] = self
 
         self.mqtt = AndroidMQTT(self.state, loop=self.loop,
-                                log=logging.getLogger("mau.instagram.mqtt").getChild(self.mxid))
+                                log=self.ig_base_log.getChild("mqtt").getChild(self.mxid))
         self.mqtt.add_event_handler(Connect, self.on_connect)
         self.mqtt.add_event_handler(Disconnect, self.on_disconnect)
         self.mqtt.add_event_handler(MessageSyncEvent, self.handle_message)

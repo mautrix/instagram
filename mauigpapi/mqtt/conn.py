@@ -81,7 +81,7 @@ class AndroidMQTT:
         self._disconnect_error = None
         self._response_waiter_locks = defaultdict(lambda: asyncio.Lock())
         self._event_handlers = defaultdict(lambda: [])
-        self.log = log or logging.getLogger("mauigpapi")
+        self.log = log or logging.getLogger("mauigpapi.mqtt")
         self._loop = loop or asyncio.get_event_loop()
         self.state = state
         self._client = MQTToTClient(
@@ -210,8 +210,7 @@ class AndroidMQTT:
 
     # region Incoming event parsing
 
-    @staticmethod
-    def _parse_direct_thread_path(path: str) -> dict:
+    def _parse_direct_thread_path(self, path: str) -> dict:
         blank, direct_v2, threads, thread_id, *rest = path.split("/")
         assert blank == ""
         assert direct_v2 == "direct_v2"
@@ -237,7 +236,7 @@ class AndroidMQTT:
                 additional["admin_user_id"] = int(rest[1])
             elif subitem_key == "activity_indicator_id":
                 additional["activity_indicator_id"] = rest[1]
-        print("Parsed path", path, "->", additional)
+        self.log.trace("Parsed path %s -> %s", path, additional)
         return additional
 
     def _on_message_sync(self, payload: bytes) -> None:
@@ -323,7 +322,7 @@ class AndroidMQTT:
             elif topic == RealtimeTopic.REALTIME_SUB:
                 self._on_realtime_sub(message.payload)
             else:
-                print("other message", message.payload)
+                self.log.trace("Other message payload: %s", message.payload)
                 try:
                     waiter = self._response_waiters.pop(topic)
                 except KeyError:
@@ -333,7 +332,7 @@ class AndroidMQTT:
                     waiter.set_result(message)
         except Exception:
             self.log.exception("Error in incoming MQTT message handler")
-            print(message.payload)
+            self.log.trace("Errored MQTT payload: %s", message.payload)
 
     # endregion
 

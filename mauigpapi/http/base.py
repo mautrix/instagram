@@ -14,6 +14,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from typing import Optional, Dict, Any, TypeVar, Type, Union
+import logging
 import random
 import time
 import json
@@ -21,6 +22,7 @@ import json
 from aiohttp import ClientSession, ClientResponse
 from yarl import URL
 from mautrix.types import JSON, Serializable
+from mautrix.util.logging import TraceLogger
 
 from ..state import AndroidState
 from ..errors import (IGActionSpamError, IGNotFoundError, IGRateLimitError, IGCheckpointError,
@@ -36,10 +38,12 @@ class BaseAndroidAPI:
     url = URL("https://i.instagram.com")
     http: ClientSession
     state: AndroidState
+    log: TraceLogger
 
-    def __init__(self, state: AndroidState) -> None:
+    def __init__(self, state: AndroidState, log: Optional[TraceLogger] = None) -> None:
         self.http = ClientSession(cookie_jar=state.cookies.jar)
         self.state = state
+        self.log = log or logging.getLogger("mauigpapi.http")
 
     @staticmethod
     def sign(req: Any, filter_nulls: bool = False) -> Dict[str, str]:
@@ -106,7 +110,7 @@ class BaseAndroidAPI:
         if not raw:
             data = self.sign(data, filter_nulls=filter_nulls)
         resp = await self.http.post(url=self.url.with_path(path), headers=headers, data=data)
-        print(f"{path} response: {await resp.text()}")
+        self.log.trace(f"{path} response: {await resp.text()}")
         if response_type is str or response_type is None:
             self._handle_response_headers(resp)
             if response_type is str:
@@ -123,7 +127,7 @@ class BaseAndroidAPI:
         headers = {**self._headers, **headers} if headers else self._headers
         query = {k: v for k, v in (query or {}).items() if v is not None}
         resp = await self.http.get(url=self.url.with_path(path).with_query(query), headers=headers)
-        print(f"{path} response: {await resp.text()}")
+        self.log.trace(f"{path} response: {await resp.text()}")
         if response_type is None:
             self._handle_response_headers(resp)
             return None
