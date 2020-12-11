@@ -299,7 +299,7 @@ class User(DBUser, BaseUser):
 
         puppet = await pu.Puppet.get_by_pk(int(evt.value.sender_id))
         portal = await po.Portal.get_by_thread_id(evt.thread_id, receiver=self.igpk)
-        if not puppet or not portal:
+        if not puppet or not portal or not portal.mxid:
             return
 
         is_typing = evt.value.activity_status != TypingStatus.OFF
