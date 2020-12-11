@@ -23,11 +23,14 @@ from .login import LoginResponseUser
 
 @dataclass
 class ChallengeStateData(SerializableAttrs['ChallengeStateData']):
-    choice: str
-    fb_access_token: str
-    big_blue_token: str
-    google_oauth_token: str
-    email: str
+    # Only for reset step
+    choice: Optional[str] = None
+    fb_access_token: Optional[str] = None
+    big_blue_token: Optional[str] = None
+    google_oauth_token: Optional[str] = None
+    email: Optional[str] = None
+
+    # Only for verify email step
     security_code: Optional[str] = None
     resend_delay: Optional[int] = None
     contact_point: Optional[str] = None
@@ -45,3 +48,8 @@ class ChallengeStateResponse(SerializableAttrs['ChallengeStateResponse']):
     # TODO enum?
     action: Optional[str] = None
     status: str
+
+    # flow_render_type: int
+    # bloks_action: str
+    # challenge_context: str
+    # challenge_type_enum_str: str
