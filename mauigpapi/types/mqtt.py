@@ -63,7 +63,7 @@ class CommandResponsePayload(SerializableAttrs['CommandResponsePayload']):
 class CommandResponse(SerializableAttrs['CommandResponse']):
     action: str
     status: str
-    status_code: str
+    status_code: Optional[str] = None
     payload: CommandResponsePayload
 
 

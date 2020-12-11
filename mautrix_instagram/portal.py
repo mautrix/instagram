@@ -25,12 +25,13 @@ import magic
 
 from mauigpapi.types import (Thread, ThreadUser, ThreadItem, RegularMediaItem, MediaType,
                              ReactionStatus, Reaction, AnimatedMediaItem, ThreadItemType,
-                             VoiceMediaItem, ExpiredMediaItem, MessageSyncMessage, ReelShareType)
+                             VoiceMediaItem, ExpiredMediaItem, MessageSyncMessage, ReelShareType,
+                             TypingStatus)
 from mautrix.appservice import AppService, IntentAPI
 from mautrix.bridge import BasePortal, NotificationDisabler
 from mautrix.types import (EventID, MessageEventContent, RoomID, EventType, MessageType, ImageInfo,
                            VideoInfo, MediaMessageEventContent, TextMessageEventContent, AudioInfo,
-                           ContentURI, EncryptedFile, LocationMessageEventContent, Format)
+                           ContentURI, EncryptedFile, LocationMessageEventContent, Format, UserID)
 from mautrix.errors import MatrixError, MForbidden
 from mautrix.util.simple_lock import SimpleLock
 from mautrix.util.network_retry import call_with_net_retry
@@ -79,6 +80,7 @@ class Portal(DBPortal, BasePortal):
     _last_participant_update: Set[int]
     _reaction_lock: asyncio.Lock
     _backfill_leave: Optional[Set[IntentAPI]]
+    _typing: Set[UserID]
 
     def __init__(self, thread_id: str, receiver: int, other_user_pk: Optional[int],
                  mxid: Optional[RoomID] = None, name: Optional[str] = None, encrypted: bool = False
@@ -96,6 +98,7 @@ class Portal(DBPortal, BasePortal):
         self._backfill_leave = None
         self._main_intent = None
         self._reaction_lock = asyncio.Lock()
+        self._typing = set()
 
     @property
     def is_direct(self) -> bool:
@@ -253,6 +256,22 @@ class Portal(DBPortal, BasePortal):
                 self.log.trace(f"Removed {message} after Matrix redaction")
             except Exception:
                 self.log.exception("Removing message failed")
+
+    async def handle_matrix_typing(self, users: Set[UserID]) -> None:
+        if users == self._typing:
+            return
+        old_typing = self._typing
+        self._typing = users
+        await self._handle_matrix_typing(old_typing - users, TypingStatus.OFF)
+        await self._handle_matrix_typing(users - old_typing, TypingStatus.TEXT)
+
+    async def _handle_matrix_typing(self, users: Set[UserID], status: TypingStatus) -> None:
+        for mxid in users:
+            user = await u.User.get_by_mxid(mxid, create=False)
+            if not user or not await user.is_logged_in() or user.remote_typing_status == status:
+                continue
+            user.remote_typing_status = None
+            await user.mqtt.indicate_activity(self.thread_id, status)
 
     async def handle_matrix_leave(self, user: 'u.User') -> None:
         if self.is_direct:

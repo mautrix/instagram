@@ -101,14 +101,15 @@ class MatrixHandler(BaseMatrixHandler):
         message = await DBMessage.get_by_mxid(event_id, portal.mxid)
         if not message or message.is_internal:
             return
-        # TODO implement
-        # user.log.debug(f"Marking messages in {portal.thread_id} read up to {message.item_id}")
-        # await user.client.conversation(portal.thread_id).mark_read(message.item_id)
+        user.log.debug(f"Marking {message.item_id} in {portal.thread_id} as read")
+        await user.mqtt.mark_seen(portal.thread_id, message.item_id)
 
     @staticmethod
     async def handle_typing(room_id: RoomID, typing: List[UserID]) -> None:
-        # TODO implement
-        pass
+        portal = await po.Portal.get_by_mxid(room_id)
+        if not portal:
+            return
+        await portal.handle_matrix_typing(set(typing))
 
     async def handle_event(self, evt: Event) -> None:
         if evt.type == EventType.ROOM_REDACTION:

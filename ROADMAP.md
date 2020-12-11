@@ -12,8 +12,8 @@
   * [x] Message redactions
   * [x] Message reactions
   * [ ] Presence
-  * [ ] Typing notifications
-  * [ ] Read receipts
+  * [x] Typing notifications
+  * [x] Read receipts
 * Instagram → Matrix
   * [x] Message content
     * [x] Text

@@ -63,6 +63,7 @@ class User(DBUser, BaseUser):
     _notice_room_lock: asyncio.Lock
     _notice_send_lock: asyncio.Lock
     _is_logged_in: bool
+    remote_typing_status: Optional[TypingStatus]
 
     def __init__(self, mxid: UserID, igpk: Optional[int] = None,
                  state: Optional[AndroidState] = None, notice_room: Optional[RoomID] = None
@@ -81,6 +82,7 @@ class User(DBUser, BaseUser):
         self._is_logged_in = False
         self._listen_task = None
         self.command_status = None
+        self.remote_typing_status = None
 
     @classmethod
     def init_cls(cls, bridge: 'InstagramBridge') -> AsyncIterable[Awaitable[None]]:
@@ -301,6 +303,8 @@ class User(DBUser, BaseUser):
             return
 
         is_typing = evt.value.activity_status != TypingStatus.OFF
+        if puppet.pk == self.igpk:
+            self.remote_typing_status = TypingStatus.TEXT if is_typing else TypingStatus.OFF
         await puppet.intent_for(portal).set_typing(portal.mxid, is_typing=is_typing,
                                                    timeout=evt.value.ttl)
 
