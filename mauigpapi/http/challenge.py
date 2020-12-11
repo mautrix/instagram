@@ -23,7 +23,7 @@ from ..errors import IGResponseError, IGChallengeWrongCodeError
 class ChallengeAPI(BaseAndroidAPI):
     @property
     def __path(self) -> str:
-        return f"/api/v1/{self.state.challenge_path}"
+        return f"/api/v1{self.state.challenge_path}"
 
     async def challenge_get_state(self) -> ChallengeStateResponse:
         query = {
