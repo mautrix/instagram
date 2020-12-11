@@ -242,10 +242,10 @@ class SharingFrictionInfo(SerializableAttrs['SharingFrictionInfo']):
 # If they're observed in other types, they should be moved to MediaShareItem.
 @dataclass(kw_only=True)
 class ReelMediaShareItem(MediaShareItem, SerializableAttrs['ReelMediaShareItem']):
+    # These three are apparently sometimes not present
     # TODO enum?
-    caption_position: int
-    is_reel_media: bool
-    # Apparently sometimes not present
+    caption_position: Optional[int] = None
+    is_reel_media: Optional[bool] = None
     timezone_offset: Optional[int] = None
     # likers: List[TODO]
     can_see_insights_as_brand: bool
@@ -369,6 +369,7 @@ class LinkItem(SerializableAttrs['LinkItem']):
 class ReelShareType(SerializableEnum):
     REPLY = "reply"
     REACTION = "reaction"
+    MENTION = "mention"
 
 
 @dataclass
@@ -427,7 +428,9 @@ class ThreadItem(SerializableAttrs['ThreadItem']):
     link: Optional[LinkItem] = None
 
     @classmethod
-    def deserialize(cls, data: JSON) -> Union['ThreadItem', Obj]:
+    def deserialize(cls, data: JSON, catch_errors: bool = True) -> Union['ThreadItem', Obj]:
+        if not catch_errors:
+            return _dict_to_attrs(cls, data)
         try:
             return _dict_to_attrs(cls, data)
         except SerializerError:
