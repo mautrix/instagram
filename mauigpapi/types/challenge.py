@@ -43,5 +43,5 @@ class ChallengeStateResponse(SerializableAttrs['ChallengeStateResponse']):
     user_id: int
     nonce_code: str
     # TODO enum?
-    action: str
+    action: Optional[str] = None
     status: str
