@@ -379,11 +379,15 @@ class Portal(DBPortal, BasePortal):
         await self._send_message(intent, prefix)
         event_id = await self._handle_instagram_media(source, intent, item)
         if share_item.caption:
-            body = f"> {share_item.caption.user.username}: {share_item.caption.text}"
+            external_url = f"https://www.instagram.com/p/{share_item.code}"
+            body = (f"> {share_item.caption.user.username}: {share_item.caption.text}\n\n"
+                    f"{external_url}")
             formatted_body = (f"<blockquote><strong>{share_item.caption.user.username}</strong>"
-                              f" {share_item.caption.text}</blockquote>")
+                              f" {share_item.caption.text}</blockquote>"
+                              f'<a href="{external_url}">instagram.com/p/{share_item.code}</a>')
             caption = TextMessageEventContent(msgtype=MessageType.TEXT, body=body,
-                                              formatted_body=formatted_body, format=Format.HTML)
+                                              formatted_body=formatted_body, format=Format.HTML,
+                                              external_url=external_url)
             await self._send_message(intent, caption)
         return event_id
 
