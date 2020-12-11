@@ -17,6 +17,7 @@ from typing import (Dict, Tuple, Optional, List, Deque, Set, Any, Union, AsyncGe
                     Awaitable, NamedTuple, TYPE_CHECKING, cast)
 from collections import deque
 from uuid import uuid4
+from io import BytesIO
 import mimetypes
 import asyncio
 
@@ -45,6 +46,11 @@ try:
     from mautrix.crypto.attachments import encrypt_attachment, decrypt_attachment
 except ImportError:
     encrypt_attachment = decrypt_attachment = None
+
+try:
+    from PIL import Image
+except ImportError:
+    Image = None
 
 StateBridge = EventType.find("m.bridge", EventType.Class.STATE)
 StateHalfShotBridge = EventType.find("uk.half-shot.bridge", EventType.Class.STATE)
@@ -163,6 +169,13 @@ class Portal(DBPortal, BasePortal):
             else:
                 data = await self.main_intent.download_media(message.url)
             mime_type = message.info.mimetype or magic.from_buffer(data, mime=True)
+            if mime_type != "image/jpeg" and mime_type.startswith("image/"):
+                with BytesIO(data) as inp:
+                    img = Image.open(inp)
+                    with BytesIO() as out:
+                        img.convert("RGB").save(out, format="JPEG", quality=80)
+                        data = out.getvalue()
+                mime_type = "image/jpeg"
             if mime_type == "image/jpeg":
                 upload_resp = await sender.client.upload_jpeg_photo(data)
                 # TODO is it possible to do this with MQTT?

@@ -7,3 +7,6 @@ unpaddedbase64>=1,<2
 
 #/metrics
 prometheus_client>=0.6,<0.10
+
+#/imageconvert
+pillow>=4,<9
