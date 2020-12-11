@@ -371,15 +371,17 @@ class Portal(DBPortal, BasePortal):
     async def _handle_instagram_media_share(self, source: 'u.User', intent: IntentAPI,
                                             item: ThreadItem) -> Optional[EventID]:
         share_item = item.media_share or item.story_share.media
-        if share_item == item.media_share:
-            prefix_text = f"Sent {share_item.user.username}'s photo"
-        else:
-            prefix_text = f"Sent {share_item.user.username}'s story"
-        prefix = TextMessageEventContent(msgtype=MessageType.NOTICE, body=prefix_text)
+        user_text = f"@{share_item.user.username}"
+        user_link = (f'<a href="https://www.instagram.com/{share_item.user.username}/">'
+                     f'{user_text}</a>')
+        item_type_name = "photo" if item.media_share else "story"
+        prefix = TextMessageEventContent(msgtype=MessageType.NOTICE, format=Format.HTML,
+                                         body=f"Sent {user_text}'s {item_type_name}",
+                                         formatted_body=f"Sent {user_link}'s {item_type_name}")
         await self._send_message(intent, prefix, timestamp=item.timestamp // 1000)
         event_id = await self._handle_instagram_media(source, intent, item)
         if share_item.caption:
-            external_url = f"https://www.instagram.com/p/{share_item.code}"
+            external_url = f"https://www.instagram.com/p/{share_item.code}/"
             body = (f"> {share_item.caption.user.username}: {share_item.caption.text}\n\n"
                     f"{external_url}")
             formatted_body = (f"<blockquote><strong>{share_item.caption.user.username}</strong>"
@@ -393,19 +395,26 @@ class Portal(DBPortal, BasePortal):
 
     async def _handle_instagram_reel_share(self, source: 'u.User', intent: IntentAPI,
                                            item: ThreadItem) -> Optional[EventID]:
+        prefix_html = None
         if item.reel_share.type == ReelShareType.REPLY:
             if item.reel_share.reel_owner_id == source.igpk:
                 prefix = "Replied to your story"
             else:
-                prefix = f"Sent {item.reel_share.media.user.username}'s story"
+                username = item.reel_share.media.user.username
+                prefix = f"Sent @{username}'s story"
+                user_link = f'<a href="https://www.instagram.com/{username}/">@{username}</a>'
+                prefix_html = f"Sent {user_link}'s story"
         elif item.reel_share.type == ReelShareType.REACTION:
             prefix = "Reacted to your story"
         else:
             self.log.debug(f"Unsupported reel share type {item.reel_share.type}")
             return None
-        prefix = TextMessageEventContent(msgtype=MessageType.NOTICE, body=prefix)
+        prefix_content = TextMessageEventContent(msgtype=MessageType.NOTICE, body=prefix)
+        if prefix_html:
+            prefix_content.format = Format.HTML
+            prefix_content.formatted_body = prefix_html
         content = TextMessageEventContent(msgtype=MessageType.TEXT, body=item.text)
-        await self._send_message(intent, prefix, timestamp=item.timestamp // 1000)
+        await self._send_message(intent, prefix_content, timestamp=item.timestamp // 1000)
         fake_item_id = f"fi.mau.instagram.reel_share_item.{item.reel_share.media.pk}"
         existing = await DBMessage.get_by_item_id(fake_item_id, self.receiver)
         if existing:
@@ -454,7 +463,10 @@ class Portal(DBPortal, BasePortal):
 
     async def _handle_instagram_item(self, source: 'u.User', sender: 'p.Puppet', item: ThreadItem,
                                      is_backfill: bool = False) -> None:
-        if item.client_context in self._reqid_dedup:
+        if not isinstance(item, ThreadItem):
+            # Parsing these items failed, they should have been logged already
+            return
+        elif item.client_context in self._reqid_dedup:
             self.log.debug(f"Ignoring message {item.item_id} by {item.user_id}"
                            " as it was sent by us (client_context in dedup queue)")
         elif item.item_id in self._msgid_dedup:
