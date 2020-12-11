@@ -211,10 +211,14 @@ class AndroidMQTT:
     # region Incoming event parsing
 
     def _parse_direct_thread_path(self, path: str) -> dict:
-        blank, direct_v2, threads, thread_id, *rest = path.split("/")
-        assert blank == ""
-        assert direct_v2 == "direct_v2"
-        assert threads == "threads"
+        try:
+            blank, direct_v2, threads, thread_id, *rest = path.split("/")
+            assert blank == ""
+            assert direct_v2 == "direct_v2"
+            assert threads == "threads"
+        except (AssertionError, ValueError) as e:
+            self.log.debug(f"Got {e} while parsing path {path}")
+            raise
         additional = {
             "thread_id": thread_id
         }
