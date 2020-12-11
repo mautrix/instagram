@@ -36,9 +36,9 @@
 * Misc
   * [x] Multi-user support
   * [x] Shared group chat portals
-  * [ ] Automatic portal creation
+  * [x] Automatic portal creation
     * [x] At startup
-    * [ ] When receiving message
+    * [x] When receiving message
   * [ ] Private chat creation by inviting Matrix puppet of Instagram user to new room
   * [ ] Option to use own Matrix account for messages sent from other Instagram clients
     * [x] Automatic login with shared secret
