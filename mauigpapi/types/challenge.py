@@ -28,10 +28,10 @@ class ChallengeStateData(SerializableAttrs['ChallengeStateData']):
     big_blue_token: str
     google_oauth_token: str
     email: str
-    security_code: str
-    resend_delay: int
-    contact_point: str
-    form_type: str
+    security_code: Optional[str] = None
+    resend_delay: Optional[int] = None
+    contact_point: Optional[str] = None
+    form_type: Optional[str] = None
 
 
 @dataclass(kw_only=True)
