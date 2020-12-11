@@ -376,7 +376,7 @@ class Portal(DBPortal, BasePortal):
         else:
             prefix_text = f"Sent {share_item.user.username}'s story"
         prefix = TextMessageEventContent(msgtype=MessageType.NOTICE, body=prefix_text)
-        await self._send_message(intent, prefix)
+        await self._send_message(intent, prefix, timestamp=item.timestamp // 1000)
         event_id = await self._handle_instagram_media(source, intent, item)
         if share_item.caption:
             external_url = f"https://www.instagram.com/p/{share_item.code}"
@@ -388,7 +388,7 @@ class Portal(DBPortal, BasePortal):
             caption = TextMessageEventContent(msgtype=MessageType.TEXT, body=body,
                                               formatted_body=formatted_body, format=Format.HTML,
                                               external_url=external_url)
-            await self._send_message(intent, caption)
+            await self._send_message(intent, caption, timestamp=item.timestamp // 1000)
         return event_id
 
     async def _handle_instagram_reel_share(self, source: 'u.User', intent: IntentAPI,
@@ -405,7 +405,7 @@ class Portal(DBPortal, BasePortal):
             return None
         prefix = TextMessageEventContent(msgtype=MessageType.NOTICE, body=prefix)
         content = TextMessageEventContent(msgtype=MessageType.TEXT, body=item.text)
-        await self._send_message(intent, prefix)
+        await self._send_message(intent, prefix, timestamp=item.timestamp // 1000)
         fake_item_id = f"fi.mau.instagram.reel_share_item.{item.reel_share.media.pk}"
         existing = await DBMessage.get_by_item_id(fake_item_id, self.receiver)
         if existing:
@@ -416,7 +416,7 @@ class Portal(DBPortal, BasePortal):
             media_event_id = await self._handle_instagram_media(source, intent, item)
             await DBMessage(mxid=media_event_id, mx_room=self.mxid, item_id=fake_item_id,
                             receiver=self.receiver, sender=item.reel_share.media.user.pk).insert()
-        return await self._send_message(intent, content)
+        return await self._send_message(intent, content, timestamp=item.timestamp // 1000)
 
     async def _handle_instagram_text(self, intent: IntentAPI, text: str, timestamp: int
                                      ) -> EventID:
