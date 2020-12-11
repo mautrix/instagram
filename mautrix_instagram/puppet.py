@@ -14,8 +14,8 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from typing import Optional, Dict, AsyncIterable, Awaitable, AsyncGenerator, TYPE_CHECKING, cast
+import os.path
 
-from aiohttp import ClientSession
 from yarl import URL
 
 from mauigpapi.types import BaseResponseUser
@@ -115,17 +115,19 @@ class Puppet(DBPuppet, BasePuppet):
         return False
 
     async def _update_avatar(self, info: BaseResponseUser, source: 'u.User') -> bool:
-        if info.profile_pic_id != self.photo_id or not self.avatar_set:
-            self.photo_id = info.profile_pic_id
-            if info.profile_pic_id:
+        pic_id = (f"id_{info.profile_pic_id}.jpg" if info.profile_pic_id
+                  else os.path.basename(URL(info.profile_pic_url).path))
+        if pic_id != self.photo_id or not self.avatar_set:
+            self.photo_id = pic_id
+            if info.has_anonymous_profile_picture:
+                mxc = None
+            else:
                 async with source.client.raw_http_get(info.profile_pic_url) as resp:
                     content_type = resp.headers["Content-Type"]
                     resp_data = await resp.read()
                 mxc = await self.default_mxid_intent.upload_media(data=resp_data,
                                                                   mime_type=content_type,
-                                                                  filename=info.profile_pic_id)
-            else:
-                mxc = None
+                                                                  filename=pic_id)
             try:
                 await self.default_mxid_intent.set_avatar_url(mxc)
                 self.avatar_set = True

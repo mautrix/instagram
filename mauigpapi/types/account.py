@@ -44,9 +44,7 @@ class BaseResponseUser(UserIdentifier, SerializableAttrs['BaseResponseUser']):
     is_private: bool
     is_verified: bool = False
     profile_pic_url: str
-    # When this doesn't exist, the profile picture is probably the default one
     profile_pic_id: Optional[str] = None
-
     has_anonymous_profile_picture: bool = False
     # TODO find type
     account_badges: Optional[List[Any]] = None
