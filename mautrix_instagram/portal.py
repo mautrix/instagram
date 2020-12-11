@@ -127,6 +127,12 @@ class Portal(DBPortal, BasePortal):
             except Exception:
                 self.log.exception("Failed to send delivery receipt for %s", event_id)
 
+    async def _send_bridge_error(self, msg: str) -> None:
+        if self.config["bridge.delivery_error_reports"]:
+            await self._send_message(self.main_intent, TextMessageEventContent(
+                msgtype=MessageType.NOTICE,
+                body=f"\u26a0 Your message may not have been bridged: {msg}"))
+
     async def _upsert_reaction(self, existing: DBReaction, intent: IntentAPI, mxid: EventID,
                                message: DBMessage, sender: Union['u.User', 'p.Puppet'],
                                reaction: str) -> None:
@@ -185,12 +191,13 @@ class Portal(DBPortal, BasePortal):
                                                      upload_id=upload_resp.upload_id,
                                                      allow_full_aspect_ratio="1")
             else:
-                # TODO add link to media for unsupported file types
+                await self._send_bridge_error("Non-image files are currently not supported")
                 return
         else:
             return
         if resp.status != "ok":
             self.log.warning(f"Failed to handle {event_id}: {resp}")
+            await self._send_bridge_error(resp.payload.message)
         else:
             self._msgid_dedup.appendleft(resp.payload.item_id)
             await DBMessage(mxid=event_id, mx_room=self.mxid, item_id=resp.payload.item_id,
