@@ -13,14 +13,18 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import List, Optional, Union, Any
+from typing import List, Optional, Union
+import logging
 
 import attr
 from attr import dataclass
-from mautrix.types import SerializableAttrs, SerializableEnum, JSON
+from mautrix.types import SerializableAttrs, SerializableEnum, JSON, SerializerError, Obj
 from mautrix.types.util.serializable_attrs import _dict_to_attrs
 
 from .account import BaseResponseUser, UserIdentifier
+
+
+log = logging.getLogger("mauigpapi.types")
 
 
 class ThreadItemType(SerializableEnum):
@@ -421,3 +425,11 @@ class ThreadItem(SerializableAttrs['ThreadItem']):
     reactions: Optional[Reactions] = None
     like: Optional[str] = None
     link: Optional[LinkItem] = None
+
+    @classmethod
+    def deserialize(cls, data: JSON) -> Union['ThreadItem', Obj]:
+        try:
+            return _dict_to_attrs(cls, data)
+        except SerializerError:
+            log.debug("Failed to deserialize ThreadItem %s", data)
+            return Obj(**data)

@@ -204,6 +204,8 @@ logging:
     loggers:
         mau:
             level: DEBUG
+        mauigpapi:
+            level: DEBUG
         aiohttp:
             level: INFO
         paho.mqtt:
