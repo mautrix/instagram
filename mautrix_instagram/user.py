@@ -23,7 +23,7 @@ import time
 from mauigpapi import AndroidAPI, AndroidState, AndroidMQTT
 from mauigpapi.mqtt import Connect, Disconnect, GraphQLSubscription, SkywalkerSubscription
 from mauigpapi.types import (CurrentUser, MessageSyncEvent, Operation, RealtimeDirectEvent,
-                             ActivityIndicatorData, TypingStatus)
+                             ActivityIndicatorData, TypingStatus, ThreadSyncEvent)
 from mauigpapi.errors import IGNotLoggedInError
 from mautrix.bridge import BaseUser
 from mautrix.types import UserID, RoomID, EventID, TextMessageEventContent, MessageType
@@ -39,6 +39,7 @@ if TYPE_CHECKING:
     from .__main__ import InstagramBridge
 
 METRIC_MESSAGE = Summary("bridge_on_message", "calls to handle_message")
+METRIC_THREAD_SYNC = Summary("bridge_on_thread_sync", "calls to handle_thread_sync")
 METRIC_RTD = Summary("bridge_on_rtd", "calls to handle_rtd")
 METRIC_LOGGED_IN = Gauge("bridge_logged_in", "Users logged into the bridge")
 METRIC_CONNECTED = Gauge("bridge_connected", "Bridged users connected to Instagram")
@@ -129,6 +130,7 @@ class User(DBUser, BaseUser):
         self.mqtt.add_event_handler(Connect, self.on_connect)
         self.mqtt.add_event_handler(Disconnect, self.on_disconnect)
         self.mqtt.add_event_handler(MessageSyncEvent, self.handle_message)
+        self.mqtt.add_event_handler(ThreadSyncEvent, self.handle_thread_sync)
         self.mqtt.add_event_handler(RealtimeDirectEvent, self.handle_rtd)
 
         await self.update()
@@ -280,6 +282,12 @@ class User(DBUser, BaseUser):
             await portal.handle_instagram_remove(evt.message.item_id)
         elif evt.message.op == Operation.REPLACE:
             await portal.handle_instagram_update(evt.message)
+
+    @async_time(METRIC_THREAD_SYNC)
+    async def handle_thread_sync(self, evt: ThreadSyncEvent) -> None:
+        self.log.trace("Received thread sync event %s", evt)
+        portal = await po.Portal.get_by_thread(evt, receiver=self.igpk)
+        await portal.create_matrix_room(self, evt)
 
     @async_time(METRIC_RTD)
     async def handle_rtd(self, evt: RealtimeDirectEvent) -> None:

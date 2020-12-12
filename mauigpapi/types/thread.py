@@ -46,6 +46,7 @@ class Thread(SerializableAttrs['Thread']):
     thread_v2_id: str
 
     users: List[ThreadUser]
+    # left_users: List[TODO]
     inviter: BaseResponseUser
     admin_user_ids: List[int]
 
@@ -78,11 +79,11 @@ class Thread(SerializableAttrs['Thread']):
     theme: ThreadTheme
     last_seen_at: Dict[int, ThreadUserLastSeenAt]
 
-    newest_cursor: str
-    oldest_cursor: str
+    newest_cursor: Optional[str] = None
+    oldest_cursor: Optional[str] = None
     next_cursor: Optional[str] = None
-    prev_cursor: str
-    last_permanent_item: ThreadItem
+    prev_cursor: Optional[str] = None
+    last_permanent_item: Optional[ThreadItem] = None
     items: List[ThreadItem]
 
     # These might only be in single thread requests and not inbox

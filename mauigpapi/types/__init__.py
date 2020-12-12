@@ -23,5 +23,5 @@ from .mqtt import (Operation, ThreadAction, ReactionStatus, TypingStatus, Comman
                    AppPresenceEvent, ZeroProductProvisioningEvent, RealtimeZeroProvisionPayload,
                    ClientConfigUpdatePayload, ClientConfigUpdateEvent, RealtimeDirectData,
                    RealtimeDirectEvent, LiveVideoSystemComment, LiveVideoCommentEvent,
-                   LiveVideoComment, LiveVideoCommentPayload)
+                   LiveVideoComment, LiveVideoCommentPayload, ThreadSyncEvent)
 from .challenge import ChallengeStateResponse, ChallengeStateData

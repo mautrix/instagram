@@ -21,7 +21,8 @@ import attr
 
 from mautrix.types import SerializableAttrs, SerializableEnum, JSON
 
-from .thread import ThreadItem
+from .thread import Thread
+from .thread_item import ThreadItem
 from .account import BaseResponseUser
 
 
@@ -101,6 +102,12 @@ class MessageSyncMessage(ThreadItem, SerializableAttrs['MessageSyncMessage']):
 class MessageSyncEvent(SerializableAttrs['MessageSyncEvent']):
     iris: IrisPayload
     message: MessageSyncMessage
+
+
+@dataclass
+class ThreadSyncEvent(Thread, SerializableAttrs['ThreadSyncEvent']):
+    path: str
+    op: Operation
 
 
 @dataclass(kw_only=True)
