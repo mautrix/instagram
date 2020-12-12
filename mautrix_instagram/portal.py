@@ -432,7 +432,7 @@ class Portal(DBPortal, BasePortal):
         if prefix_html:
             prefix_content.format = Format.HTML
             prefix_content.formatted_body = prefix_html
-        content = TextMessageEventContent(msgtype=MessageType.TEXT, body=item.text)
+        content = TextMessageEventContent(msgtype=MessageType.TEXT, body=item.reel_share.text)
         await self._send_message(intent, prefix_content, timestamp=item.timestamp // 1000)
         fake_item_id = f"fi.mau.instagram.reel_share_item.{item.reel_share.media.pk}"
         existing = await DBMessage.get_by_item_id(fake_item_id, self.receiver)
