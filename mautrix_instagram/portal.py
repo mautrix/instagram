@@ -437,12 +437,13 @@ class Portal(DBPortal, BasePortal):
 
     async def _handle_instagram_reel_share(self, source: 'u.User', intent: IntentAPI,
                                            item: ThreadItem) -> Optional[EventID]:
+        media = item.reel_share.media
         prefix_html = None
         if item.reel_share.type == ReelShareType.REPLY:
             if item.reel_share.reel_owner_id == source.igpk:
                 prefix = "Replied to your story"
             else:
-                username = item.reel_share.media.user.username
+                username = media.user.username
                 prefix = f"Sent @{username}'s story"
                 user_link = f'<a href="https://www.instagram.com/{username}/">@{username}</a>'
                 prefix_html = f"Sent {user_link}'s story"
@@ -457,16 +458,20 @@ class Portal(DBPortal, BasePortal):
             prefix_content.formatted_body = prefix_html
         content = TextMessageEventContent(msgtype=MessageType.TEXT, body=item.reel_share.text)
         await self._send_message(intent, prefix_content, timestamp=item.timestamp // 1000)
-        fake_item_id = f"fi.mau.instagram.reel_share.{item.user_id}.{item.reel_share.media.pk}"
-        existing = await DBMessage.get_by_item_id(fake_item_id, self.receiver)
-        if existing:
-            # If the user already reacted or replied to the same reel share item,
-            # use a Matrix reply instead of reposting the image.
-            content.set_reply(existing.mxid)
+        if isinstance(media, ExpiredMediaItem):
+            # TODO send message about expired story
+            pass
         else:
-            media_event_id = await self._handle_instagram_media(source, intent, item)
-            await DBMessage(mxid=media_event_id, mx_room=self.mxid, item_id=fake_item_id,
-                            receiver=self.receiver, sender=item.reel_share.media.user.pk).insert()
+            fake_item_id = f"fi.mau.instagram.reel_share.{item.user_id}.{media.pk}"
+            existing = await DBMessage.get_by_item_id(fake_item_id, self.receiver)
+            if existing:
+                # If the user already reacted or replied to the same reel share item,
+                # use a Matrix reply instead of reposting the image.
+                content.set_reply(existing.mxid)
+            else:
+                media_event_id = await self._handle_instagram_media(source, intent, item)
+                await DBMessage(mxid=media_event_id, mx_room=self.mxid, item_id=fake_item_id,
+                                receiver=self.receiver, sender=media.user.pk).insert()
         return await self._send_message(intent, content, timestamp=item.timestamp // 1000)
 
     async def _handle_instagram_text(self, intent: IntentAPI, text: str, timestamp: int
