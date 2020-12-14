@@ -41,8 +41,8 @@ class ThreadAPI(BaseAndroidAPI):
     async def iter_inbox(self, start_at: Optional[DMInboxResponse] = None,
                          message_limit: int = 10) -> AsyncIterable[Thread]:
         if start_at:
-            cursor = start_at.inbox.prev_cursor
-            seq_id = start_at.inbox.prev_cursor
+            cursor = start_at.inbox.oldest_cursor
+            seq_id = start_at.seq_id
             has_more = start_at.inbox.has_older
             for thread in start_at.inbox.threads:
                 yield thread
@@ -53,7 +53,7 @@ class ThreadAPI(BaseAndroidAPI):
         while has_more:
             resp = await self.get_inbox(message_limit=message_limit, cursor=cursor, seq_id=seq_id)
             seq_id = resp.seq_id
-            cursor = resp.inbox.prev_cursor
+            cursor = resp.inbox.oldest_cursor
             has_more = resp.inbox.has_older
             for thread in resp.inbox.threads:
                 yield thread
