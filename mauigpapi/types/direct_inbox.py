@@ -33,9 +33,9 @@ class DMInbox(SerializableAttrs['DMInbox']):
     has_older: bool
     unseen_count: int
     unseen_count_ts: int
-    prev_cursor: DMInboxCursor
-    next_cursor: DMInboxCursor
     blended_inbox_enabled: bool
+    prev_cursor: Optional[DMInboxCursor] = None
+    next_cursor: Optional[DMInboxCursor] = None
     newest_cursor: Optional[str] = None
     oldest_cursor: Optional[str] = None
 
