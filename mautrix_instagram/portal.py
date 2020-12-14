@@ -436,7 +436,7 @@ class Portal(DBPortal, BasePortal):
             prefix_content.formatted_body = prefix_html
         content = TextMessageEventContent(msgtype=MessageType.TEXT, body=item.reel_share.text)
         await self._send_message(intent, prefix_content, timestamp=item.timestamp // 1000)
-        fake_item_id = f"fi.mau.instagram.reel_share_item.{item.reel_share.media.pk}"
+        fake_item_id = f"fi.mau.instagram.reel_share.{item.user_id}.{item.reel_share.media.pk}"
         existing = await DBMessage.get_by_item_id(fake_item_id, self.receiver)
         if existing:
             # If the user already reacted or replied to the same reel share item,
