@@ -604,6 +604,8 @@ class Portal(DBPortal, BasePortal):
     # region Updating portal info
 
     async def update_info(self, thread: Thread, source: 'u.User') -> None:
+        if self.is_direct and self.other_user_pk == source.igpk and not thread.thread_title:
+            thread.thread_title = "Instagram chat with yourself"
         changed = await self._update_name(thread.thread_title)
         if changed:
             await self.update_bridge_info()
@@ -933,7 +935,10 @@ class Portal(DBPortal, BasePortal):
             receiver = 0
             other_user_pk = None
         else:
-            other_user_pk = thread.users[0].pk
+            if len(thread.users) == 0:
+                other_user_pk = receiver
+            else:
+                other_user_pk = thread.users[0].pk
         return await cls.get_by_thread_id(thread.thread_id, receiver, is_group=thread.is_group,
                                           other_user_pk=other_user_pk)
     # endregion
