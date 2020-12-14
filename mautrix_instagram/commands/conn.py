@@ -67,6 +67,7 @@ async def connect(evt: CommandEvent) -> None:
     if evt.sender.is_connected:
         await evt.reply("You're already connected to Instagram.")
         return
+    # TODO backfill when reconnecting
     await evt.sender.stop_listen()
     evt.sender.shutdown = False
     await evt.sender.start_listen()
