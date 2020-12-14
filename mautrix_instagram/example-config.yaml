@@ -78,6 +78,8 @@ bridge:
 
     # Maximum number of seconds since the last activity in a chat to automatically create portals.
     portal_create_max_age: 86400
+    # Maximum number of chats to fetch for startup sync
+    chat_sync_limit: 100
     # Whether or not to use /sync to get read receipts and typing notifications
     # when double puppeting is enabled
     sync_with_custom_puppets: true

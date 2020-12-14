@@ -60,6 +60,7 @@ class Config(BaseBridgeConfig):
         copy("bridge.displayname_max_length")
 
         copy("bridge.portal_create_max_age")
+        copy("bridge.chat_sync_limit")
         copy("bridge.sync_with_custom_puppets")
         copy("bridge.sync_direct_chat_list")
         copy("bridge.double_puppet_server_map")

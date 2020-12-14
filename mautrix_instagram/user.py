@@ -220,7 +220,9 @@ class User(DBUser, BaseUser):
     async def sync(self) -> None:
         resp = await self.client.get_inbox()
         max_age = self.config["bridge.portal_create_max_age"] * 1_000_000
+        limit = self.config["bridge.chat_sync_limit"]
         min_active_at = (time.time() * 1_000_000) - max_age
+        i = 0
         async for thread in self.client.iter_inbox(start_at=resp):
             portal = await po.Portal.get_by_thread(thread, self.igpk)
             if portal.mxid:
@@ -231,6 +233,9 @@ class User(DBUser, BaseUser):
                 await portal.create_matrix_room(self, thread)
             else:
                 self.log.debug(f"{thread.thread_id} is not active and doesn't have a portal")
+            i += 1
+            if i >= limit:
+                break
         await self.update_direct_chats()
 
         if not self._listen_task:
