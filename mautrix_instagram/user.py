@@ -24,7 +24,7 @@ from mauigpapi import AndroidAPI, AndroidState, AndroidMQTT
 from mauigpapi.mqtt import Connect, Disconnect, GraphQLSubscription, SkywalkerSubscription
 from mauigpapi.types import (CurrentUser, MessageSyncEvent, Operation, RealtimeDirectEvent,
                              ActivityIndicatorData, TypingStatus, ThreadSyncEvent)
-from mauigpapi.errors import IGNotLoggedInError
+from mauigpapi.errors import IGNotLoggedInError, MQTTNotLoggedIn, MQTTNotConnected
 from mautrix.bridge import BaseUser
 from mautrix.types import UserID, RoomID, EventID, TextMessageEventContent, MessageType
 from mautrix.appservice import AppService
@@ -64,6 +64,8 @@ class User(DBUser, BaseUser):
     _notice_room_lock: asyncio.Lock
     _notice_send_lock: asyncio.Lock
     _is_logged_in: bool
+    _is_connected: bool
+    shutdown: bool
     remote_typing_status: Optional[TypingStatus]
 
     def __init__(self, mxid: UserID, igpk: Optional[int] = None,
@@ -81,6 +83,8 @@ class User(DBUser, BaseUser):
         self.dm_update_lock = asyncio.Lock()
         self._metric_value = defaultdict(lambda: False)
         self._is_logged_in = False
+        self._is_connected = False
+        self.shutdown = False
         self._listen_task = None
         self.command_status = None
         self.remote_typing_status = None
@@ -108,6 +112,10 @@ class User(DBUser, BaseUser):
     def api_log(self) -> TraceLogger:
         return self.ig_base_log.getChild("http").getChild(self.mxid)
 
+    @property
+    def is_connected(self) -> bool:
+        return bool(self.client) and bool(self.mqtt) and self._is_connected
+
     async def connect(self) -> None:
         client = AndroidAPI(self.state, log=self.api_log)
 
@@ -116,7 +124,8 @@ class User(DBUser, BaseUser):
         except IGNotLoggedInError as e:
             self.log.warning(f"Failed to connect to Instagram: {e}")
             # TODO show reason?
-            await self.send_bridge_notice("You have been logged out of Instagram")
+            await self.send_bridge_notice("You have been logged out of Instagram",
+                                          important=True)
             return
         self.client = client
         self._is_logged_in = True
@@ -141,10 +150,13 @@ class User(DBUser, BaseUser):
     async def on_connect(self, evt: Connect) -> None:
         self.log.debug("Connected to Instagram")
         self._track_metric(METRIC_CONNECTED, True)
+        self._is_connected = True
+        await self.send_bridge_notice("Connected to Instagram")
 
     async def on_disconnect(self, evt: Disconnect) -> None:
         self.log.debug("Disconnected from Instagram")
         self._track_metric(METRIC_CONNECTED, False)
+        self._is_connected = False
 
     # TODO this stuff could probably be moved to mautrix-python
     async def get_notice_room(self) -> RoomID:
@@ -162,6 +174,9 @@ class User(DBUser, BaseUser):
 
     async def send_bridge_notice(self, text: str, edit: Optional[EventID] = None,
                                  important: bool = False) -> Optional[EventID]:
+        if not important and not self.config["bridge.unimportant_bridge_notices"]:
+            self.log.debug("Not sending unimportant bridge notice: %s", text)
+            return
         event_id = None
         try:
             self.log.debug("Sending bridge notice: %s", text)
@@ -218,18 +233,46 @@ class User(DBUser, BaseUser):
                 self.log.debug(f"{thread.thread_id} is not active and doesn't have a portal")
         await self.update_direct_chats()
 
-        self._listen_task = self.loop.create_task(self.mqtt.listen(
-            graphql_subs={GraphQLSubscription.app_presence(),
-                          GraphQLSubscription.direct_typing(self.state.user_id),
-                          GraphQLSubscription.direct_status()},
-            skywalker_subs={SkywalkerSubscription.direct_sub(self.state.user_id),
-                            SkywalkerSubscription.live_sub(self.state.user_id)},
-            seq_id=resp.seq_id, snapshot_at_ms=resp.snapshot_at_ms))
+        if not self._listen_task:
+            await self.start_listen(resp.seq_id, resp.snapshot_at_ms)
 
-    async def stop(self) -> None:
+    async def start_listen(self, seq_id: Optional[int] = None, snapshot_at_ms: Optional[int] = None) -> None:
+        if not seq_id:
+            resp = await self.client.get_inbox(limit=1)
+            seq_id, snapshot_at_ms = resp.seq_id, resp.snapshot_at_ms
+        task = self.listen(seq_id=seq_id, snapshot_at_ms=snapshot_at_ms)
+        self._listen_task = self.loop.create_task(task)
+
+    async def listen(self, seq_id: int, snapshot_at_ms: int) -> None:
+        try:
+            await self.mqtt.listen(
+                graphql_subs={GraphQLSubscription.app_presence(),
+                              GraphQLSubscription.direct_typing(self.state.user_id),
+                              GraphQLSubscription.direct_status()},
+                skywalker_subs={SkywalkerSubscription.direct_sub(self.state.user_id),
+                                SkywalkerSubscription.live_sub(self.state.user_id)},
+                seq_id=seq_id, snapshot_at_ms=snapshot_at_ms)
+        except Exception:
+            self.log.exception("Fatal error in listener")
+            await self.send_bridge_notice("Fatal error in listener (see logs for more info)",
+                                          important=True)
+            self.mqtt.disconnect()
+            self._is_connected = False
+            self._track_metric(METRIC_CONNECTED, False)
+        else:
+            if not self.shutdown:
+                await self.send_bridge_notice("Instagram connection closed without error")
+        finally:
+            self._listen_task = None
+
+    async def stop_listen(self) -> None:
+        self.shutdown = True
         if self.mqtt:
             self.mqtt.disconnect()
+            if self._listen_task:
+                await self._listen_task
         self._track_metric(METRIC_CONNECTED, False)
+        self._is_connected = False
         await self.update()
 
     async def logout(self) -> None:

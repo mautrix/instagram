@@ -31,7 +31,7 @@ from paho.mqtt.client import MQTTMessage, WebsocketConnectionError
 from yarl import URL
 from mautrix.util.logging import TraceLogger
 
-from ..errors import NotLoggedIn, NotConnected
+from ..errors import MQTTNotLoggedIn, MQTTNotConnected
 from ..state import AndroidState
 from ..types import (CommandResponse, ThreadItemType, ThreadAction, ReactionStatus, TypingStatus,
                      IrisPayload, PubsubPayload, AppPresenceEventPayload, RealtimeDirectEvent,
@@ -363,7 +363,7 @@ class AndroidMQTT:
             self._client.reconnect()
         except (SocketError, OSError, WebsocketConnectionError) as e:
             # TODO custom class
-            raise NotLoggedIn("MQTT reconnection failed") from e
+            raise MQTTNotLoggedIn("MQTT reconnection failed") from e
 
     def add_event_handler(self, evt_type: Type[T], handler: Callable[[T], Awaitable[None]]
                           ) -> None:
@@ -414,10 +414,10 @@ class AndroidMQTT:
                     # See https://github.com/eclipse/paho.mqtt.python/issues/340
                     await self._dispatch(Disconnect(reason="Connection lost, retrying"))
                 elif rc == paho.mqtt.client.MQTT_ERR_CONN_REFUSED:
-                    raise NotLoggedIn("MQTT connection refused")
+                    raise MQTTNotLoggedIn("MQTT connection refused")
                 elif rc == paho.mqtt.client.MQTT_ERR_NO_CONN:
                     if exit_if_not_connected:
-                        raise NotConnected("MQTT error: no connection")
+                        raise MQTTNotConnected("MQTT error: no connection")
                     await self._dispatch(Disconnect(reason="MQTT Error: no connection, retrying"))
                 else:
                     err = paho.mqtt.client.error_string(rc)

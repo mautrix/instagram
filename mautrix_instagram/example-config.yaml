@@ -150,6 +150,9 @@ bridge:
     # This field will automatically be changed back to false after it,
     # except if the config file is not writable.
     resend_bridge_info: false
+    # Whether or not unimportant bridge notices should be sent to the user.
+    # (e.g. connected, disconnected but will retry)
+    unimportant_bridge_notices: true
 
     # Provisioning API part of the web server for automated portal creation and fetching information.
     # Used by things like mautrix-manager (https://github.com/tulir/mautrix-manager).

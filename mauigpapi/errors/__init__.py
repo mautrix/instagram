@@ -1,5 +1,5 @@
 from .base import IGError
-from .mqtt import IGMQTTError, NotLoggedIn, NotConnected
+from .mqtt import IGMQTTError, MQTTNotLoggedIn, MQTTNotConnected
 from .state import IGUserIDNotFoundError, IGCookieNotFoundError, IGNoCheckpointError
 from .response import (IGResponseError, IGActionSpamError, IGNotFoundError, IGRateLimitError,
                        IGCheckpointError, IGUserHasLoggedOutError, IGLoginRequiredError,

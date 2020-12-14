@@ -20,9 +20,9 @@ class IGMQTTError(IGError):
     pass
 
 
-class NotLoggedIn(IGMQTTError):
+class MQTTNotLoggedIn(IGMQTTError):
     pass
 
 
-class NotConnected(IGMQTTError):
+class MQTTNotConnected(IGMQTTError):
     pass

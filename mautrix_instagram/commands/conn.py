@@ -46,6 +46,12 @@ async def ping(evt: CommandEvent) -> None:
         user = user_info.user
         await evt.reply(f"You're logged in as {user.full_name} ([@{user.username}]"
                         f"(https://instagram.com/{user.username}), user ID: {user.pk})")
+    if evt.sender.is_connected:
+        await evt.reply("MQTT connection is active")
+    elif evt.sender.mqtt and evt.sender._listen_task:
+        await evt.reply("MQTT connection is reconnecting")
+    else:
+        await evt.reply("MQTT not connected")
 
 
 @command_handler(needs_auth=True, management_only=False, help_section=SECTION_CONNECTION,
@@ -55,4 +61,23 @@ async def sync(evt: CommandEvent) -> None:
     await evt.reply("Synchronization complete")
 
 
-# TODO connect/disconnect MQTT commands
+@command_handler(needs_auth=True, management_only=False, help_section=SECTION_CONNECTION,
+                 help_text="Connect to Instagram", aliases=["reconnect"])
+async def connect(evt: CommandEvent) -> None:
+    if evt.sender.is_connected:
+        await evt.reply("You're already connected to Instagram.")
+        return
+    await evt.sender.stop_listen()
+    evt.sender.shutdown = False
+    await evt.sender.start_listen()
+    await evt.reply("Restarted connection to Instagram.")
+
+
+@command_handler(needs_auth=True, management_only=False, help_section=SECTION_CONNECTION,
+                 help_text="Disconnect from Instagram")
+async def disconnect(evt: CommandEvent) -> None:
+    if not evt.sender.mqtt:
+        await evt.reply("You're not connected to Instagram.")
+    await evt.sender.stop_listen()
+    evt.sender.shutdown = False
+    await evt.reply("Successfully disconnected from Instagram.")

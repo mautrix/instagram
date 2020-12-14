@@ -73,7 +73,7 @@ class InstagramBridge(Bridge):
         await super().start()
 
     def prepare_stop(self) -> None:
-        self.add_shutdown_actions(user.stop() for user in User.by_igpk.values())
+        self.add_shutdown_actions(user.stop_listen() for user in User.by_igpk.values())
         self.log.debug("Stopping puppet syncers")
         for puppet in Puppet.by_custom_mxid.values():
             puppet.stop()

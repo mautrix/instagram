@@ -130,11 +130,13 @@ class Portal(DBPortal, BasePortal):
             except Exception:
                 self.log.exception("Failed to send delivery receipt for %s", event_id)
 
-    async def _send_bridge_error(self, msg: str) -> None:
+    async def _send_bridge_error(self, msg: str, event_type: str = "message",
+                                 confirmed: bool = False) -> None:
         if self.config["bridge.delivery_error_reports"]:
+            error_type = "was not" if confirmed else "may not have been"
             await self._send_message(self.main_intent, TextMessageEventContent(
                 msgtype=MessageType.NOTICE,
-                body=f"\u26a0 Your message may not have been bridged: {msg}"))
+                body=f"\u26a0 Your {event_type} {error_type} bridged: {msg}"))
 
     async def _upsert_reaction(self, existing: DBReaction, intent: IntentAPI, mxid: EventID,
                                message: DBMessage, sender: Union['u.User', 'p.Puppet'],
@@ -155,12 +157,21 @@ class Portal(DBPortal, BasePortal):
 
     async def handle_matrix_message(self, sender: 'u.User', message: MessageEventContent,
                                     event_id: EventID) -> None:
-        if not sender.client:
-            self.log.debug(f"Ignoring message {event_id} as user is not connected")
-            return
-        elif ((message.get(self.bridge.real_user_content_key,
-                           False) and await p.Puppet.get_by_custom_mxid(sender.mxid))):
+        try:
+            await self._handle_matrix_message(sender, message, event_id)
+        except Exception:
+            self.log.exception(f"Fatal error handling Matrix event {event_id}")
+            await self._send_bridge_error("Fatal error in message handling "
+                                          "(see logs for more details)")
+
+    async def _handle_matrix_message(self, sender: 'u.User', message: MessageEventContent,
+                                     event_id: EventID) -> None:
+        if ((message.get(self.bridge.real_user_content_key, False)
+             and await p.Puppet.get_by_custom_mxid(sender.mxid))):
             self.log.debug(f"Ignoring puppet-sent message by confirmed puppet user {sender.mxid}")
+            return
+        elif not sender.is_connected:
+            await self._send_bridge_error("You're not connected to Instagram", confirmed=True)
             return
         request_id = str(uuid4())
         self._reqid_dedup.add(request_id)
@@ -194,7 +205,8 @@ class Portal(DBPortal, BasePortal):
                                                      upload_id=upload_resp.upload_id,
                                                      allow_full_aspect_ratio="1")
             else:
-                await self._send_bridge_error("Non-image files are currently not supported")
+                await self._send_bridge_error("Non-image files are currently not supported",
+                                              confirmed=True)
                 return
         else:
             return
@@ -234,6 +246,10 @@ class Portal(DBPortal, BasePortal):
                                       redaction_event_id: EventID) -> None:
         if not self.mxid:
             return
+        elif not sender.is_connected:
+            await self._send_bridge_error("You're not connected to Instagram",
+                                          event_type="redaction", confirmed=True)
+            return
 
         # TODO implement
         reaction = await DBReaction.get_by_mxid(event_id, self.mxid)
@@ -268,7 +284,8 @@ class Portal(DBPortal, BasePortal):
     async def _handle_matrix_typing(self, users: Set[UserID], status: TypingStatus) -> None:
         for mxid in users:
             user = await u.User.get_by_mxid(mxid, create=False)
-            if not user or not await user.is_logged_in() or user.remote_typing_status == status:
+            if ((not user or not await user.is_logged_in() or user.remote_typing_status == status
+                 or not user.is_connected)):
                 continue
             user.remote_typing_status = None
             await user.mqtt.indicate_activity(self.thread_id, status)
