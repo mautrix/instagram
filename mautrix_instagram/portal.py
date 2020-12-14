@@ -356,32 +356,34 @@ class Portal(DBPortal, BasePortal):
 
     async def _handle_instagram_media(self, source: 'u.User', intent: IntentAPI, item: ThreadItem
                                       ) -> Optional[EventID]:
+        # TODO maybe use a dict and item.item_type instead of a ton of ifs
+        method = self._reupload_instagram_media
         if item.media:
-            reuploaded = await self._reupload_instagram_media(source, item.media, intent)
+            media_data = item.media
         elif item.visual_media:
-            if isinstance(item.visual_media.media, ExpiredMediaItem):
-                # TODO send error message instead
-                return None
-            reuploaded = await self._reupload_instagram_media(source, item.visual_media.media,
-                                                              intent)
+            media_data = item.visual_media.media
         elif item.animated_media:
-            reuploaded = await self._reupload_instagram_animated(source, item.animated_media,
-                                                                 intent)
+            media_data = item.animated_media
+            method = self._reupload_instagram_animated
         elif item.voice_media:
-            reuploaded = await self._reupload_instagram_voice(source, item.voice_media, intent)
+            media_data = item.voice_media
+            method = self._reupload_instagram_voice
         elif item.reel_share:
-            reuploaded = await self._reupload_instagram_media(source, item.reel_share.media,
-                                                              intent)
+            media_data = item.reel_share.media
         elif item.story_share:
-            reuploaded = await self._reupload_instagram_media(source, item.story_share.media,
-                                                              intent)
+            media_data = item.story_share.media
         elif item.media_share:
-            reuploaded = await self._reupload_instagram_media(source, item.media_share, intent)
+            media_data = item.media_share
         else:
-            reuploaded = None
-        if not reuploaded:
+            media_data = None
+        if not media_data:
             self.log.debug(f"Unsupported media type in item {item}")
             return None
+        elif isinstance(media_data, ExpiredMediaItem):
+            self.log.debug(f"Expired media in item {item}")
+            # TODO send error message
+            return None
+        reuploaded = await method(source, media_data, intent)
         content = MediaMessageEventContent(body=reuploaded.file_name, external_url=reuploaded.url,
                                            url=reuploaded.mxc, file=reuploaded.decryption_info,
                                            info=reuploaded.info, msgtype=reuploaded.msgtype)

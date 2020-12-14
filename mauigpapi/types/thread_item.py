@@ -130,6 +130,7 @@ class MediaType(SerializableEnum):
 @dataclass(kw_only=True)
 class ExpiredMediaItem(SerializableAttrs['ExpiredMediaItem']):
     media_type: Optional[MediaType] = None
+    user: Optional[BaseResponseUser] = None
 
 
 @dataclass(kw_only=True)
@@ -386,8 +387,17 @@ class ReelShareItem(SerializableAttrs['ReelShareItem']):
     reel_owner_id: int
     is_reel_persisted: int
     reel_type: str
-    media: ReelMediaShareItem
+    media: Union[ReelMediaShareItem, ExpiredMediaItem]
     reaction_info: Optional[ReelShareReactionInfo] = None
+
+    @classmethod
+    def deserialize(cls, data: JSON) -> 'ReelShareItem':
+        data = {**data}
+        if "id" not in data["media"]:
+            data["media"] = ExpiredMediaItem.deserialize(data["media"])
+        else:
+            data["media"] = ReelMediaShareItem.deserialize(data["media"])
+        return _dict_to_attrs(cls, data)
 
 
 @dataclass
@@ -399,8 +409,22 @@ class StoryShareItem(SerializableAttrs['StoryShareItem']):
     reel_id: str
     # TODO enum?
     story_share_type: str  # default
-    media: ReelMediaShareItem
+    media: Union[ReelMediaShareItem, ExpiredMediaItem]
 
+    # Only present when expired
+    message: Optional[str] = None
+    # TODO enum
+    reason: Optional[int] = None  # 3 = expired?
+
+
+    @classmethod
+    def deserialize(cls, data: JSON) -> 'StoryShareItem':
+        data = {**data}
+        if "media" not in data:
+            data["media"] = ExpiredMediaItem()
+        else:
+            data["media"] = ReelMediaShareItem.deserialize(data["media"])
+        return _dict_to_attrs(cls, data)
 
 @dataclass(kw_only=True)
 class ThreadItem(SerializableAttrs['ThreadItem']):
