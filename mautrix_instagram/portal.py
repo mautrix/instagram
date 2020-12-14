@@ -635,7 +635,7 @@ class Portal(DBPortal, BasePortal):
         current_members = {int(user.pk) for user in users}
         for user_id in await self.main_intent.get_room_members(self.mxid):
             pk = p.Puppet.get_id_from_mxid(user_id)
-            if pk and pk not in current_members:
+            if pk and pk not in current_members and pk != self.other_user_pk:
                 await self.main_intent.kick_user(self.mxid, p.Puppet.get_mxid_from_id(pk),
                                                  reason="User had left this Instagram DM")
 
