@@ -204,16 +204,18 @@ class User(DBUser, BaseUser):
 
     async def sync(self) -> None:
         resp = await self.client.get_inbox()
-        limit = self.config["bridge.initial_conversation_sync"]
-        threads = sorted(resp.inbox.threads, key=lambda thread: thread.last_activity_at)
-        if limit < 0:
-            limit = len(threads)
-        for i, thread in enumerate(threads):
+        max_age = self.config["bridge.portal_create_max_age"] * 1_000_000
+        min_active_at = (time.time() * 1_000_000) - max_age
+        async for thread in self.client.iter_inbox(start_at=resp):
             portal = await po.Portal.get_by_thread(thread, self.igpk)
             if portal.mxid:
+                self.log.debug(f"{thread.thread_id} has a portal, syncing and backfilling...")
                 await portal.update_matrix_room(self, thread, backfill=True)
-            elif i < limit:
+            elif thread.last_activity_at > min_active_at:
+                self.log.debug(f"{thread.thread_id} has been active recently, creating portal...")
                 await portal.create_matrix_room(self, thread)
+            else:
+                self.log.debug(f"{thread.thread_id} is not active and doesn't have a portal")
         await self.update_direct_chats()
 
         self._listen_task = self.loop.create_task(self.mqtt.listen(

@@ -384,6 +384,10 @@ class Portal(DBPortal, BasePortal):
             # TODO send error message
             return None
         reuploaded = await method(source, media_data, intent)
+        if not reuploaded:
+            self.log.trace(f"Upload of {media_data} failed")
+            # TODO error message?
+            return None
         content = MediaMessageEventContent(body=reuploaded.file_name, external_url=reuploaded.url,
                                            url=reuploaded.mxc, file=reuploaded.decryption_info,
                                            info=reuploaded.info, msgtype=reuploaded.msgtype)

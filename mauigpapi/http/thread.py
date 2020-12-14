@@ -38,9 +38,18 @@ class ThreadAPI(BaseAndroidAPI):
         return await self.std_http_get(f"/api/v1/direct_v2/{inbox_type}/", query=query,
                                        response_type=DMInboxResponse)
 
-    async def iter_inbox(self, cursor: Optional[str] = None, seq_id: Optional[str] = None,
+    async def iter_inbox(self, start_at: Optional[DMInboxResponse] = None,
                          message_limit: int = 10) -> AsyncIterable[Thread]:
-        has_more = True
+        if start_at:
+            cursor = start_at.inbox.prev_cursor
+            seq_id = start_at.inbox.prev_cursor
+            has_more = start_at.inbox.has_older
+            for thread in start_at.inbox.threads:
+                yield thread
+        else:
+            cursor = None
+            seq_id = None
+            has_more = True
         while has_more:
             resp = await self.get_inbox(message_limit=message_limit, cursor=cursor, seq_id=seq_id)
             seq_id = resp.seq_id

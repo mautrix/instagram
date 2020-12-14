@@ -76,9 +76,8 @@ bridge:
     # Maximum length of displayname
     displayname_max_length: 100
 
-    # Number of conversations to sync (and create portals for) on login.
-    # Set 0 to disable automatic syncing.
-    initial_conversation_sync: 10
+    # Maximum number of seconds since the last activity in a chat to automatically create portals.
+    portal_create_max_age: 86400
     # Whether or not to use /sync to get read receipts and typing notifications
     # when double puppeting is enabled
     sync_with_custom_puppets: true
