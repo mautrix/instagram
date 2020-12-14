@@ -25,3 +25,4 @@ from .mqtt import (Operation, ThreadAction, ReactionStatus, TypingStatus, Comman
                    RealtimeDirectEvent, LiveVideoSystemComment, LiveVideoCommentEvent,
                    LiveVideoComment, LiveVideoCommentPayload, ThreadSyncEvent)
 from .challenge import ChallengeStateResponse, ChallengeStateData
+from .user import SearchResultUser, UserSearchResponse
