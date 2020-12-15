@@ -280,6 +280,10 @@ class AndroidMQTT:
         self.log.trace("Got message sync event: %s", parsed)
         for sync_item in parsed:
             parsed_item = IrisPayload.deserialize(sync_item)
+            if self._iris_seq_id < parsed_item.seq_id:
+                self.log.trace(f"Got new seq_id: {parsed_item.seq_id}")
+                self._iris_seq_id = parsed_item.seq_id
+                self._iris_snapshot_at_ms = int(time.time() * 1000)
             for part in parsed_item.data:
                 self._on_messager_sync_item(part, parsed_item)
 
