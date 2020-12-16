@@ -364,6 +364,7 @@ class AndroidMQTT:
 
     async def _reconnect(self) -> None:
         try:
+            self.log.trace("Trying to reconnect to MQTT")
             self._client.reconnect()
         except (SocketError, OSError, WebsocketConnectionError) as e:
             # TODO custom class
@@ -384,7 +385,7 @@ class AndroidMQTT:
         self._client.disconnect()
 
     async def listen(self, graphql_subs: Set[str] = None, skywalker_subs: Set[str] = None,
-                     seq_id: int = None, snapshot_at_ms: int = None) -> None:
+                     seq_id: int = None, snapshot_at_ms: int = None, retry_limit: int = 5) -> None:
         self._graphql_subs = graphql_subs or set()
         self._skywalker_subs = skywalker_subs or set()
         self._iris_seq_id = seq_id
@@ -392,7 +393,7 @@ class AndroidMQTT:
 
         self.log.debug("Connecting to Instagram MQTT")
         await self._reconnect()
-        exit_if_not_connected = False
+        connection_retries = 0
 
         while True:
             try:
@@ -420,18 +421,21 @@ class AndroidMQTT:
                 elif rc == paho.mqtt.client.MQTT_ERR_CONN_REFUSED:
                     raise MQTTNotLoggedIn("MQTT connection refused")
                 elif rc == paho.mqtt.client.MQTT_ERR_NO_CONN:
-                    if exit_if_not_connected:
-                        raise MQTTNotConnected("MQTT error: no connection")
-                    await self._dispatch(Disconnect(reason="MQTT Error: no connection, retrying"))
+                    if connection_retries > retry_limit:
+                        raise MQTTNotConnected(f"Connection failed {connection_retries} times")
+                    sleep = connection_retries * 2
+                    await self._dispatch(Disconnect(reason="MQTT Error: no connection, retrying "
+                                                           f"in {connection_retries} seconds"))
+                    await asyncio.sleep(sleep)
                 else:
                     err = paho.mqtt.client.error_string(rc)
                     self.log.error("MQTT Error: %s", err)
                     await self._dispatch(Disconnect(reason=f"MQTT Error: {err}, retrying"))
 
                 await self._reconnect()
-                exit_if_not_connected = True
+                connection_retries += 1
             else:
-                exit_if_not_connected = False
+                connection_retries = 0
         if self._disconnect_error:
             self.log.info("disconnect_error is set, raising and clearing variable")
             err = self._disconnect_error

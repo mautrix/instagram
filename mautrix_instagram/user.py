@@ -257,18 +257,21 @@ class User(DBUser, BaseUser):
                 skywalker_subs={SkywalkerSubscription.direct_sub(self.state.user_id),
                                 SkywalkerSubscription.live_sub(self.state.user_id)},
                 seq_id=seq_id, snapshot_at_ms=snapshot_at_ms)
+        except (MQTTNotConnected, MQTTNotLoggedIn) as e:
+            await self.send_bridge_notice(f"Error in listener: {e}", important=True)
+            self.mqtt.disconnect()
         except Exception:
             self.log.exception("Fatal error in listener")
             await self.send_bridge_notice("Fatal error in listener (see logs for more info)",
                                           important=True)
             self.mqtt.disconnect()
-            self._is_connected = False
-            self._track_metric(METRIC_CONNECTED, False)
         else:
             if not self.shutdown:
                 await self.send_bridge_notice("Instagram connection closed without error")
         finally:
             self._listen_task = None
+            self._is_connected = False
+            self._track_metric(METRIC_CONNECTED, False)
 
     async def stop_listen(self) -> None:
         self.shutdown = True
