@@ -98,6 +98,8 @@ class BaseAndroidAPI:
         return {k: v for k, v in headers.items() if v is not None}
 
     def raw_http_get(self, url: Union[URL, str]):
+        if isinstance(url, str):
+            url = URL(url, encoded=True)
         return self.http.get(url, headers={
             "user-agent": self.state.user_agent,
             "accept-language": self.state.device.language.replace("_", "-"),
