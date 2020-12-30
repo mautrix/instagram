@@ -55,9 +55,9 @@ async def ping(evt: CommandEvent) -> None:
 
 
 @command_handler(needs_auth=True, management_only=False, help_section=SECTION_CONNECTION,
-                 help_text="Synchronize portals")
-async def sync(evt: CommandEvent) -> None:
-    await evt.sender.sync()
+                 help_text="Reconnect to Instagram and synchronize portals", aliases=["sync"])
+async def refresh(evt: CommandEvent) -> None:
+    await evt.sender.refresh()
     await evt.reply("Synchronization complete")
 
 
@@ -67,10 +67,7 @@ async def connect(evt: CommandEvent) -> None:
     if evt.sender.is_connected:
         await evt.reply("You're already connected to Instagram.")
         return
-    # TODO backfill when reconnecting
-    await evt.sender.stop_listen()
-    evt.sender.shutdown = False
-    await evt.sender.start_listen()
+    await evt.sender.refresh(resync=False)
     await evt.reply("Restarted connection to Instagram.")
 
 
@@ -80,5 +77,4 @@ async def disconnect(evt: CommandEvent) -> None:
     if not evt.sender.mqtt:
         await evt.reply("You're not connected to Instagram.")
     await evt.sender.stop_listen()
-    evt.sender.shutdown = False
     await evt.reply("Successfully disconnected from Instagram.")

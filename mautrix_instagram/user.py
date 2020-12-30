@@ -217,6 +217,13 @@ class User(DBUser, BaseUser):
             if portal.mxid
         }
 
+    async def refresh(self, resync: bool = True) -> None:
+        await self.stop_listen()
+        if resync:
+            await self.sync()
+        else:
+            await self.start_listen()
+
     async def sync(self) -> None:
         resp = await self.client.get_inbox()
         max_age = self.config["bridge.portal_create_max_age"] * 1_000_000
@@ -241,7 +248,9 @@ class User(DBUser, BaseUser):
         if not self._listen_task:
             await self.start_listen(resp.seq_id, resp.snapshot_at_ms)
 
-    async def start_listen(self, seq_id: Optional[int] = None, snapshot_at_ms: Optional[int] = None) -> None:
+    async def start_listen(self, seq_id: Optional[int] = None, snapshot_at_ms: Optional[int] = None
+                           ) -> None:
+        self.shutdown = False
         if not seq_id:
             resp = await self.client.get_inbox(limit=1)
             seq_id, snapshot_at_ms = resp.seq_id, resp.snapshot_at_ms
@@ -274,11 +283,12 @@ class User(DBUser, BaseUser):
             self._track_metric(METRIC_CONNECTED, False)
 
     async def stop_listen(self) -> None:
-        self.shutdown = True
         if self.mqtt:
+            self.shutdown = True
             self.mqtt.disconnect()
             if self._listen_task:
                 await self._listen_task
+            self.shutdown = False
         self._track_metric(METRIC_CONNECTED, False)
         self._is_connected = False
         await self.update()

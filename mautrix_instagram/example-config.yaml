@@ -120,6 +120,15 @@ bridge:
         # If using double puppeting, should notifications be disabled
         # while the initial backfill is in progress?
         disable_notifications: false
+    periodic_reconnect:
+        # Interval in seconds in which to automatically reconnect all users.
+        # This can be used to automatically mitigate the bug where Instagram stops sending messages.
+        # Set to -1 to disable periodic reconnections entirely.
+        interval: -1
+        # Whether or not the bridge should backfill chats when reconnecting.
+        resync: true
+        # Should even disconnected users be reconnected?
+        always: false
     # End-to-bridge encryption support options. You must install the e2be optional dependency for
     # this to work. See https://github.com/tulir/mautrix-telegram/wiki/End‐to‐bridge-encryption
     encryption:
