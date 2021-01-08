@@ -207,7 +207,7 @@ class ProvisioningAPI:
         user.state = state
         pl = state.device.payload
         manufacturer, model = pl["manufacturer"], pl["model"]
-        asyncio.create_task(user.try_connect())
+        await user.try_connect()
         return web.json_response(data={
             "status": "logged-in",
             "device_displayname": f"{manufacturer} {model}",

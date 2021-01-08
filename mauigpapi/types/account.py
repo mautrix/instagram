@@ -112,7 +112,8 @@ class CurrentUser(BaseFullResponseUser, SerializableAttrs['CurrentUser']):
     hd_profile_pic_versions: List[HDProfilePictureVersion] = attr.ib(factory=lambda: [])
     hd_profile_pic_url_info: HDProfilePictureVersion
     show_conversion_edit_entry: bool
-    birthday: Any
+    # TODO type
+    # birthday: Any
     gender: Gender
     custom_gender: str
     email: str
