@@ -132,10 +132,12 @@ class ProvisioningAPI:
                 "response": e.body.serialize(),
             }, status=202, headers=self._acao_headers)
         except IGLoginInvalidUserError:
-            return web.json_response(data={"status": "invalid-username"},
+            return web.json_response(data={"error": "Invalid username",
+                                           "status": "invalid-username"},
                                      status=404, headers=self._acao_headers)
         except IGLoginBadPasswordError:
-            return web.json_response(data={"status": "incorrect-password"},
+            return web.json_response(data={"error": "Incorrect password",
+                                           "status": "incorrect-password"},
                                      status=403, headers=self._acao_headers)
         return await self._finish_login(user, state, resp.logged_in_user)
 
@@ -170,6 +172,7 @@ class ProvisioningAPI:
                                               is_totp=is_totp)
         except IGBad2FACodeError:
             return web.json_response(data={
+                "error": "Incorrect 2-factor authentication code",
                 "status": "incorrect-2fa-code",
             }, status=403, headers=self._acao_headers)
         except IGCheckpointError as e:
@@ -194,6 +197,7 @@ class ProvisioningAPI:
             resp = await api.challenge_send_security_code(code=code)
         except IGChallengeWrongCodeError:
             return web.json_response(data={
+                "error": "Incorrect challenge code",
                 "status": "incorrect-challenge-code",
             }, status=403, headers=self._acao_headers)
         return await self._finish_login(user, state, resp.logged_in_user)
