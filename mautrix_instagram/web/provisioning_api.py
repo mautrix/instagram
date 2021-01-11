@@ -43,9 +43,11 @@ class ProvisioningAPI:
         self.app.router.add_get("/api/whoami", self.status)
         self.app.router.add_options("/api/login", self.login_options)
         self.app.router.add_options("/api/login/2fa", self.login_options)
+        self.app.router.add_options("/api/login/checkpoint", self.login_options)
         self.app.router.add_options("/api/logout", self.login_options)
         self.app.router.add_post("/api/login", self.login)
         self.app.router.add_post("/api/login/2fa", self.login_2fa)
+        self.app.router.add_post("/api/login/checkpoint", self.login_checkpoint)
         self.app.router.add_post("/api/logout", self.logout)
 
     @property
