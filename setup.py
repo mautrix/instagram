@@ -61,9 +61,14 @@ setuptools.setup(
         "Programming Language :: Python :: 3.8",
         "Programming Language :: Python :: 3.9",
     ],
-    package_data={"mautrix_instagram": [
-        "example-config.yaml",
-    ]},
+    package_data={
+        "mautrix_instagram": [
+            "example-config.yaml",
+        ],
+        "mauigpapi.state": [
+            "samples/*.json",
+        ],
+    },
     data_files=[
         (".", ["mautrix_instagram/example-config.yaml"]),
     ],
