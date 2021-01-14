@@ -47,7 +47,7 @@ class Thread(SerializableAttrs['Thread']):
 
     users: List[ThreadUser]
     # left_users: List[TODO]
-    inviter: BaseResponseUser
+    inviter: Optional[BaseResponseUser] = None
     admin_user_ids: List[int]
 
     last_activity_at: int
