@@ -48,8 +48,8 @@ class CheckpointChallenge(SerializableAttrs['CheckpointChallenge']):
 class CheckpointResponse(SerializableAttrs['CheckpointResponse']):
     message: str  # challenge_required
     status: str  # fail
-    error_type: str
     challenge: CheckpointChallenge
+    error_type: Optional[str] = None
 
 
 @dataclass
