@@ -40,11 +40,11 @@ class ChallengeStateData(SerializableAttrs['ChallengeStateData']):
 @dataclass(kw_only=True)
 class ChallengeStateResponse(SerializableAttrs['ChallengeStateResponse']):
     # TODO enum?
-    step_name: str
-    step_data: ChallengeStateData
+    step_name: Optional[str] = None
+    step_data: Optional[ChallengeStateData] = None
     logged_in_user: Optional[LoginResponseUser] = None
-    user_id: int
-    nonce_code: str
+    user_id: Optional[int] = None
+    nonce_code: Optional[str] = None
     # TODO enum?
     action: Optional[str] = None
     status: str

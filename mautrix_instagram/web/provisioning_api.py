@@ -213,7 +213,7 @@ class ProvisioningAPI:
         return web.json_response(data={
             "status": "logged-in",
             "device_displayname": f"{manufacturer} {model}",
-            "user": resp_user.serialize(),
+            "user": resp_user.serialize() if resp_user else None,
         }, status=200, headers=self._acao_headers)
 
     async def logout(self, request: web.Request) -> web.Response:
