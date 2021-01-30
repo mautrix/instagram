@@ -118,7 +118,7 @@ class PubsubPublishMetadata(SerializableAttrs['PubsubPublishMetadata']):
 
 @dataclass(kw_only=True)
 class PubsubBasePayload(SerializableAttrs['PubsubBasePayload']):
-    lazy: bool
+    lazy: Optional[bool] = False
     event: str = "patch"
     publish_metadata: Optional[PubsubPublishMetadata] = None
     num_endpoints: Optional[int] = None

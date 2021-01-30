@@ -23,7 +23,6 @@ from mautrix.types.util.serializable_attrs import _dict_to_attrs
 
 from .account import BaseResponseUser, UserIdentifier
 
-
 log = logging.getLogger("mauigpapi.types")
 
 
@@ -217,19 +216,19 @@ class MediaShareItem(RegularMediaItem, SerializableAttrs['MediaShareItem']):
     user: BaseResponseUser
     # Not present in reel shares
     can_viewer_reshare: Optional[bool] = None
-    caption_is_edited: bool
-    comment_likes_enabled: bool
-    comment_threading_enabled: bool
-    has_more_comments: bool
-    max_num_visible_preview_comments: int
+    caption_is_edited: bool = False
+    comment_likes_enabled: bool = False
+    comment_threading_enabled: bool = False
+    has_more_comments: bool = False
+    max_num_visible_preview_comments: int = 0
     # preview_comments: List[TODO]
-    can_view_more_preview_comments: bool
-    comment_count: int
-    like_count: int
-    has_liked: bool
-    photo_of_you: bool
+    can_view_more_preview_comments: bool = False
+    comment_count: int = 0
+    like_count: int = 0
+    has_liked: bool = False
+    photo_of_you: bool = False
     caption: Optional[Caption] = None
-    can_viewer_save: bool
+    can_viewer_save: bool = True
     location: Optional[Location] = None
 
 
@@ -249,15 +248,15 @@ class ReelMediaShareItem(MediaShareItem, SerializableAttrs['ReelMediaShareItem']
     is_reel_media: Optional[bool] = None
     timezone_offset: Optional[int] = None
     # likers: List[TODO]
-    can_see_insights_as_brand: bool
-    expiring_at: int
-    sharing_friction_info: SharingFrictionInfo
-    is_in_profile_grid: bool
-    profile_grid_control_enabled: bool
-    is_shop_the_look_eligible: bool
+    can_see_insights_as_brand: bool = False
+    expiring_at: Optional[int] = None
+    sharing_friction_info: Optional[SharingFrictionInfo] = None
+    is_in_profile_grid: bool = False
+    profile_grid_control_enabled: bool = False
+    is_shop_the_look_eligible: bool = False
     # TODO enum?
-    deleted_reason: int
-    integrity_review_decision: str
+    deleted_reason: Optional[int] = None
+    integrity_review_decision: Optional[str] = None
     # Not present in story_share, only reel_share
     story_is_saved_to_archive: Optional[bool] = None
 
@@ -290,8 +289,8 @@ class VisualMedia(ReplayableMediaItem, SerializableAttrs['VisualMedia']):
 class AudioInfo(SerializableAttrs['AudioInfo']):
     audio_src: str
     duration: int
-    waveform_data: List[int]
-    waveform_sampling_frequency_hz: int
+    waveform_data: Optional[List[int]] = None
+    waveform_sampling_frequency_hz: Optional[int] = None
 
 
 @dataclass(kw_only=True)
@@ -416,7 +415,6 @@ class StoryShareItem(SerializableAttrs['StoryShareItem']):
     # TODO enum
     reason: Optional[int] = None  # 3 = expired?
 
-
     @classmethod
     def deserialize(cls, data: JSON) -> 'StoryShareItem':
         data = {**data}
@@ -425,6 +423,7 @@ class StoryShareItem(SerializableAttrs['StoryShareItem']):
         else:
             data["media"] = ReelMediaShareItem.deserialize(data["media"])
         return _dict_to_attrs(cls, data)
+
 
 @dataclass(kw_only=True)
 class ThreadItem(SerializableAttrs['ThreadItem']):
