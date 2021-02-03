@@ -173,6 +173,8 @@ class Portal(DBPortal, BasePortal):
         elif not sender.is_connected:
             await self._send_bridge_error("You're not connected to Instagram", confirmed=True)
             return
+        else:
+            self.log.debug(f"Handling Matrix message {event_id} from {sender.mxid}/{sender.igpk}")
         request_id = str(uuid4())
         self._reqid_dedup.add(request_id)
         if message.msgtype in (MessageType.EMOTE, MessageType.TEXT):
@@ -209,6 +211,8 @@ class Portal(DBPortal, BasePortal):
                                               confirmed=True)
                 return
         else:
+            self.log.debug(f"Unhandled Matrix message {event_id}: "
+                           f"unknown msgtype {message.msgtype}")
             return
         if resp.status != "ok":
             self.log.warning(f"Failed to handle {event_id}: {resp}")
