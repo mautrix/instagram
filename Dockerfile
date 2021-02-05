@@ -1,11 +1,6 @@
-FROM alpine:3.12
+FROM alpine:3.13
 
 ARG TARGETARCH=amd64
-
-RUN echo $'\
-@edge http://dl-cdn.alpinelinux.org/alpine/edge/main\n\
-@edge http://dl-cdn.alpinelinux.org/alpine/edge/testing\n\
-@edge http://dl-cdn.alpinelinux.org/alpine/edge/community' >> /etc/apk/repositories
 
 RUN apk add --no-cache \
       python3 py3-pip py3-setuptools py3-wheel \
@@ -14,20 +9,20 @@ RUN apk add --no-cache \
       py3-aiohttp \
       py3-magic \
       py3-ruamel.yaml \
-      py3-commonmark@edge \
+      py3-commonmark \
       # Other dependencies
       ca-certificates \
       su-exec \
       # encryption
       olm-dev \
       py3-cffi \
-	  py3-pycryptodome \
+      py3-pycryptodome \
       py3-unpaddedbase64 \
       py3-future \
       bash \
       curl \
       jq \
-      yq@edge
+      yq
 
 COPY requirements.txt /opt/mautrix-instagram/requirements.txt
 COPY optional-requirements.txt /opt/mautrix-instagram/optional-requirements.txt
