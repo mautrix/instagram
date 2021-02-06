@@ -108,6 +108,7 @@ class ProvisioningAPI:
                 pl = user.state.device.payload
                 manufacturer, model = pl["manufacturer"], pl["model"]
                 data["instagram"]["device_displayname"] = f"{manufacturer} {model}"
+            data["instagram"]["mqtt_is_connected"] = user.is_connected
         return web.json_response(data, headers=self._acao_headers)
 
     async def login(self, request: web.Request) -> web.Response:

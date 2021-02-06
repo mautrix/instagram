@@ -452,8 +452,8 @@ class AndroidMQTT:
             payload = json.dumps(payload)
         if isinstance(payload, str):
             payload = payload.encode("utf-8")
+        self.log.trace(f"Publishing message in {topic.value} ({topic.encoded}): {payload}")
         payload = zlib.compress(payload, level=9)
-        self.log.trace(f"Publishing message in {topic.name}/{topic.encoded}: {payload}")
         info = self._client.publish(topic.encoded, payload, qos=1)
         self.log.trace(f"Published message ID: {info.mid}")
         fut = asyncio.Future()
@@ -466,7 +466,7 @@ class AndroidMQTT:
             fut = asyncio.Future()
             self._response_waiters[response] = fut
             await self.publish(topic, payload)
-            self.log.trace(f"Request published to {topic.name}, "
+            self.log.trace(f"Request published to {topic.value}, "
                            f"waiting for response {response.name}")
             return await fut
 
