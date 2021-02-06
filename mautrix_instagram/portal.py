@@ -181,6 +181,7 @@ class Portal(DBPortal, BasePortal):
             text = message.body
             if message.msgtype == MessageType.EMOTE:
                 text = f"/me {text}"
+            self.log.trace(f"Sending Matrix text from {event_id} with request ID {request_id}")
             resp = await sender.mqtt.send_text(self.thread_id, text=text,
                                                client_context=request_id)
         elif message.msgtype.is_media:
@@ -199,7 +200,9 @@ class Portal(DBPortal, BasePortal):
                         data = out.getvalue()
                 mime_type = "image/jpeg"
             if mime_type == "image/jpeg":
+                self.log.trace(f"Uploading photo from {event_id}")
                 upload_resp = await sender.client.upload_jpeg_photo(data)
+                self.log.trace(f"Broadcasting uploaded photo with request ID {request_id}")
                 # TODO is it possible to do this with MQTT?
                 resp = await sender.client.broadcast(self.thread_id,
                                                      ThreadItemType.CONFIGURE_PHOTO,
@@ -214,6 +217,7 @@ class Portal(DBPortal, BasePortal):
             self.log.debug(f"Unhandled Matrix message {event_id}: "
                            f"unknown msgtype {message.msgtype}")
             return
+        self.log.trace(f"Got response to message send {request_id}: {resp}")
         if resp.status != "ok":
             self.log.warning(f"Failed to handle {event_id}: {resp}")
             await self._send_bridge_error(resp.payload.message)

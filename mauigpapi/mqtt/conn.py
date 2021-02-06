@@ -209,7 +209,9 @@ class AndroidMQTT:
         try:
             waiter = self._publish_waiters[mid]
         except KeyError:
+            self.log.trace(f"Got publish confirmation for {mid}, but no waiters")
             return
+        self.log.trace(f"Got publish confirmation for {mid}")
         waiter.set_result(None)
 
     # region Incoming event parsing
@@ -451,7 +453,9 @@ class AndroidMQTT:
         if isinstance(payload, str):
             payload = payload.encode("utf-8")
         payload = zlib.compress(payload, level=9)
+        self.log.trace(f"Publishing message in {topic.name}/{topic.encoded}: {payload}")
         info = self._client.publish(topic.encoded, payload, qos=1)
+        self.log.trace(f"Published message ID: {info.mid}")
         fut = asyncio.Future()
         self._publish_waiters[info.mid] = fut
         return fut
@@ -462,6 +466,8 @@ class AndroidMQTT:
             fut = asyncio.Future()
             self._response_waiters[response] = fut
             await self.publish(topic, payload)
+            self.log.trace(f"Request published to {topic.name}, "
+                           f"waiting for response {response.name}")
             return await fut
 
     async def iris_subscribe(self, seq_id: int, snapshot_at_ms: int) -> None:
