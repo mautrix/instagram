@@ -62,7 +62,7 @@ class InstagramBridge(Bridge):
 
     def prepare_db(self) -> None:
         self.db = Database(self.config["appservice.database"], upgrade_table=upgrade_table,
-                           loop=self.loop)
+                           loop=self.loop, db_args=self.config["appservice.database_opts"])
         init_db(self.db)
 
     def prepare_bridge(self) -> None:
@@ -75,6 +75,8 @@ class InstagramBridge(Bridge):
     async def start(self) -> None:
         await self.db.start()
         await self.state_store.upgrade_table.upgrade(self.db.pool)
+        if self.matrix.e2ee:
+            self.matrix.e2ee.crypto_db.override_pool(self.db.pool)
         self.add_startup_actions(User.init_cls(self))
         self.add_startup_actions(Puppet.init_cls(self))
         Portal.init_cls(self)
