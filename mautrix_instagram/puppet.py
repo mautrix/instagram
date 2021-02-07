@@ -19,7 +19,7 @@ import os.path
 from yarl import URL
 
 from mauigpapi.types import BaseResponseUser
-from mautrix.bridge import BasePuppet
+from mautrix.bridge import BasePuppet, async_getter_lock
 from mautrix.appservice import IntentAPI
 from mautrix.types import ContentURI, UserID, SyncToken, RoomID
 from mautrix.util.simple_template import SimpleTemplate
@@ -160,6 +160,7 @@ class Puppet(DBPuppet, BasePuppet):
         return None
 
     @classmethod
+    @async_getter_lock
     async def get_by_custom_mxid(cls, mxid: UserID) -> Optional['Puppet']:
         try:
             return cls.by_custom_mxid[mxid]
@@ -182,7 +183,8 @@ class Puppet(DBPuppet, BasePuppet):
         return UserID(cls.mxid_template.format_full(twid))
 
     @classmethod
-    async def get_by_pk(cls, pk: int, create: bool = True) -> Optional['Puppet']:
+    @async_getter_lock
+    async def get_by_pk(cls, pk: int, *, create: bool = True) -> Optional['Puppet']:
         try:
             return cls.by_pk[pk]
         except KeyError:

@@ -83,7 +83,7 @@ class Portal:
     @classmethod
     async def find_private_chats_with(cls, other_user: int) -> List['Portal']:
         q = ("SELECT thread_id, receiver, other_user_pk, mxid, name, encrypted FROM portal "
-             "WHERE other_user=$1")
+             "WHERE other_user_pk=$1")
         rows = await cls.db.fetch(q, other_user)
         return [cls._from_row(row) for row in rows]
 

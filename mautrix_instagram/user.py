@@ -25,7 +25,7 @@ from mauigpapi.mqtt import Connect, Disconnect, GraphQLSubscription, SkywalkerSu
 from mauigpapi.types import (CurrentUser, MessageSyncEvent, Operation, RealtimeDirectEvent,
                              ActivityIndicatorData, TypingStatus, ThreadSyncEvent)
 from mauigpapi.errors import IGNotLoggedInError, MQTTNotLoggedIn, MQTTNotConnected
-from mautrix.bridge import BaseUser
+from mautrix.bridge import BaseUser, async_getter_lock
 from mautrix.types import UserID, RoomID, EventID, TextMessageEventContent, MessageType
 from mautrix.appservice import AppService
 from mautrix.util.opt_prometheus import Summary, Gauge, async_time
@@ -388,7 +388,8 @@ class User(DBUser, BaseUser):
             self.by_igpk[self.igpk] = self
 
     @classmethod
-    async def get_by_mxid(cls, mxid: UserID, create: bool = True) -> Optional['User']:
+    @async_getter_lock
+    async def get_by_mxid(cls, mxid: UserID, *, create: bool = True) -> Optional['User']:
         # Never allow ghosts to be users
         if pu.Puppet.get_id_from_mxid(mxid):
             return None
@@ -411,6 +412,7 @@ class User(DBUser, BaseUser):
         return None
 
     @classmethod
+    @async_getter_lock
     async def get_by_igpk(cls, igpk: int) -> Optional['User']:
         try:
             return cls.by_igpk[igpk]
