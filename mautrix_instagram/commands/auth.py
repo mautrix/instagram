@@ -97,6 +97,9 @@ async def login(evt: CommandEvent) -> None:
         await evt.reply("Invalid username")
     except IGLoginBadPasswordError:
         await evt.reply("Incorrect password")
+    except Exception as e:
+        evt.log.exception("Failed to log in")
+        await evt.reply(f"Failed to log in: {e}")
     else:
         await _post_login(evt, state, resp.logged_in_user)
 
@@ -122,8 +125,8 @@ async def enter_login_2fa(evt: CommandEvent) -> None:
         await evt.reply("2-factor authentication code accepted, but Instagram wants to verify it's"
                         " really you. Please confirm the login and enter the security code here.")
     except Exception as e:
-        await evt.reply(f"Failed to log in: {e}")
         evt.log.exception("Failed to log in")
+        await evt.reply(f"Failed to log in: {e}")
         evt.sender.command_status = None
     else:
         evt.sender.command_status = None
@@ -138,8 +141,8 @@ async def enter_login_security_code(evt: CommandEvent) -> None:
     except IGChallengeWrongCodeError as e:
         await evt.reply(f"Incorrect security code: {e}")
     except Exception as e:
-        await evt.reply(f"Failed to log in: {e}")
         evt.log.exception("Failed to log in")
+        await evt.reply(f"Failed to log in: {e}")
         evt.sender.command_status = None
     else:
         if not resp.logged_in_user:
