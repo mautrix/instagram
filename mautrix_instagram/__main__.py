@@ -135,7 +135,7 @@ class InstagramBridge(Bridge):
                     log.debug("Periodic reconnect loop stopped")
                     return
                 except Exception:
-                    log.exception("Error while reconnecting", user.mxid)
+                    log.exception("Error while reconnecting %s", user.mxid)
 
     async def get_portal(self, room_id: RoomID) -> Portal:
         return await Portal.get_by_mxid(room_id)
