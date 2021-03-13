@@ -438,6 +438,8 @@ class ThreadItem(SerializableAttrs['ThreadItem']):
     show_forward_attribution: Optional[bool] = None
     action_log: Optional[ThreadItemActionLog] = None
 
+    replied_to_message: Optional['ThreadItem'] = None
+
     media: Optional[RegularMediaItem] = None
     voice_media: Optional[VoiceMediaItem] = None
     animated_media: Optional[AnimatedMediaItem] = None
@@ -459,3 +461,9 @@ class ThreadItem(SerializableAttrs['ThreadItem']):
         except SerializerError:
             log.debug("Failed to deserialize ThreadItem %s", data)
             return Obj(**data)
+
+
+# This resolves the 'ThreadItem' string into an actual type.
+# Starting Python 3.10, all type annotations will be strings and have to be resolved like this.
+# TODO do this automatically for all SerializableAttrs somewhere in mautrix-python
+attr.resolve_types(ThreadItem)

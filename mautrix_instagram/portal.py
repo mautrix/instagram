@@ -32,7 +32,7 @@ from mautrix.bridge import BasePortal, NotificationDisabler, async_getter_lock
 from mautrix.types import (EventID, MessageEventContent, RoomID, EventType, MessageType, ImageInfo,
                            VideoInfo, MediaMessageEventContent, TextMessageEventContent, AudioInfo,
                            ContentURI, EncryptedFile, LocationMessageEventContent, Format, UserID)
-from mautrix.errors import MatrixError, MForbidden
+from mautrix.errors import MatrixError, MForbidden, MNotFound, SessionNotFound
 from mautrix.util.simple_lock import SimpleLock
 from mautrix.util.network_retry import call_with_net_retry
 
@@ -416,6 +416,7 @@ class Portal(DBPortal, BasePortal):
         content = MediaMessageEventContent(body=reuploaded.file_name, external_url=reuploaded.url,
                                            url=reuploaded.mxc, file=reuploaded.decryption_info,
                                            info=reuploaded.info, msgtype=reuploaded.msgtype)
+        await self._add_instagram_reply(content, item.replied_to_message)
         return await self._send_message(intent, content, timestamp=item.timestamp // 1000)
 
     async def _handle_instagram_media_share(self, source: 'u.User', intent: IntentAPI,
@@ -482,10 +483,11 @@ class Portal(DBPortal, BasePortal):
                                 receiver=self.receiver, sender=media.user.pk).insert()
         return await self._send_message(intent, content, timestamp=item.timestamp // 1000)
 
-    async def _handle_instagram_text(self, intent: IntentAPI, text: str, timestamp: int
+    async def _handle_instagram_text(self, intent: IntentAPI, item: ThreadItem, text: str,
                                      ) -> EventID:
         content = TextMessageEventContent(msgtype=MessageType.TEXT, body=text)
-        return await self._send_message(intent, content, timestamp=timestamp // 1000)
+        await self._add_instagram_reply(content, item.replied_to_message)
+        return await self._send_message(intent, content, timestamp=item.timestamp // 1000)
 
     async def _handle_instagram_location(self, intent: IntentAPI, item: ThreadItem) -> EventID:
         loc = item.location
@@ -506,6 +508,8 @@ class Portal(DBPortal, BasePortal):
         content["format"] = str(Format.HTML)
         content["formatted_body"] = f"Location: <a href='{url}'>{body}</a>"
 
+        await self._add_instagram_reply(content, item.replied_to_message)
+
         return await self._send_message(intent, content, timestamp=item.timestamp // 1000)
 
     async def handle_instagram_item(self, source: 'u.User', sender: 'p.Puppet', item: ThreadItem,
@@ -515,6 +519,37 @@ class Portal(DBPortal, BasePortal):
         except Exception:
             self.log.exception("Fatal error handling Instagram item")
             self.log.trace("Item content: %s", item.serialize())
+
+    async def _add_instagram_reply(self, content: MessageEventContent,
+                                   reply_to: Optional[ThreadItem]) -> None:
+        if not reply_to:
+            return
+
+        message = await DBMessage.get_by_item_id(reply_to.item_id, self.receiver)
+        if not message:
+            return
+
+        content.set_reply(message.mxid)
+        if not isinstance(content, TextMessageEventContent):
+            return
+
+        try:
+            evt = await self.main_intent.get_event(message.mx_room, message.mxid)
+        except (MNotFound, MForbidden):
+            evt = None
+        if not evt:
+            return
+
+        if evt.type == EventType.ROOM_ENCRYPTED:
+            try:
+                evt = await self.matrix.e2ee.decrypt(evt, wait_session_timeout=0)
+            except SessionNotFound:
+                return
+
+        if isinstance(evt.content, TextMessageEventContent):
+            evt.content.trim_reply_fallback()
+
+        content.set_reply(evt)
 
     async def _handle_instagram_item(self, source: 'u.User', sender: 'p.Puppet', item: ThreadItem,
                                      is_backfill: bool = False) -> None:
@@ -551,13 +586,12 @@ class Portal(DBPortal, BasePortal):
             elif item.media_share or item.story_share:
                 event_id = await self._handle_instagram_media_share(source, intent, item)
             if item.text:
-                event_id = await self._handle_instagram_text(intent, item.text, item.timestamp)
+                event_id = await self._handle_instagram_text(intent, item, item.text)
             elif item.like:
                 # We handle likes as text because Matrix clients do big emoji on their own.
-                event_id = await self._handle_instagram_text(intent, item.like, item.timestamp)
+                event_id = await self._handle_instagram_text(intent, item, item.like)
             elif item.link:
-                event_id = await self._handle_instagram_text(intent, item.link.text,
-                                                             item.timestamp)
+                event_id = await self._handle_instagram_text(intent, item, item.link.text)
             if event_id:
                 msg = DBMessage(mxid=event_id, mx_room=self.mxid, item_id=item.item_id,
                                 receiver=self.receiver, sender=sender.pk)

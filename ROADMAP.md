@@ -9,6 +9,7 @@
       * [ ] Voice messages
       * [ ] Locations
       * [ ] †Files
+    * [ ] Replies
   * [x] Message redactions
   * [x] Message reactions
   * [ ] Presence
@@ -24,6 +25,7 @@
       * [x] Voice messages
       * [x] Locations
       * [x] Story/reel share
+    * [x] Replies
   * [x] Message unsend
   * [x] Message reactions
   * [x] Message history
