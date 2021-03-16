@@ -15,6 +15,7 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from typing import List, Any, Dict, Optional
 
+import attr
 from attr import dataclass
 from mautrix.types import SerializableAttrs
 
@@ -77,7 +78,7 @@ class Thread(SerializableAttrs['Thread']):
     has_newer: bool
 
     theme: ThreadTheme
-    last_seen_at: Dict[int, ThreadUserLastSeenAt]
+    last_seen_at: Dict[int, ThreadUserLastSeenAt] = attr.ib(factory=lambda: {})
 
     newest_cursor: Optional[str] = None
     oldest_cursor: Optional[str] = None
