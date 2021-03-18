@@ -76,7 +76,11 @@ bridge:
     # Displayname template for Instagram users.
     # {displayname} is replaced with the display name of the Instagram user.
     # {username} is replaced with the username of the Instagram user.
-    displayname_template: "{username} (Instagram)"
+    displayname_template: "{displayname} (Instagram)"
+    # Displayname template for 1:1 chat portals. Same variables as displayname_template.
+    private_chat_name_template: "{displayname}"
+    # Displayname template for group chat portals. Only {name} is available.
+    group_chat_name_template: "{name}"
 
     # Maximum length of displayname
     displayname_max_length: 100

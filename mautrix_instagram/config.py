@@ -56,6 +56,8 @@ class Config(BaseBridgeConfig):
 
         copy("bridge.username_template")
         copy("bridge.displayname_template")
+        copy("bridge.private_chat_name_template")
+        copy("bridge.group_chat_name_template")
 
         copy("bridge.displayname_max_length")
 

@@ -650,10 +650,24 @@ class Portal(DBPortal, BasePortal):
     # endregion
     # region Updating portal info
 
+    def _get_thread_name(self, thread: Thread) -> str:
+        if self.is_direct:
+            if self.other_user_pk == thread.viewer_id and len(thread.users) == 0:
+                return "Instagram chat with yourself"
+            elif len(thread.users) == 1:
+                tpl = self.config["bridge.private_chat_name_template"]
+                ui = thread.users[0]
+                return tpl.format(displayname=ui.full_name, id=ui.pk, username=ui.username)
+            pass
+        elif thread.thread_title:
+            return self.config["bridge.group_chat_name_template"].format(name=thread.thread_title)
+        else:
+            return ""
+
     async def update_info(self, thread: Thread, source: 'u.User') -> None:
         if self.is_direct and self.other_user_pk == source.igpk and not thread.thread_title:
             thread.thread_title = "Instagram chat with yourself"
-        changed = await self._update_name(thread.thread_title)
+        changed = await self._update_name(self._get_thread_name(thread))
         if changed:
             await self.update_bridge_info()
             await self.update()
@@ -661,7 +675,7 @@ class Portal(DBPortal, BasePortal):
         # TODO update power levels with thread.admin_user_ids
 
     async def _update_name(self, name: str) -> bool:
-        if self.name != name:
+        if self.name != name and name:
             self.name = name
             if self.mxid:
                 await self.main_intent.set_room_name(self.mxid, name)
