@@ -78,7 +78,7 @@ class Thread(SerializableAttrs['Thread']):
     has_newer: bool
 
     theme: ThreadTheme
-    last_seen_at: Dict[int, ThreadUserLastSeenAt] = attr.ib(factory=lambda: {})
+    last_seen_at: Dict[str, ThreadUserLastSeenAt] = attr.ib(factory=lambda: {})
 
     newest_cursor: Optional[str] = None
     oldest_cursor: Optional[str] = None

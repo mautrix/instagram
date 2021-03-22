@@ -26,7 +26,7 @@ import magic
 from mauigpapi.types import (Thread, ThreadUser, ThreadItem, RegularMediaItem, MediaType,
                              ReactionStatus, Reaction, AnimatedMediaItem, ThreadItemType,
                              VoiceMediaItem, ExpiredMediaItem, MessageSyncMessage, ReelShareType,
-                             TypingStatus)
+                             TypingStatus, ThreadUserLastSeenAt)
 from mautrix.appservice import AppService, IntentAPI
 from mautrix.bridge import BasePortal, NotificationDisabler, async_getter_lock
 from mautrix.types import (EventID, MessageEventContent, RoomID, EventType, MessageType, ImageInfo,
@@ -665,8 +665,6 @@ class Portal(DBPortal, BasePortal):
             return ""
 
     async def update_info(self, thread: Thread, source: 'u.User') -> None:
-        if self.is_direct and self.other_user_pk == source.igpk and not thread.thread_title:
-            thread.thread_title = "Instagram chat with yourself"
         changed = await self._update_name(self._get_thread_name(thread))
         if changed:
             await self.update_bridge_info()
@@ -699,6 +697,20 @@ class Portal(DBPortal, BasePortal):
             if pk and pk not in current_members and pk != self.other_user_pk:
                 await self.main_intent.kick_user(self.mxid, p.Puppet.get_mxid_from_id(pk),
                                                  reason="User had left this Instagram DM")
+
+    async def _update_read_receipts(self, receipts: Dict[int, ThreadUserLastSeenAt]) -> None:
+        for user_id, receipt in receipts.items():
+            message = await DBMessage.get_by_item_id(receipt.item_id, self.receiver)
+            if not message:
+                continue
+            puppet = await p.Puppet.get_by_pk(int(user_id), create=False)
+            if not puppet:
+                continue
+            try:
+                await puppet.intent_for(self).mark_read(message.mx_room, message.mxid)
+            except Exception:
+                self.log.warning(f"Failed to mark {message.mxid} in {message.mx_room} "
+                                 f"as read by {puppet.intent.mxid}", exc_info=True)
 
     # endregion
     # region Backfilling
@@ -819,6 +831,7 @@ class Portal(DBPortal, BasePortal):
                 self.log.debug(f"Last permanent item ({info.last_permanent_item.item_id})"
                                " not found in database, starting backfilling")
                 await self.backfill(source, is_initial=False)
+        await self._update_read_receipts(info.last_seen_at)
 
         # TODO
         # up = DBUserPortal.get(source.fbid, self.fbid, self.fb_receiver)
@@ -904,6 +917,7 @@ class Portal(DBPortal, BasePortal):
                 await self.backfill(source, is_initial=True)
             except Exception:
                 self.log.exception("Failed to backfill new portal")
+            await self._update_read_receipts(info.last_seen_at)
 
         return self.mxid
 
