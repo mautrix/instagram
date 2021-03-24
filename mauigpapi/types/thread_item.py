@@ -177,18 +177,24 @@ class Caption(SerializableAttrs['Caption']):
     pk: int
     user_id: int
     text: str
-    # TODO enum?
+    # TODO enum? 1
     type: int
     created_at: int
     created_at_utc: int
+    # TODO enum? comment
     content_type: str
-    # TODO enum?
+    # TODO enum? Active
     status: str
+    # TODO enum-ish thing?
     bit_flags: int
     user: BaseResponseUser
     did_report_as_spam: bool
     share_enabled: bool
     media_id: int
+
+    # Might not be in all captions
+    is_covered: Optional[bool] = None
+    private_reply_status: Optional[int] = None
 
 
 @dataclass
@@ -245,6 +251,7 @@ class ReelMediaShareItem(MediaShareItem, SerializableAttrs['ReelMediaShareItem']
     # These three are apparently sometimes not present
     # TODO enum?
     caption_position: Optional[int] = None
+    caption: Optional[Caption] = None
     is_reel_media: Optional[bool] = None
     timezone_offset: Optional[int] = None
     # likers: List[TODO]
@@ -388,6 +395,7 @@ class ReelShareItem(SerializableAttrs['ReelShareItem']):
     reel_type: str
     media: Union[ReelMediaShareItem, ExpiredMediaItem]
     reaction_info: Optional[ReelShareReactionInfo] = None
+    mentioned_user_id: Optional[int] = None
 
     @classmethod
     def deserialize(cls, data: JSON) -> 'ReelShareItem':

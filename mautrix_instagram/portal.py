@@ -458,6 +458,11 @@ class Portal(DBPortal, BasePortal):
                 prefix_html = f"Sent {user_link}'s story"
         elif item.reel_share.type == ReelShareType.REACTION:
             prefix = "Reacted to your story"
+        elif item.reel_share.type == ReelShareType.MENTION:
+            if item.reel_share.mentioned_user_id == source.igpk:
+                prefix = "Mentioned you in their story"
+            else:
+                prefix = "You mentioned them in your story"
         else:
             self.log.debug(f"Unsupported reel share type {item.reel_share.type}")
             return None
@@ -466,6 +471,8 @@ class Portal(DBPortal, BasePortal):
             prefix_content.format = Format.HTML
             prefix_content.formatted_body = prefix_html
         content = TextMessageEventContent(msgtype=MessageType.TEXT, body=item.reel_share.text)
+        if not content.body:
+            content.body = (media.caption.text if media.caption else None) or "<no caption>"
         await self._send_message(intent, prefix_content, timestamp=item.timestamp // 1000)
         if isinstance(media, ExpiredMediaItem):
             # TODO send message about expired story
