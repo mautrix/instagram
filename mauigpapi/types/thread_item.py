@@ -251,7 +251,6 @@ class ReelMediaShareItem(MediaShareItem, SerializableAttrs['ReelMediaShareItem']
     # These three are apparently sometimes not present
     # TODO enum?
     caption_position: Optional[int] = None
-    caption: Optional[Caption] = None
     is_reel_media: Optional[bool] = None
     timezone_offset: Optional[int] = None
     # likers: List[TODO]

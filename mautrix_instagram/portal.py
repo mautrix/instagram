@@ -26,7 +26,7 @@ import magic
 from mauigpapi.types import (Thread, ThreadUser, ThreadItem, RegularMediaItem, MediaType,
                              ReactionStatus, Reaction, AnimatedMediaItem, ThreadItemType,
                              VoiceMediaItem, ExpiredMediaItem, MessageSyncMessage, ReelShareType,
-                             TypingStatus, ThreadUserLastSeenAt)
+                             TypingStatus, ThreadUserLastSeenAt, MediaShareItem)
 from mautrix.appservice import AppService, IntentAPI
 from mautrix.bridge import BasePortal, NotificationDisabler, async_getter_lock
 from mautrix.types import (EventID, MessageEventContent, RoomID, EventType, MessageType, ImageInfo,
@@ -471,8 +471,10 @@ class Portal(DBPortal, BasePortal):
             prefix_content.format = Format.HTML
             prefix_content.formatted_body = prefix_html
         content = TextMessageEventContent(msgtype=MessageType.TEXT, body=item.reel_share.text)
+        if not content.body and isinstance(media, MediaShareItem):
+            content.body = media.caption.text if media.caption else ""
         if not content.body:
-            content.body = (media.caption.text if media.caption else None) or "<no caption>"
+            content.body = "<no caption>"
         await self._send_message(intent, prefix_content, timestamp=item.timestamp // 1000)
         if isinstance(media, ExpiredMediaItem):
             # TODO send message about expired story
