@@ -24,10 +24,11 @@ from .account import BaseFullResponseUser
 
 @dataclass
 class LoginResponseNametag(SerializableAttrs['LoginResponseNametag']):
-    mode: int
-    gradient: str
-    emoji: str
-    selfie_sticker: str
+    mode: Optional[int] = None
+    emoji: Optional[str] = None
+    emoji_color: Optional[str] = None
+    selfie_sticker: Optional[str] = None
+    gradient: Optional[str] = None
 
 
 @dataclass
