@@ -26,3 +26,8 @@ class MQTTNotLoggedIn(IGMQTTError):
 
 class MQTTNotConnected(IGMQTTError):
     pass
+
+
+class IrisSubscribeError(IGMQTTError):
+    def __init__(self, type: str, message: str) -> None:
+        super().__init__(f"{type}: {message}")
