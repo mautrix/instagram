@@ -220,7 +220,17 @@ class User(DBUser, BaseUser):
     async def refresh(self, resync: bool = True) -> None:
         await self.stop_listen()
         if resync:
-            await self.sync()
+            retry_count = 0
+            while True:
+                try:
+                    await self.sync()
+                    return
+                except Exception:
+                    if retry_count >= 4:
+                        raise
+                    retry_count += 1
+                    self.log.exception("Error while syncing for refresh, retrying in 1 minute")
+                    await asyncio.sleep(60)
         else:
             await self.start_listen()
 
