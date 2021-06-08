@@ -706,7 +706,8 @@ class Portal(DBPortal, BasePortal):
                 await self.main_intent.kick_user(self.mxid, p.Puppet.get_mxid_from_id(pk),
                                                  reason="User had left this Instagram DM")
 
-    async def _update_read_receipts(self, receipts: Dict[int, ThreadUserLastSeenAt]) -> None:
+    async def _update_read_receipts(self, receipts: Dict[Union[int, str], ThreadUserLastSeenAt]
+                                    ) -> None:
         for user_id, receipt in receipts.items():
             message = await DBMessage.get_by_item_id(receipt.item_id, self.receiver)
             if not message:

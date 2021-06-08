@@ -15,7 +15,6 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from typing import (Dict, Optional, AsyncIterable, Awaitable, AsyncGenerator, List, TYPE_CHECKING,
                     cast)
-from collections import defaultdict
 import asyncio
 import logging
 import time
@@ -24,8 +23,9 @@ from mauigpapi import AndroidAPI, AndroidState, AndroidMQTT
 from mauigpapi.mqtt import Connect, Disconnect, GraphQLSubscription, SkywalkerSubscription
 from mauigpapi.types import (CurrentUser, MessageSyncEvent, Operation, RealtimeDirectEvent,
                              ActivityIndicatorData, TypingStatus, ThreadSyncEvent, Thread)
-from mauigpapi.errors import IGNotLoggedInError, MQTTNotLoggedIn, MQTTNotConnected
-from mautrix.bridge import BaseUser, async_getter_lock
+from mauigpapi.errors import (IGNotLoggedInError, MQTTNotLoggedIn, MQTTNotConnected,
+                              IrisSubscribeError)
+from mautrix.bridge import BaseUser, BridgeState, async_getter_lock
 from mautrix.types import UserID, RoomID, EventID, TextMessageEventContent, MessageType
 from mautrix.appservice import AppService
 from mautrix.util.opt_prometheus import Summary, Gauge, async_time
@@ -43,6 +43,15 @@ METRIC_THREAD_SYNC = Summary("bridge_on_thread_sync", "calls to handle_thread_sy
 METRIC_RTD = Summary("bridge_on_rtd", "calls to handle_rtd")
 METRIC_LOGGED_IN = Gauge("bridge_logged_in", "Users logged into the bridge")
 METRIC_CONNECTED = Gauge("bridge_connected", "Bridged users connected to Instagram")
+
+BridgeState.human_readable_errors.update({
+    "ig-connection-error": "Instagram disconnected unexpectedly",
+    "ig-logged-out": "You logged out from Instagram",
+    "ig-auth-error": "Authentication error from Instagram: {message}",
+    "ig-disconnected": None,
+    "ig-no-mqtt": "You're not connected to Instagram",
+    "ig-not-logged-in": "You're not logged into Instagram",
+})
 
 
 class User(DBUser, BaseUser):
@@ -72,21 +81,18 @@ class User(DBUser, BaseUser):
                  state: Optional[AndroidState] = None, notice_room: Optional[RoomID] = None
                  ) -> None:
         super().__init__(mxid=mxid, igpk=igpk, state=state, notice_room=notice_room)
+        BaseUser.__init__(self)
         self._notice_room_lock = asyncio.Lock()
         self._notice_send_lock = asyncio.Lock()
         perms = self.config.get_permissions(mxid)
         self.is_whitelisted, self.is_admin, self.permission_level = perms
-        self.log = self.log.getChild(self.mxid)
         self.client = None
         self.mqtt = None
         self.username = None
-        self.dm_update_lock = asyncio.Lock()
-        self._metric_value = defaultdict(lambda: False)
         self._is_logged_in = False
         self._is_connected = False
         self.shutdown = False
         self._listen_task = None
-        self.command_status = None
         self.remote_typing_status = None
 
     @classmethod
@@ -122,10 +128,11 @@ class User(DBUser, BaseUser):
         try:
             resp = await client.current_user()
         except IGNotLoggedInError as e:
-            self.log.warning(f"Failed to connect to Instagram: {e}")
-            # TODO show reason?
-            await self.send_bridge_notice("You have been logged out of Instagram",
-                                          important=True)
+            self.log.warning(f"Failed to connect to Instagram: {e}, logging out")
+            await self.send_bridge_notice(f"You have been logged out of Instagram: {e!s}",
+                                          important=True, error_code="ig-auth-error",
+                                          error_message=str(e))
+            await self.logout(from_error=True)
             return
         self.client = client
         self._is_logged_in = True
@@ -152,6 +159,7 @@ class User(DBUser, BaseUser):
         self._track_metric(METRIC_CONNECTED, True)
         self._is_connected = True
         await self.send_bridge_notice("Connected to Instagram")
+        await self.push_bridge_state(ok=True)
 
     async def on_disconnect(self, evt: Disconnect) -> None:
         self.log.debug("Disconnected from Instagram")
@@ -172,11 +180,23 @@ class User(DBUser, BaseUser):
                 await self.update()
         return self.notice_room
 
+    async def get_bridge_state(self) -> BridgeState:
+        if not self.client:
+            return BridgeState(ok=False, error="ig-not-logged-in")
+        elif not self._listen_task or self._listen_task.done() or not self.is_connected:
+            return BridgeState(ok=False, error="ig-no-mqtt")
+        return BridgeState(ok=True)
+
     async def send_bridge_notice(self, text: str, edit: Optional[EventID] = None,
-                                 important: bool = False) -> Optional[EventID]:
+                                 important: bool = False, error_code: Optional[str] = None,
+                                 error_message: Optional[str] = None) -> Optional[EventID]:
+        if error_code:
+            await self.push_bridge_state(ok=False, error=error_code, message=error_message)
+        if self.config["bridge.disable_bridge_notices"]:
+            return None
         if not important and not self.config["bridge.unimportant_bridge_notices"]:
             self.log.debug("Not sending unimportant bridge notice: %s", text)
-            return
+            return None
         event_id = None
         try:
             self.log.debug("Sending bridge notice: %s", text)
@@ -285,17 +305,22 @@ class User(DBUser, BaseUser):
                 skywalker_subs={SkywalkerSubscription.direct_sub(self.state.user_id),
                                 SkywalkerSubscription.live_sub(self.state.user_id)},
                 seq_id=seq_id, snapshot_at_ms=snapshot_at_ms)
+        except IrisSubscribeError as e:
+            self.log.warning(f"Got IrisSubscribeError {e}, refreshing...")
+            await self.refresh()
         except (MQTTNotConnected, MQTTNotLoggedIn) as e:
-            await self.send_bridge_notice(f"Error in listener: {e}", important=True)
+            await self.send_bridge_notice(f"Error in listener: {e}", important=True,
+                                          error_code="ig-connection-error")
             self.mqtt.disconnect()
         except Exception:
             self.log.exception("Fatal error in listener")
             await self.send_bridge_notice("Fatal error in listener (see logs for more info)",
-                                          important=True)
+                                          important=True, error_code="ig-connection-error")
             self.mqtt.disconnect()
         else:
             if not self.shutdown:
-                await self.send_bridge_notice("Instagram connection closed without error")
+                await self.send_bridge_notice("Instagram connection closed without error",
+                                              error_code="ig-disconnected")
         finally:
             self._listen_task = None
             self._is_connected = False
@@ -312,7 +337,7 @@ class User(DBUser, BaseUser):
         self._is_connected = False
         await self.update()
 
-    async def logout(self) -> None:
+    async def logout(self, from_error: bool = False) -> None:
         if self.client:
             try:
                 await self.client.logout(one_tap_app_login=False)
@@ -322,17 +347,20 @@ class User(DBUser, BaseUser):
             self.mqtt.disconnect()
         self._track_metric(METRIC_CONNECTED, False)
         self._track_metric(METRIC_LOGGED_IN, False)
-        puppet = await pu.Puppet.get_by_pk(self.igpk, create=False)
-        if puppet and puppet.is_real_user:
-            await puppet.switch_mxid(None, None)
-        try:
-            del self.by_igpk[self.igpk]
-        except KeyError:
-            pass
+        if not from_error:
+            puppet = await pu.Puppet.get_by_pk(self.igpk, create=False)
+            if puppet and puppet.is_real_user:
+                await puppet.switch_mxid(None, None)
+            try:
+                del self.by_igpk[self.igpk]
+            except KeyError:
+                pass
+            self.igpk = None
+        else:
+            await self.push_bridge_state(ok=False, error="ig-logged-out")
         self.client = None
         self.mqtt = None
         self.state = None
-        self.igpk = None
         self._is_logged_in = False
         await self.update()
 

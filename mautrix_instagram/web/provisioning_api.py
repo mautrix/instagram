@@ -102,7 +102,10 @@ class ProvisioningAPI:
                 # TODO maybe don't always log out?
                 self.log.exception(f"Got error checking current user for %s, logging out. %s",
                                    user.mxid, e.body.json())
-                await user.logout()
+                await user.send_bridge_notice(f"You have been logged out of Instagram: {e!s}",
+                                              important=True, error_code="ig-auth-error",
+                                              error_message=str(e))
+                await user.logout(from_error=True)
             else:
                 data["instagram"] = resp.user.serialize()
                 pl = user.state.device.payload
