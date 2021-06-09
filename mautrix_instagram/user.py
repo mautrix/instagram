@@ -46,11 +46,10 @@ METRIC_CONNECTED = Gauge("bridge_connected", "Bridged users connected to Instagr
 
 BridgeState.human_readable_errors.update({
     "ig-connection-error": "Instagram disconnected unexpectedly",
-    "ig-logged-out": "You logged out from Instagram",
     "ig-auth-error": "Authentication error from Instagram: {message}",
     "ig-disconnected": None,
     "ig-no-mqtt": "You're not connected to Instagram",
-    "ig-not-logged-in": "You're not logged into Instagram",
+    "logged-out": "You're not logged into Instagram",
 })
 
 
@@ -180,9 +179,14 @@ class User(DBUser, BaseUser):
                 await self.update()
         return self.notice_room
 
+    async def fill_bridge_state(self, state: BridgeState) -> None:
+        await super().fill_bridge_state(state)
+        state.remote_id = str(self.igpk)
+        state.remote_name = f"@{self.username}"
+
     async def get_bridge_state(self) -> BridgeState:
         if not self.client:
-            return BridgeState(ok=False, error="ig-not-logged-in")
+            return BridgeState(ok=False, error="logged-out")
         elif not self._listen_task or self._listen_task.done() or not self.is_connected:
             return BridgeState(ok=False, error="ig-no-mqtt")
         return BridgeState(ok=True)
@@ -357,7 +361,7 @@ class User(DBUser, BaseUser):
                 pass
             self.igpk = None
         else:
-            await self.push_bridge_state(ok=False, error="ig-logged-out")
+            await self.push_bridge_state(ok=False, error="logged-out")
         self.client = None
         self.mqtt = None
         self.state = None
