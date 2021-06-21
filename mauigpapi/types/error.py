@@ -21,7 +21,7 @@ from mautrix.types import SerializableAttrs
 
 
 @dataclass
-class SpamResponse(SerializableAttrs['SpamResponse']):
+class SpamResponse(SerializableAttrs):
     feedback_title: str
     feedback_message: str
     feedback_url: str
@@ -35,7 +35,7 @@ class SpamResponse(SerializableAttrs['SpamResponse']):
 
 
 @dataclass
-class CheckpointChallenge(SerializableAttrs['CheckpointChallenge']):
+class CheckpointChallenge(SerializableAttrs):
     url: str
     api_path: str
     hide_webview_header: bool
@@ -45,7 +45,7 @@ class CheckpointChallenge(SerializableAttrs['CheckpointChallenge']):
 
 
 @dataclass
-class CheckpointResponse(SerializableAttrs['CheckpointResponse']):
+class CheckpointResponse(SerializableAttrs):
     message: str  # challenge_required
     status: str  # fail
     challenge: CheckpointChallenge
@@ -53,7 +53,7 @@ class CheckpointResponse(SerializableAttrs['CheckpointResponse']):
 
 
 @dataclass
-class LoginRequiredResponse(SerializableAttrs['LoginRequiredResponse']):
+class LoginRequiredResponse(SerializableAttrs):
     # TODO enum?
     logout_reason: int
     message: str  # login_required or user_has_logged_out
@@ -61,13 +61,13 @@ class LoginRequiredResponse(SerializableAttrs['LoginRequiredResponse']):
 
 
 @dataclass
-class LoginErrorResponseButton(SerializableAttrs['LoginErrorResponseButton']):
+class LoginErrorResponseButton(SerializableAttrs):
     title: str
     action: str
 
 
 @dataclass
-class LoginPhoneVerificationSettings(SerializableAttrs['LoginPhoneVerificationSettings']):
+class LoginPhoneVerificationSettings(SerializableAttrs):
     max_sms_count: int
     resend_sms_delay_sec: int
     robocall_count_down_time_sec: int
@@ -75,7 +75,7 @@ class LoginPhoneVerificationSettings(SerializableAttrs['LoginPhoneVerificationSe
 
 
 @dataclass
-class LoginTwoFactorInfo(SerializableAttrs['LoginTwoFactorInfo']):
+class LoginTwoFactorInfo(SerializableAttrs):
     username: str
     sms_two_factor_on: bool
     totp_two_factor_on: bool
@@ -92,7 +92,7 @@ class LoginTwoFactorInfo(SerializableAttrs['LoginTwoFactorInfo']):
 
 
 @dataclass
-class LoginErrorResponse(SerializableAttrs['LoginErrorResponse']):
+class LoginErrorResponse(SerializableAttrs):
     message: str
     status: str
     error_type: str

@@ -22,13 +22,13 @@ from .thread import Thread, ThreadUser
 
 
 @dataclass
-class DMInboxCursor(SerializableAttrs['DMInboxCursor']):
+class DMInboxCursor(SerializableAttrs):
     cursor_timestamp_seconds: int
     cursor_thread_v2_id: int
 
 
 @dataclass
-class DMInbox(SerializableAttrs['DMInbox']):
+class DMInbox(SerializableAttrs):
     threads: List[Thread]
     has_older: bool
     unseen_count: int
@@ -41,7 +41,7 @@ class DMInbox(SerializableAttrs['DMInbox']):
 
 
 @dataclass
-class DMInboxResponse(SerializableAttrs['DMInboxResponse']):
+class DMInboxResponse(SerializableAttrs):
     status: str
     seq_id: int
     snapshot_at_ms: int
@@ -54,6 +54,6 @@ class DMInboxResponse(SerializableAttrs['DMInboxResponse']):
 
 
 @dataclass
-class DMThreadResponse(SerializableAttrs['DMThreadResponse']):
+class DMThreadResponse(SerializableAttrs):
     thread: Thread
     status: str

@@ -25,7 +25,7 @@ default_capabilities = json.loads(pkgutil.get_data("mauigpapi.state",
 
 
 @dataclass
-class AndroidApplication(SerializableAttrs['AndroidApplication']):
+class AndroidApplication(SerializableAttrs):
     # TODO these newer versions make the iris subscribe stop working for some reason
     # APP_VERSION: str = "168.0.0.40.355"
     # APP_VERSION_CODE: str = "261079771"

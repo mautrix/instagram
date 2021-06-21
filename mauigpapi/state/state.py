@@ -33,7 +33,7 @@ from .cookies import Cookies
 
 
 @dataclass
-class AndroidState(SerializableAttrs['AndroidState']):
+class AndroidState(SerializableAttrs):
     device: AndroidDevice = attr.ib(factory=lambda: AndroidDevice())
     session: AndroidSession = attr.ib(factory=lambda: AndroidSession())
     application: AndroidApplication = attr.ib(factory=lambda: AndroidApplication())

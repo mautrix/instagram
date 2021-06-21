@@ -68,7 +68,7 @@ class ThreadItemType(SerializableEnum):
 
 
 @dataclass(kw_only=True)
-class ThreadItemActionLog(SerializableAttrs['ThreadItemActionLog']):
+class ThreadItemActionLog(SerializableAttrs):
     description: str
     # TODO bold, text_attributes
 
@@ -80,20 +80,20 @@ class ViewMode(SerializableEnum):
 
 
 @dataclass(kw_only=True)
-class CreativeConfig(SerializableAttrs['CreativeConfig']):
+class CreativeConfig(SerializableAttrs):
     capture_type: str
     camera_facing: str
     should_render_try_it_on: bool
 
 
 @dataclass(kw_only=True)
-class CreateModeAttribution(SerializableAttrs['CreateModeAttribution']):
+class CreateModeAttribution(SerializableAttrs):
     type: str
     name: str
 
 
 @dataclass(kw_only=True)
-class ImageVersion(SerializableAttrs['ImageVersion']):
+class ImageVersion(SerializableAttrs):
     width: int
     height: int
     url: str
@@ -101,12 +101,12 @@ class ImageVersion(SerializableAttrs['ImageVersion']):
 
 
 @dataclass(kw_only=True)
-class ImageVersions(SerializableAttrs['ImageVersions']):
+class ImageVersions(SerializableAttrs):
     candidates: List[ImageVersion]
 
 
 @dataclass(kw_only=True)
-class VideoVersion(SerializableAttrs['VideoVersion']):
+class VideoVersion(SerializableAttrs):
     type: int
     width: int
     height: int
@@ -127,13 +127,13 @@ class MediaType(SerializableEnum):
 
 
 @dataclass(kw_only=True)
-class ExpiredMediaItem(SerializableAttrs['ExpiredMediaItem']):
+class ExpiredMediaItem(SerializableAttrs):
     media_type: Optional[MediaType] = None
     user: Optional[BaseResponseUser] = None
 
 
 @dataclass(kw_only=True)
-class RegularMediaItem(SerializableAttrs['RegularMediaItem']):
+class RegularMediaItem(SerializableAttrs):
     id: str
     image_versions2: Optional[ImageVersions] = None
     video_versions: Optional[List[VideoVersion]] = None
@@ -173,7 +173,7 @@ class RegularMediaItem(SerializableAttrs['RegularMediaItem']):
 
 
 @dataclass(kw_only=True)
-class Caption(SerializableAttrs['Caption']):
+class Caption(SerializableAttrs):
     pk: int
     user_id: int
     text: str
@@ -198,7 +198,7 @@ class Caption(SerializableAttrs['Caption']):
 
 
 @dataclass
-class Location(SerializableAttrs['Location']):
+class Location(SerializableAttrs):
     pk: int
     short_name: str
     facebook_places_id: int
@@ -212,7 +212,7 @@ class Location(SerializableAttrs['Location']):
 
 
 @dataclass(kw_only=True)
-class MediaShareItem(RegularMediaItem, SerializableAttrs['MediaShareItem']):
+class MediaShareItem(RegularMediaItem, SerializableAttrs):
     taken_at: int
     pk: int
     device_timestamp: int
@@ -239,7 +239,7 @@ class MediaShareItem(RegularMediaItem, SerializableAttrs['MediaShareItem']):
 
 
 @dataclass
-class SharingFrictionInfo(SerializableAttrs['SharingFrictionInfo']):
+class SharingFrictionInfo(SerializableAttrs):
     should_have_sharing_friction: bool
     bloks_app_url: Optional[str]
 
@@ -247,7 +247,7 @@ class SharingFrictionInfo(SerializableAttrs['SharingFrictionInfo']):
 # The fields in this class have been observed in reel share items, but may exist elsewhere too.
 # If they're observed in other types, they should be moved to MediaShareItem.
 @dataclass(kw_only=True)
-class ReelMediaShareItem(MediaShareItem, SerializableAttrs['ReelMediaShareItem']):
+class ReelMediaShareItem(MediaShareItem, SerializableAttrs):
     # These three are apparently sometimes not present
     # TODO enum?
     caption_position: Optional[int] = None
@@ -268,7 +268,7 @@ class ReelMediaShareItem(MediaShareItem, SerializableAttrs['ReelMediaShareItem']
 
 
 @dataclass(kw_only=True)
-class ReplayableMediaItem(SerializableAttrs['ReplayableMediaItem']):
+class ReplayableMediaItem(SerializableAttrs):
     view_mode: ViewMode
     seen_count: int
     seen_user_ids: List[int]
@@ -276,7 +276,7 @@ class ReplayableMediaItem(SerializableAttrs['ReplayableMediaItem']):
 
 
 @dataclass(kw_only=True)
-class VisualMedia(ReplayableMediaItem, SerializableAttrs['VisualMedia']):
+class VisualMedia(ReplayableMediaItem, SerializableAttrs):
     url_expire_at_secs: Optional[int] = None
     playback_duration_secs: Optional[int] = None
     media: Union[RegularMediaItem, ExpiredMediaItem]
@@ -292,7 +292,7 @@ class VisualMedia(ReplayableMediaItem, SerializableAttrs['VisualMedia']):
 
 
 @dataclass(kw_only=True)
-class AudioInfo(SerializableAttrs['AudioInfo']):
+class AudioInfo(SerializableAttrs):
     audio_src: str
     duration: int
     waveform_data: Optional[List[int]] = None
@@ -300,7 +300,7 @@ class AudioInfo(SerializableAttrs['AudioInfo']):
 
 
 @dataclass(kw_only=True)
-class VoiceMediaData(SerializableAttrs['VoiceMediaData']):
+class VoiceMediaData(SerializableAttrs):
     id: str
     audio: AudioInfo
     organic_tracking_token: str
@@ -311,12 +311,12 @@ class VoiceMediaData(SerializableAttrs['VoiceMediaData']):
 
 
 @dataclass(kw_only=True)
-class VoiceMediaItem(ReplayableMediaItem, SerializableAttrs['VoiceMediaItem']):
+class VoiceMediaItem(ReplayableMediaItem, SerializableAttrs):
     media: VoiceMediaData
 
 
 @dataclass(kw_only=True)
-class AnimatedMediaImage(SerializableAttrs['AnimatedMediaImage']):
+class AnimatedMediaImage(SerializableAttrs):
     height: str
     mp4: str
     mp4_size: str
@@ -328,12 +328,12 @@ class AnimatedMediaImage(SerializableAttrs['AnimatedMediaImage']):
 
 
 @dataclass(kw_only=True)
-class AnimatedMediaImages(SerializableAttrs['AnimatedMediaImages']):
+class AnimatedMediaImages(SerializableAttrs):
     fixed_height: Optional[AnimatedMediaImage] = None
 
 
 @dataclass(kw_only=True)
-class AnimatedMediaItem(SerializableAttrs['AnimatedMediaItem']):
+class AnimatedMediaItem(SerializableAttrs):
     id: str
     is_random: str
     is_sticker: str
@@ -341,7 +341,7 @@ class AnimatedMediaItem(SerializableAttrs['AnimatedMediaItem']):
 
 
 @dataclass
-class Reaction(SerializableAttrs['Reaction']):
+class Reaction(SerializableAttrs):
     sender_id: int
     timestamp: int
     client_context: int
@@ -350,14 +350,14 @@ class Reaction(SerializableAttrs['Reaction']):
 
 
 @dataclass
-class Reactions(SerializableAttrs['Reactions']):
+class Reactions(SerializableAttrs):
     likes_count: int = 0
     likes: List[Reaction] = attr.ib(factory=lambda: [])
     emojis: List[Reaction] = attr.ib(factory=lambda: [])
 
 
 @dataclass
-class LinkContext(SerializableAttrs['LinkContext']):
+class LinkContext(SerializableAttrs):
     link_url: str
     link_title: str
     link_summary: str
@@ -365,7 +365,7 @@ class LinkContext(SerializableAttrs['LinkContext']):
 
 
 @dataclass
-class LinkItem(SerializableAttrs['LinkItem']):
+class LinkItem(SerializableAttrs):
     text: str
     link_context: LinkContext
     client_context: str
@@ -379,14 +379,14 @@ class ReelShareType(SerializableEnum):
 
 
 @dataclass
-class ReelShareReactionInfo(SerializableAttrs['ReelShareReactionInfo']):
+class ReelShareReactionInfo(SerializableAttrs):
     emoji: str
     # TODO find type
     # intensity: Any
 
 
 @dataclass
-class ReelShareItem(SerializableAttrs['ReelShareItem']):
+class ReelShareItem(SerializableAttrs):
     text: str
     type: ReelShareType
     reel_owner_id: int
@@ -407,7 +407,7 @@ class ReelShareItem(SerializableAttrs['ReelShareItem']):
 
 
 @dataclass
-class StoryShareItem(SerializableAttrs['StoryShareItem']):
+class StoryShareItem(SerializableAttrs):
     text: str
     is_reel_persisted: bool
     # TODO enum?
@@ -433,7 +433,7 @@ class StoryShareItem(SerializableAttrs['StoryShareItem']):
 
 
 @dataclass(kw_only=True)
-class ThreadItem(SerializableAttrs['ThreadItem']):
+class ThreadItem(SerializableAttrs):
     item_id: Optional[str] = None
     user_id: Optional[int] = None
     timestamp: Optional[int] = None

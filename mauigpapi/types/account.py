@@ -22,7 +22,7 @@ from mautrix.types import SerializableAttrs, SerializableEnum
 
 
 @dataclass(kw_only=True)
-class FriendshipStatus(SerializableAttrs['FriendshipStatus']):
+class FriendshipStatus(SerializableAttrs):
     following: bool
     outgoing_request: bool
     is_bestie: bool
@@ -33,13 +33,13 @@ class FriendshipStatus(SerializableAttrs['FriendshipStatus']):
 
 
 @dataclass(kw_only=True)
-class UserIdentifier(SerializableAttrs['UserIdentifier']):
+class UserIdentifier(SerializableAttrs):
     pk: int
     username: str
 
 
 @dataclass(kw_only=True)
-class BaseResponseUser(UserIdentifier, SerializableAttrs['BaseResponseUser']):
+class BaseResponseUser(UserIdentifier, SerializableAttrs):
     full_name: str
     is_private: bool
     is_verified: bool = False
@@ -58,7 +58,7 @@ class BaseResponseUser(UserIdentifier, SerializableAttrs['BaseResponseUser']):
 
 
 @dataclass(kw_only=True)
-class BaseFullResponseUser(BaseResponseUser, SerializableAttrs['BaseFullResponseUser']):
+class BaseFullResponseUser(BaseResponseUser, SerializableAttrs):
     phone_number: str
     country_code: Optional[int] = None
     national_number: Optional[int] = None
@@ -73,21 +73,21 @@ class BaseFullResponseUser(BaseResponseUser, SerializableAttrs['BaseFullResponse
 
 
 @dataclass
-class EntityText(SerializableAttrs['EntityText']):
+class EntityText(SerializableAttrs):
     raw_text: str
     # TODO figure out type
     entities: List[Any]
 
 
 @dataclass
-class HDProfilePictureVersion(SerializableAttrs['HDProfilePictureVersion']):
+class HDProfilePictureVersion(SerializableAttrs):
     url: str
     width: int
     height: int
 
 
 @dataclass
-class ProfileEditParams(SerializableAttrs['ProfileEditParams']):
+class ProfileEditParams(SerializableAttrs):
     should_show_confirmation_dialog: bool
     is_pending_review: bool
     confirmation_dialog_text: str
@@ -102,7 +102,7 @@ class Gender(SerializableEnum):
 
 
 @dataclass(kw_only=True)
-class CurrentUser(BaseFullResponseUser, SerializableAttrs['CurrentUser']):
+class CurrentUser(BaseFullResponseUser, SerializableAttrs):
     biography: str
     can_link_entities_in_bio: bool
     biography_with_entities: EntityText
@@ -121,6 +121,6 @@ class CurrentUser(BaseFullResponseUser, SerializableAttrs['CurrentUser']):
 
 
 @dataclass
-class CurrentUserResponse(SerializableAttrs['CurrentUserResponse']):
+class CurrentUserResponse(SerializableAttrs):
     status: str
     user: CurrentUser

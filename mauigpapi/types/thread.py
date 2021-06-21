@@ -24,25 +24,25 @@ from .thread_item import ThreadItem
 
 
 @dataclass
-class ThreadUser(BaseResponseUser, SerializableAttrs['ThreadUser']):
+class ThreadUser(BaseResponseUser, SerializableAttrs):
     interop_messaging_user_fbid: int
     is_using_unified_inbox_for_direct: bool
 
 
 @dataclass
-class ThreadTheme(SerializableAttrs['ThreadTheme']):
+class ThreadTheme(SerializableAttrs):
     id: str
 
 
 @dataclass
-class ThreadUserLastSeenAt(SerializableAttrs['UserLastSeenAt']):
+class ThreadUserLastSeenAt(SerializableAttrs):
     timestamp: str
     item_id: str
     shh_seen_state: Dict[str, Any]
 
 
 @dataclass(kw_only=True)
-class Thread(SerializableAttrs['Thread']):
+class Thread(SerializableAttrs):
     thread_id: str
     thread_v2_id: str
 

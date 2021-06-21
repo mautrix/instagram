@@ -21,7 +21,7 @@ from mautrix.types import SerializableAttrs
 
 
 @dataclass
-class UploadPhotoResponse(SerializableAttrs['UploadPhotoResponse']):
+class UploadPhotoResponse(SerializableAttrs):
     upload_id: str
     status: str
     xsharing_nonces: Any

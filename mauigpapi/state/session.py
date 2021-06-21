@@ -21,7 +21,7 @@ from mautrix.types import SerializableAttrs
 
 
 @dataclass
-class AndroidSession(SerializableAttrs['AndroidSession']):
+class AndroidSession(SerializableAttrs):
     eu_dc_enabled: Optional[bool] = None
     thumbnail_cache_busting_value: int = 1000
     ads_opt_out: bool = False

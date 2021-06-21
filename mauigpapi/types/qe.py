@@ -22,7 +22,7 @@ from mautrix.types import SerializableAttrs
 
 
 @dataclass
-class QeSyncExperimentParam(SerializableAttrs['QeSyncExperimentParam']):
+class QeSyncExperimentParam(SerializableAttrs):
     name: str
     value: str
 
@@ -43,7 +43,7 @@ def _try_parse(val: str) -> Any:
 
 
 @dataclass
-class QeSyncExperiment(SerializableAttrs['QeSyncResponseExperiment']):
+class QeSyncExperiment(SerializableAttrs):
     name: str
     group: str
     additional_params: List[Any]
@@ -58,6 +58,6 @@ class QeSyncExperiment(SerializableAttrs['QeSyncResponseExperiment']):
 
 
 @dataclass
-class QeSyncResponse(SerializableAttrs['QeSyncResponse']):
+class QeSyncResponse(SerializableAttrs):
     experiments: List[QeSyncExperiment]
     status: str

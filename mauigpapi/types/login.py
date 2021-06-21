@@ -23,7 +23,7 @@ from .account import BaseFullResponseUser
 
 
 @dataclass
-class LoginResponseNametag(SerializableAttrs['LoginResponseNametag']):
+class LoginResponseNametag(SerializableAttrs):
     mode: Optional[int] = None
     emoji: Optional[str] = None
     emoji_color: Optional[str] = None
@@ -32,7 +32,7 @@ class LoginResponseNametag(SerializableAttrs['LoginResponseNametag']):
 
 
 @dataclass
-class LoginResponseUser(BaseFullResponseUser, SerializableAttrs['LoginResponseUser']):
+class LoginResponseUser(BaseFullResponseUser, SerializableAttrs):
     can_boost_post: bool
     can_see_organic_insights: bool
     show_insights_terms: bool
@@ -48,12 +48,12 @@ class LoginResponseUser(BaseFullResponseUser, SerializableAttrs['LoginResponseUs
 
 
 @dataclass
-class LoginResponse(SerializableAttrs['LoginResponse']):
+class LoginResponse(SerializableAttrs):
     logged_in_user: LoginResponseUser
     status: str
 
 
 @dataclass
-class LogoutResponse(SerializableAttrs['LogoutResponse']):
+class LogoutResponse(SerializableAttrs):
     status: str
     login_nonce: Optional[str] = None

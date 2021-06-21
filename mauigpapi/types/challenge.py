@@ -22,7 +22,7 @@ from .login import LoginResponseUser
 
 
 @dataclass
-class ChallengeStateData(SerializableAttrs['ChallengeStateData']):
+class ChallengeStateData(SerializableAttrs):
     # Only for reset step
     choice: Optional[str] = None
     fb_access_token: Optional[str] = None
@@ -38,7 +38,7 @@ class ChallengeStateData(SerializableAttrs['ChallengeStateData']):
 
 
 @dataclass(kw_only=True)
-class ChallengeStateResponse(SerializableAttrs['ChallengeStateResponse']):
+class ChallengeStateResponse(SerializableAttrs):
     # TODO enum?
     step_name: Optional[str] = None
     step_data: Optional[ChallengeStateData] = None

@@ -31,7 +31,7 @@ descriptors = json.loads(pkgutil.get_data("mauigpapi.state", "samples/devices.js
 
 
 @dataclass
-class AndroidDevice(SerializableAttrs['AndroidDevice']):
+class AndroidDevice(SerializableAttrs):
     id: Optional[str] = None
     descriptor: Optional[str] = None
     uuid: Optional[str] = None

@@ -23,14 +23,14 @@ from .account import BaseResponseUser
 
 
 @dataclass
-class SearchResultUser(BaseResponseUser, SerializableAttrs['SearchResultUser']):
+class SearchResultUser(BaseResponseUser, SerializableAttrs):
     mutual_followers_count: int
     social_context: Optional[str] = None
     search_social_context: Optional[str] = None
 
 
 @dataclass
-class UserSearchResponse(SerializableAttrs['UserSearchResponse']):
+class UserSearchResponse(SerializableAttrs):
     num_results: int
     users: List[SearchResultUser]
     has_more: bool

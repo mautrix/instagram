@@ -52,7 +52,7 @@ class TypingStatus(SerializableEnum):
 
 
 @dataclass(kw_only=True)
-class CommandResponsePayload(SerializableAttrs['CommandResponsePayload']):
+class CommandResponsePayload(SerializableAttrs):
     client_context: Optional[str] = None
     item_id: Optional[str] = None
     timestamp: Optional[str] = None
@@ -61,7 +61,7 @@ class CommandResponsePayload(SerializableAttrs['CommandResponsePayload']):
 
 
 @dataclass(kw_only=True)
-class CommandResponse(SerializableAttrs['CommandResponse']):
+class CommandResponse(SerializableAttrs):
     action: str
     status: str
     status_code: Optional[str] = None
@@ -69,14 +69,14 @@ class CommandResponse(SerializableAttrs['CommandResponse']):
 
 
 @dataclass(kw_only=True)
-class IrisPayloadData(SerializableAttrs['IrisPayloadData']):
+class IrisPayloadData(SerializableAttrs):
     op: Operation
     path: str
     value: str
 
 
 @dataclass(kw_only=True)
-class IrisPayload(SerializableAttrs['IrisPayload']):
+class IrisPayload(SerializableAttrs):
     data: List[IrisPayloadData]
     message_type: int
     seq_id: int
@@ -87,7 +87,7 @@ class IrisPayload(SerializableAttrs['IrisPayload']):
 
 
 @dataclass(kw_only=True)
-class MessageSyncMessage(ThreadItem, SerializableAttrs['MessageSyncMessage']):
+class MessageSyncMessage(ThreadItem, SerializableAttrs):
     path: str
     op: Operation = Operation.ADD
 
@@ -99,25 +99,25 @@ class MessageSyncMessage(ThreadItem, SerializableAttrs['MessageSyncMessage']):
 
 
 @dataclass(kw_only=True)
-class MessageSyncEvent(SerializableAttrs['MessageSyncEvent']):
+class MessageSyncEvent(SerializableAttrs):
     iris: IrisPayload
     message: MessageSyncMessage
 
 
 @dataclass
-class ThreadSyncEvent(Thread, SerializableAttrs['ThreadSyncEvent']):
+class ThreadSyncEvent(Thread, SerializableAttrs):
     path: str
     op: Operation
 
 
 @dataclass(kw_only=True)
-class PubsubPublishMetadata(SerializableAttrs['PubsubPublishMetadata']):
+class PubsubPublishMetadata(SerializableAttrs):
     publish_time_ms: str
     topic_publish_id: int
 
 
 @dataclass(kw_only=True)
-class PubsubBasePayload(SerializableAttrs['PubsubBasePayload']):
+class PubsubBasePayload(SerializableAttrs):
     lazy: Optional[bool] = False
     event: str = "patch"
     publish_metadata: Optional[PubsubPublishMetadata] = None
@@ -125,7 +125,7 @@ class PubsubBasePayload(SerializableAttrs['PubsubBasePayload']):
 
 
 @dataclass(kw_only=True)
-class ActivityIndicatorData(SerializableAttrs['ActivityIndicatorData']):
+class ActivityIndicatorData(SerializableAttrs):
     timestamp: Union[int, str]
     sender_id: str
     ttl: int
@@ -141,7 +141,7 @@ class ActivityIndicatorData(SerializableAttrs['ActivityIndicatorData']):
 
 
 @dataclass(kw_only=True)
-class PubsubPayloadData(SerializableAttrs['PubsubPayloadData']):
+class PubsubPayloadData(SerializableAttrs):
     double_publish: bool = attr.ib(metadata={"json": "doublePublish"})
     value: ActivityIndicatorData
     path: str
@@ -149,12 +149,12 @@ class PubsubPayloadData(SerializableAttrs['PubsubPayloadData']):
 
 
 @dataclass(kw_only=True)
-class PubsubPayload(PubsubBasePayload, SerializableAttrs['PubsubPayload']):
+class PubsubPayload(PubsubBasePayload, SerializableAttrs):
     data: List[PubsubPayloadData] = attr.ib(factory=lambda: [])
 
 
 @dataclass(kw_only=True)
-class PubsubEvent(SerializableAttrs['PubsubEvent']):
+class PubsubEvent(SerializableAttrs):
     base: PubsubBasePayload
     data: PubsubPayloadData
     thread_id: str
@@ -162,7 +162,7 @@ class PubsubEvent(SerializableAttrs['PubsubEvent']):
 
 
 @dataclass(kw_only=True)
-class AppPresenceEvent(SerializableAttrs['AppPresenceEvent']):
+class AppPresenceEvent(SerializableAttrs):
     user_id: str
     is_active: bool
     last_activity_at_ms: str
@@ -170,24 +170,24 @@ class AppPresenceEvent(SerializableAttrs['AppPresenceEvent']):
 
 
 @dataclass(kw_only=True)
-class AppPresenceEventPayload(SerializableAttrs['AppPresenceEventPayload']):
+class AppPresenceEventPayload(SerializableAttrs):
     presence_event: AppPresenceEvent
 
 
 @dataclass(kw_only=True)
-class ZeroProductProvisioningEvent(SerializableAttrs['ZeroProductProvisioningEvent']):
+class ZeroProductProvisioningEvent(SerializableAttrs):
     device_id: str
     product_name: str
     zero_provisioned_time: str
 
 
 @dataclass(kw_only=True)
-class RealtimeZeroProvisionPayload(SerializableAttrs['RealtimeZeroProvisionPayload']):
+class RealtimeZeroProvisionPayload(SerializableAttrs):
     zero_product_provisioning_event: ZeroProductProvisioningEvent
 
 
 @dataclass(kw_only=True)
-class ClientConfigUpdateEvent(SerializableAttrs['ClientConfigUpdateEvent']):
+class ClientConfigUpdateEvent(SerializableAttrs):
     publish_id: str
     client_config_name: str
     backing: str  # might be "QE"
@@ -195,7 +195,7 @@ class ClientConfigUpdateEvent(SerializableAttrs['ClientConfigUpdateEvent']):
 
 
 @dataclass(kw_only=True)
-class ClientConfigUpdatePayload(SerializableAttrs['ClientConfigUpdatePayload']):
+class ClientConfigUpdatePayload(SerializableAttrs):
     client_config_update_event: ClientConfigUpdateEvent
 
 
@@ -204,7 +204,7 @@ RealtimeDirectData = ActivityIndicatorData
 
 
 @dataclass(kw_only=True)
-class RealtimeDirectEvent(SerializableAttrs['RealtimeDirectEvent']):
+class RealtimeDirectEvent(SerializableAttrs):
     op: Operation
     path: str
     value: RealtimeDirectData
@@ -217,7 +217,7 @@ class RealtimeDirectEvent(SerializableAttrs['RealtimeDirectEvent']):
 
 
 @dataclass(kw_only=True)
-class LiveVideoSystemComment(SerializableAttrs['LiveVideoSystemComment']):
+class LiveVideoSystemComment(SerializableAttrs):
     pk: str
     created_at: int
     text: str
@@ -226,7 +226,7 @@ class LiveVideoSystemComment(SerializableAttrs['LiveVideoSystemComment']):
 
 
 @dataclass(kw_only=True)
-class LiveVideoComment(SerializableAttrs['LiveVideoComment']):
+class LiveVideoComment(SerializableAttrs):
     pk: str
     user_id: str
     text: str
@@ -242,7 +242,7 @@ class LiveVideoComment(SerializableAttrs['LiveVideoComment']):
 
 
 @dataclass(kw_only=True)
-class LiveVideoCommentEvent(SerializableAttrs['LiveVideoCommentEvent']):
+class LiveVideoCommentEvent(SerializableAttrs):
     client_subscription_id: str
     live_seconds_per_comment: int
     comment_likes_enabled: bool
@@ -259,5 +259,5 @@ class LiveVideoCommentEvent(SerializableAttrs['LiveVideoCommentEvent']):
 
 
 @dataclass(kw_only=True)
-class LiveVideoCommentPayload(SerializableAttrs['LiveVideoCommentPayload']):
+class LiveVideoCommentPayload(SerializableAttrs):
     live_video_comment_event: LiveVideoCommentEvent
