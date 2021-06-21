@@ -1,5 +1,5 @@
 # mautrix-instagram - A Matrix-Instagram puppeting bridge.
-# Copyright (C) 2020 Tulir Asokan
+# Copyright (C) 2021 Tulir Asokan
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as published by
@@ -19,9 +19,8 @@ import random
 import time
 
 from attr import dataclass
-import attr
 
-from mautrix.types import SerializableAttrs
+from mautrix.types import SerializableAttrs, field
 
 from ..errors import IGNoCheckpointError, IGCookieNotFoundError, IGUserIDNotFoundError
 from ..types import ChallengeStateResponse
@@ -34,15 +33,15 @@ from .cookies import Cookies
 
 @dataclass
 class AndroidState(SerializableAttrs):
-    device: AndroidDevice = attr.ib(factory=lambda: AndroidDevice())
-    session: AndroidSession = attr.ib(factory=lambda: AndroidSession())
-    application: AndroidApplication = attr.ib(factory=lambda: AndroidApplication())
-    experiments: AndroidExperiments = attr.ib(factory=lambda: AndroidExperiments())
+    device: AndroidDevice = field(factory=lambda: AndroidDevice())
+    session: AndroidSession = field(factory=lambda: AndroidSession())
+    application: AndroidApplication = field(factory=lambda: AndroidApplication())
+    experiments: AndroidExperiments = field(factory=lambda: AndroidExperiments(), hidden=True)
     client_session_id_lifetime: int = 1_200_000
     pigeon_session_id_lifetime: int = 1_200_000
     challenge: Optional[ChallengeStateResponse] = None
-    _challenge_path: Optional[str] = attr.ib(default=None, metadata={"json": "challenge_path"})
-    cookies: Cookies = attr.ib(factory=lambda: Cookies())
+    _challenge_path: Optional[str] = field(default=None, json="challenge_path")
+    cookies: Cookies = field(factory=lambda: Cookies())
 
     def __attrs_post_init__(self) -> None:
         if self.application.APP_VERSION_CODE != AndroidApplication().APP_VERSION_CODE:
