@@ -574,6 +574,7 @@ class Portal(DBPortal, BasePortal):
             self.log.debug(f"Ignoring message {item.item_id} by {item.user_id}"
                            " as it was already handled (message.id found in database)")
         else:
+            self.log.debug(f"Starting handling of message {item.item_id} by {item.user_id}")
             self._msgid_dedup.appendleft(item.item_id)
             if self.backfill_lock.locked and sender.need_backfill_invite(self):
                 self.log.debug("Adding %s's default puppet to room for backfilling", sender.mxid)
