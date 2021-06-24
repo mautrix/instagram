@@ -172,10 +172,10 @@ class Portal(DBPortal, BasePortal):
         elif not sender.is_connected:
             await self._send_bridge_error("You're not connected to Instagram", confirmed=True)
             return
-        else:
-            self.log.debug(f"Handling Matrix message {event_id} from {sender.mxid}/{sender.igpk}")
         request_id = str(uuid4())
         self._reqid_dedup.add(request_id)
+        self.log.debug(f"Handling Matrix message {event_id} from {sender.mxid}/{sender.igpk} "
+                       f"with request ID {request_id}")
         if message.msgtype in (MessageType.EMOTE, MessageType.TEXT):
             text = message.body
             if message.msgtype == MessageType.EMOTE:
@@ -565,8 +565,8 @@ class Portal(DBPortal, BasePortal):
             # Parsing these items failed, they should have been logged already
             return
         elif item.client_context in self._reqid_dedup:
-            self.log.debug(f"Ignoring message {item.item_id} by {item.user_id}"
-                           " as it was sent by us (client_context in dedup queue)")
+            self.log.debug(f"Ignoring message {item.item_id} ({item.client_context}) by "
+                           f"{item.user_id} as it was sent by us (client_context in dedup queue)")
         elif item.item_id in self._msgid_dedup:
             self.log.debug(f"Ignoring message {item.item_id} by {item.user_id}"
                            " as it was already handled (message.id in dedup queue)")
@@ -574,7 +574,8 @@ class Portal(DBPortal, BasePortal):
             self.log.debug(f"Ignoring message {item.item_id} by {item.user_id}"
                            " as it was already handled (message.id found in database)")
         else:
-            self.log.debug(f"Starting handling of message {item.item_id} by {item.user_id}")
+            self.log.debug(f"Starting handling of message {item.item_id} ({item.client_context}) "
+                           f"by {item.user_id}")
             self._msgid_dedup.appendleft(item.item_id)
             if self.backfill_lock.locked and sender.need_backfill_invite(self):
                 self.log.debug("Adding %s's default puppet to room for backfilling", sender.mxid)
