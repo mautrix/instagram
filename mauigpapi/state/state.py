@@ -79,6 +79,10 @@ class AndroidState(SerializableAttrs):
     def challenge_path(self, val: str) -> None:
         self._challenge_path = val
 
+    @staticmethod
+    def gen_client_context() -> str:
+        return str((int(time.time() * 1000) << 22) + random.randint(10000, 5000000))
+
     def _gen_temp_uuid(self, seed: str, lifetime: int) -> UUID:
         rand = random.Random(f"{seed}{self.device.id}{round(time.time() * 1000 / lifetime)}")
         return UUID(int=rand.getrandbits(128), version=4)

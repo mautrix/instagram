@@ -16,11 +16,11 @@
 from typing import (Dict, Tuple, Optional, List, Deque, Set, Any, Union, AsyncGenerator,
                     Awaitable, NamedTuple, TYPE_CHECKING, cast)
 from collections import deque
-from uuid import uuid4
 from io import BytesIO
 import mimetypes
 import asyncio
 
+import asyncpg
 import magic
 
 from mauigpapi.types import (Thread, ThreadUser, ThreadItem, RegularMediaItem, MediaType,
@@ -172,7 +172,7 @@ class Portal(DBPortal, BasePortal):
         elif not sender.is_connected:
             await self._send_bridge_error("You're not connected to Instagram", confirmed=True)
             return
-        request_id = str(uuid4())
+        request_id = sender.state.gen_client_context()
         self._reqid_dedup.add(request_id)
         self.log.debug(f"Handling Matrix message {event_id} from {sender.mxid}/{sender.igpk} "
                        f"with request ID {request_id}")
@@ -222,11 +222,16 @@ class Portal(DBPortal, BasePortal):
             await self._send_bridge_error(resp.payload.message)
         else:
             self._msgid_dedup.appendleft(resp.payload.item_id)
-            await DBMessage(mxid=event_id, mx_room=self.mxid, item_id=resp.payload.item_id,
-                            receiver=self.receiver, sender=sender.igpk).insert()
+            try:
+                await DBMessage(mxid=event_id, mx_room=self.mxid, item_id=resp.payload.item_id,
+                                receiver=self.receiver, sender=sender.igpk).insert()
+            except asyncpg.UniqueViolationError as e:
+                self.log.warning(f"Error while persisting {event_id} "
+                                 f"({resp.payload.client_context}) -> {resp.payload.item_id}: {e}")
             self._reqid_dedup.remove(request_id)
             await self._send_delivery_receipt(event_id)
-            self.log.debug(f"Handled Matrix message {event_id} -> {resp.payload.item_id}")
+            self.log.debug(f"Handled Matrix message {event_id} ({resp.payload.client_context}) "
+                           f"-> {resp.payload.item_id}")
 
     async def handle_matrix_reaction(self, sender: 'u.User', event_id: EventID,
                                      reacting_to: EventID, emoji: str) -> None:
@@ -568,11 +573,11 @@ class Portal(DBPortal, BasePortal):
             self.log.debug(f"Ignoring message {item.item_id} ({item.client_context}) by "
                            f"{item.user_id} as it was sent by us (client_context in dedup queue)")
         elif item.item_id in self._msgid_dedup:
-            self.log.debug(f"Ignoring message {item.item_id} by {item.user_id}"
-                           " as it was already handled (message.id in dedup queue)")
+            self.log.debug(f"Ignoring message {item.item_id} ({item.client_context}) by "
+                           f"{item.user_id} as it was already handled (message.id in dedup queue)")
         elif await DBMessage.get_by_item_id(item.item_id, self.receiver) is not None:
-            self.log.debug(f"Ignoring message {item.item_id} by {item.user_id}"
-                           " as it was already handled (message.id found in database)")
+            self.log.debug(f"Ignoring message {item.item_id} ({item.client_context}) by "
+                           f"{item.user_id} as it was already handled (message.id in database)")
         else:
             self.log.debug(f"Starting handling of message {item.item_id} ({item.client_context}) "
                            f"by {item.user_id}")

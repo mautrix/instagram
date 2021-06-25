@@ -18,9 +18,10 @@ from typing import (Union, Set, Optional, Any, Dict, Awaitable, Type, List, Type
 from collections import defaultdict
 from socket import socket, error as SocketError
 from uuid import uuid4
-import logging
 import urllib.request
+import logging
 import asyncio
+import random
 import zlib
 import time
 import json
@@ -534,14 +535,13 @@ class AndroidMQTT:
             self._client._keepalive = state.keep_alive_timeout
 
     async def send_command(self, thread_id: str, action: ThreadAction,
-                           client_context: Optional[str] = None,
-                           offline_threading_id: Optional[str] = None, **kwargs: Any
+                           client_context: Optional[str] = None, **kwargs: Any
                            ) -> Optional[CommandResponse]:
-        client_context = client_context or str(uuid4())
+        client_context = client_context or self.state.gen_client_context()
         req = {
             "thread_id": thread_id,
             "client_context": client_context,
-            "offline_threading_id": offline_threading_id or client_context,
+            "offline_threading_id": client_context,
             "action": action.value,
             # "device_id": self.state.cookies["ig_did"],
             **kwargs,
@@ -561,97 +561,75 @@ class AndroidMQTT:
             return CommandResponse.parse_json(resp.payload.decode("utf-8"))
 
     def send_item(self, thread_id: str, item_type: ThreadItemType, shh_mode: bool = False,
-                  client_context: Optional[str] = None, offline_threading_id: Optional[str] = None,
-                  **kwargs: Any) -> Awaitable[CommandResponse]:
+                  client_context: Optional[str] = None, **kwargs: Any
+                  ) -> Awaitable[CommandResponse]:
         return self.send_command(thread_id, item_type=item_type.value,
                                  is_shh_mode=str(int(shh_mode)), action=ThreadAction.SEND_ITEM,
-                                 client_context=client_context,
-                                 offline_threading_id=offline_threading_id, **kwargs)
+                                 client_context=client_context, **kwargs)
 
     def send_hashtag(self, thread_id: str, hashtag: str, text: str = "", shh_mode: bool = False,
-                     client_context: Optional[str] = None,
-                     offline_threading_id: Optional[str] = None) -> Awaitable[CommandResponse]:
+                     client_context: Optional[str] = None) -> Awaitable[CommandResponse]:
         return self.send_item(thread_id, text=text, item_id=hashtag, shh_mode=shh_mode,
-                              item_type=ThreadItemType.HASHTAG, client_context=client_context,
-                              offline_threading_id=offline_threading_id)
+                              item_type=ThreadItemType.HASHTAG, client_context=client_context)
 
     def send_like(self, thread_id: str, shh_mode: bool = False,
-                  client_context: Optional[str] = None, offline_threading_id: Optional[str] = None,
-                  ) -> Awaitable[CommandResponse]:
+                  client_context: Optional[str] = None) -> Awaitable[CommandResponse]:
         return self.send_item(thread_id, shh_mode=shh_mode, item_type=ThreadItemType.LIKE,
-                              client_context=client_context,
-                              offline_threading_id=offline_threading_id)
+                              client_context=client_context)
 
     def send_location(self, thread_id: str, venue_id: str, text: str = "",
-                      shh_mode: bool = False, client_context: Optional[str] = None,
-                      offline_threading_id: Optional[str] = None,
+                      shh_mode: bool = False, client_context: Optional[str] = None
                       ) -> Awaitable[CommandResponse]:
         return self.send_item(thread_id, text=text, item_id=venue_id, shh_mode=shh_mode,
-                              item_type=ThreadItemType.LOCATION, client_context=client_context,
-                              offline_threading_id=offline_threading_id)
+                              item_type=ThreadItemType.LOCATION, client_context=client_context)
 
     def send_media(self, thread_id: str, media_id: str, text: str = "", shh_mode: bool = False,
-                   client_context: Optional[str] = None,
-                   offline_threading_id: Optional[str] = None) -> Awaitable[CommandResponse]:
+                   client_context: Optional[str] = None) -> Awaitable[CommandResponse]:
         return self.send_item(thread_id, text=text, media_id=media_id, shh_mode=shh_mode,
-                              item_type=ThreadItemType.MEDIA_SHARE, client_context=client_context,
-                              offline_threading_id=offline_threading_id)
+                              item_type=ThreadItemType.MEDIA_SHARE, client_context=client_context)
 
     def send_profile(self, thread_id: str, user_id: str, text: str = "", shh_mode: bool = False,
-                     client_context: Optional[str] = None,
-                     offline_threading_id: Optional[str] = None) -> Awaitable[CommandResponse]:
+                     client_context: Optional[str] = None) -> Awaitable[CommandResponse]:
         return self.send_item(thread_id, text=text, item_id=user_id, shh_mode=shh_mode,
-                              item_type=ThreadItemType.PROFILE, client_context=client_context,
-                              offline_threading_id=offline_threading_id)
+                              item_type=ThreadItemType.PROFILE, client_context=client_context)
 
     def send_reaction(self, thread_id: str, emoji: str, item_id: str,
                       reaction_status: ReactionStatus = ReactionStatus.CREATED,
                       target_item_type: ThreadItemType = ThreadItemType.TEXT,
-                      shh_mode: bool = False, client_context: Optional[str] = None,
-                      offline_threading_id: Optional[str] = None) -> Awaitable[CommandResponse]:
+                      shh_mode: bool = False, client_context: Optional[str] = None
+                      ) -> Awaitable[CommandResponse]:
         return self.send_item(thread_id, reaction_status=reaction_status.value, node_type="item",
                               reaction_type="like", target_item_type=target_item_type.value,
                               emoji=emoji, item_id=item_id, reaction_action_source="double_tap",
                               shh_mode=shh_mode, item_type=ThreadItemType.REACTION,
-                              client_context=client_context,
-                              offline_threading_id=offline_threading_id)
+                              client_context=client_context)
 
     def send_user_story(self, thread_id: str, media_id: str, text: str = "",
-                        shh_mode: bool = False, client_context: Optional[str] = None,
-                        offline_threading_id: Optional[str] = None) -> Awaitable[CommandResponse]:
+                        shh_mode: bool = False, client_context: Optional[str] = None
+                        ) -> Awaitable[CommandResponse]:
         return self.send_item(thread_id, text=text, item_id=media_id, shh_mode=shh_mode,
-                              item_type=ThreadItemType.REEL_SHARE, client_context=client_context,
-                              offline_threading_id=offline_threading_id)
+                              item_type=ThreadItemType.REEL_SHARE, client_context=client_context)
 
     def send_text(self, thread_id: str, text: str = "", shh_mode: bool = False,
-                  client_context: Optional[str] = None, offline_threading_id: Optional[str] = None
-                  ) -> Awaitable[CommandResponse]:
+                  client_context: Optional[str] = None) -> Awaitable[CommandResponse]:
         return self.send_item(thread_id, text=text, shh_mode=shh_mode,
-                              item_type=ThreadItemType.TEXT, client_context=client_context,
-                              offline_threading_id=offline_threading_id)
+                              item_type=ThreadItemType.TEXT, client_context=client_context)
 
-    def mark_seen(self, thread_id: str, item_id: str, client_context: Optional[str] = None,
-                  offline_threading_id: Optional[str] = None) -> Awaitable[None]:
+    def mark_seen(self, thread_id: str, item_id: str, client_context: Optional[str] = None
+                  ) -> Awaitable[None]:
         return self.send_command(thread_id, item_id=item_id, action=ThreadAction.MARK_SEEN,
-                                 client_context=client_context,
-                                 offline_threading_id=offline_threading_id)
+                                 client_context=client_context)
 
     def mark_visual_item_seen(self, thread_id: str, item_id: str,
-                              client_context: Optional[str] = None,
-                              offline_threading_id: Optional[str] = None
-                              ) -> Awaitable[CommandResponse]:
+                              client_context: Optional[str] = None) -> Awaitable[CommandResponse]:
         return self.send_command(thread_id, item_id=item_id,
                                  action=ThreadAction.MARK_VISUAL_ITEM_SEEN,
-                                 client_context=client_context,
-                                 offline_threading_id=offline_threading_id)
+                                 client_context=client_context)
 
     def indicate_activity(self, thread_id: str, activity_status: TypingStatus = TypingStatus.TEXT,
-                          client_context: Optional[str] = None,
-                          offline_threading_id: Optional[str] = None
-                          ) -> Awaitable[CommandResponse]:
+                          client_context: Optional[str] = None) -> Awaitable[CommandResponse]:
         return self.send_command(thread_id, activity_status=activity_status.value,
                                  action=ThreadAction.INDICATE_ACTIVITY,
-                                 client_context=client_context,
-                                 offline_threading_id=offline_threading_id)
+                                 client_context=client_context)
 
     # endregion

@@ -88,7 +88,7 @@ class ThreadAPI(BaseAndroidAPI):
 
     async def broadcast(self, thread_id: str, item_type: ThreadItemType, signed: bool = False,
                         client_context: Optional[str] = None, **kwargs) -> CommandResponse:
-        client_context = client_context or str(uuid4())
+        client_context = client_context or self.state.gen_client_context()
         form = {
             "action": ThreadAction.SEND_ITEM.value,
             "send_attribution": "inbox",
