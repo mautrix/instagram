@@ -1,4 +1,4 @@
-FROM alpine:3.13
+FROM alpine:3.14
 
 ARG TARGETARCH=amd64
 
@@ -14,7 +14,7 @@ RUN apk add --no-cache \
       ca-certificates \
       su-exec \
       # encryption
-      olm-dev \
+      py3-olm \
       py3-cffi \
       py3-pycryptodome \
       py3-unpaddedbase64 \
