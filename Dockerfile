@@ -10,6 +10,8 @@ RUN apk add --no-cache \
       py3-magic \
       py3-ruamel.yaml \
       py3-commonmark \
+      py3-prometheus-client \
+      py3-paho-mqtt \
       # Other dependencies
       ca-certificates \
       su-exec \
