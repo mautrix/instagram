@@ -502,8 +502,12 @@ class Portal(DBPortal, BasePortal):
         await self._add_instagram_reply(content, item.replied_to_message)
         return await self._send_message(intent, content, timestamp=item.timestamp // 1000)
 
-    async def _handle_instagram_location(self, intent: IntentAPI, item: ThreadItem) -> EventID:
+    async def _handle_instagram_location(self, intent: IntentAPI, item: ThreadItem
+                                         ) -> Optional[EventID]:
         loc = item.location
+        if not loc.lng or not loc.lat:
+            # TODO handle somehow
+            return None
         long_char = "E" if loc.lng > 0 else "W"
         lat_char = "N" if loc.lat > 0 else "S"
 
@@ -600,6 +604,7 @@ class Portal(DBPortal, BasePortal):
                 event_id = await self._handle_instagram_reel_share(source, intent, item)
             elif item.media_share or item.story_share:
                 event_id = await self._handle_instagram_media_share(source, intent, item)
+            # TODO handle item.clip?
             if item.text:
                 event_id = await self._handle_instagram_text(intent, item, item.text)
             elif item.like:

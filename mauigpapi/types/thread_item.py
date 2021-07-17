@@ -65,6 +65,7 @@ class ThreadItemType(SerializableEnum):
     AR_EFFECT = "ar_effect"
     SELFIE_STICKER = "selfie_sticker"
     REACTION = "reaction"
+    CLIP = "clip"
 
 
 @dataclass(kw_only=True)
@@ -207,8 +208,9 @@ class Location(SerializableAttrs):
     name: str
     address: str
     city: str
-    lng: float
-    lat: float
+    lng: Optional[float] = None
+    lat: Optional[float] = None
+    is_eligible_for_guides: bool = False
 
 
 @dataclass(kw_only=True)
@@ -409,13 +411,15 @@ class ReelShareItem(SerializableAttrs):
 @dataclass
 class StoryShareItem(SerializableAttrs):
     text: str
-    is_reel_persisted: bool
-    # TODO enum?
-    reel_type: str  # user_reel
-    reel_id: str
-    # TODO enum?
-    story_share_type: str  # default
     media: Union[ReelMediaShareItem, ExpiredMediaItem]
+
+    # Only present when not expired
+    is_reel_persisted: Optional[bool] = None
+    # TODO enum?
+    reel_type: Optional[str] = None  # user_reel
+    reel_id: Optional[str] = None
+    # TODO enum?
+    story_share_type: Optional[str] = None  # default
 
     # Only present when expired
     message: Optional[str] = None
@@ -430,6 +434,12 @@ class StoryShareItem(SerializableAttrs):
         else:
             data["media"] = ReelMediaShareItem.deserialize(data["media"])
         return _dict_to_attrs(cls, data)
+
+
+@dataclass
+class ClipItem(SerializableAttrs):
+    # TODO there are some additional fields in clips
+    clip: MediaShareItem
 
 
 @dataclass(kw_only=True)
@@ -458,6 +468,7 @@ class ThreadItem(SerializableAttrs):
     reactions: Optional[Reactions] = None
     like: Optional[str] = None
     link: Optional[LinkItem] = None
+    clip: Optional[ClipItem] = None
 
     @classmethod
     def deserialize(cls, data: JSON, catch_errors: bool = True) -> Union['ThreadItem', Obj]:
