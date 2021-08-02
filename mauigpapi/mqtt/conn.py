@@ -235,12 +235,12 @@ class AndroidMQTT:
     def _parse_direct_thread_path(self, path: str) -> dict:
         try:
             blank, direct_v2, threads, thread_id, *rest = path.split("/")
-            assert blank == ""
-            assert direct_v2 == "direct_v2"
-            assert threads == "threads"
-        except (AssertionError, ValueError, IndexError) as e:
+        except (ValueError, IndexError) as e:
             self.log.debug(f"Got {e!r} while parsing path {path}")
             raise
+        if (blank, direct_v2, threads) != ("", "direct_v2", "threads"):
+            self.log.debug(f"Got unexpected first parts in direct thread path {path}")
+            raise ValueError("unexpected first three parts in _parse_direct_thread_path")
         additional = {
             "thread_id": thread_id
         }
