@@ -62,7 +62,8 @@ class Thread(SerializableAttrs):
     thread_type: str
     viewer_id: int
     thread_title: str
-    folder: int
+    # This seems to be missing in some cases
+    folder: Optional[int] = None
     vc_muted: bool
     is_group: bool
     mentions_muted: bool
