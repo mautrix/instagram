@@ -28,8 +28,9 @@ from mauigpapi.errors import (IGNotLoggedInError, MQTTNotLoggedIn, MQTTNotConnec
 from mautrix.bridge import BaseUser, BridgeState, async_getter_lock
 from mautrix.types import UserID, RoomID, EventID, TextMessageEventContent, MessageType
 from mautrix.appservice import AppService
-from mautrix.util.opt_prometheus import Summary, Gauge, async_time
+from mautrix.util.bridge_state import BridgeStateEvent
 from mautrix.util.logging import TraceLogger
+from mautrix.util.opt_prometheus import Summary, Gauge, async_time
 
 from .db import User as DBUser, Portal as DBPortal
 from .config import Config
@@ -129,6 +130,7 @@ class User(DBUser, BaseUser):
         except IGNotLoggedInError as e:
             self.log.warning(f"Failed to connect to Instagram: {e}, logging out")
             await self.send_bridge_notice(f"You have been logged out of Instagram: {e!s}",
+                                          state_event=BridgeStateEvent.BAD_CREDENTIALS,
                                           important=True, error_code="ig-auth-error",
                                           error_message=str(e))
             await self.logout(from_error=True)
@@ -158,7 +160,7 @@ class User(DBUser, BaseUser):
         self._track_metric(METRIC_CONNECTED, True)
         self._is_connected = True
         await self.send_bridge_notice("Connected to Instagram")
-        await self.push_bridge_state(ok=True)
+        await self.push_bridge_state(BridgeStateEvent.CONNECTED)
 
     async def on_disconnect(self, evt: Disconnect) -> None:
         self.log.debug("Disconnected from Instagram")
@@ -184,18 +186,13 @@ class User(DBUser, BaseUser):
         state.remote_id = str(self.igpk)
         state.remote_name = f"@{self.username}"
 
-    async def get_bridge_state(self) -> BridgeState:
-        if not self.client:
-            return BridgeState(ok=False, error="logged-out")
-        elif not self._listen_task or self._listen_task.done() or not self.is_connected:
-            return BridgeState(ok=False, error="ig-no-mqtt")
-        return BridgeState(ok=True)
-
     async def send_bridge_notice(self, text: str, edit: Optional[EventID] = None,
+                                 state_event: Optional[BridgeStateEvent] = None,
                                  important: bool = False, error_code: Optional[str] = None,
                                  error_message: Optional[str] = None) -> Optional[EventID]:
-        if error_code:
-            await self.push_bridge_state(ok=False, error=error_code, message=error_message)
+        if state_event:
+            await self.push_bridge_state(state_event, error=error_code,
+                                         message=error_message if error_code else text)
         if self.config["bridge.disable_bridge_notices"]:
             return None
         if not important and not self.config["bridge.unimportant_bridge_notices"]:
@@ -275,6 +272,7 @@ class User(DBUser, BaseUser):
         limit = self.config["bridge.chat_sync_limit"]
         min_active_at = (time.time() * 1_000_000) - max_age
         i = 0
+        await self.push_bridge_state(BridgeStateEvent.BACKFILLING)
         async for thread in self.client.iter_inbox(start_at=resp):
             try:
                 await self._sync_thread(thread, min_active_at)
@@ -314,16 +312,19 @@ class User(DBUser, BaseUser):
             await self.refresh()
         except (MQTTNotConnected, MQTTNotLoggedIn) as e:
             await self.send_bridge_notice(f"Error in listener: {e}", important=True,
+                                          state_event=BridgeStateEvent.UNKNOWN_ERROR,
                                           error_code="ig-connection-error")
             self.mqtt.disconnect()
         except Exception:
             self.log.exception("Fatal error in listener")
             await self.send_bridge_notice("Fatal error in listener (see logs for more info)",
+                                          state_event=BridgeStateEvent.UNKNOWN_ERROR,
                                           important=True, error_code="ig-connection-error")
             self.mqtt.disconnect()
         else:
             if not self.shutdown:
                 await self.send_bridge_notice("Instagram connection closed without error",
+                                              state_event=BridgeStateEvent.UNKNOWN_ERROR,
                                               error_code="ig-disconnected")
         finally:
             self._listen_task = None
@@ -361,7 +362,7 @@ class User(DBUser, BaseUser):
                 pass
             self.igpk = None
         else:
-            await self.push_bridge_state(ok=False, error="logged-out")
+            await self.push_bridge_state(BridgeStateEvent.LOGGED_OUT)
         self.client = None
         self.mqtt = None
         self.state = None
