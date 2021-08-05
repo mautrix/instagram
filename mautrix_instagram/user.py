@@ -130,7 +130,6 @@ class User(DBUser, BaseUser):
         except IGNotLoggedInError as e:
             self.log.warning(f"Failed to connect to Instagram: {e}, logging out")
             await self.send_bridge_notice(f"You have been logged out of Instagram: {e!s}",
-                                          state_event=BridgeStateEvent.BAD_CREDENTIALS,
                                           important=True, error_code="ig-auth-error",
                                           error_message=str(e))
             await self.logout(from_error=True)
@@ -353,6 +352,7 @@ class User(DBUser, BaseUser):
         self._track_metric(METRIC_CONNECTED, False)
         self._track_metric(METRIC_LOGGED_IN, False)
         if not from_error:
+            await self.push_bridge_state(BridgeStateEvent.LOGGED_OUT)
             puppet = await pu.Puppet.get_by_pk(self.igpk, create=False)
             if puppet and puppet.is_real_user:
                 await puppet.switch_mxid(None, None)
@@ -362,7 +362,7 @@ class User(DBUser, BaseUser):
                 pass
             self.igpk = None
         else:
-            await self.push_bridge_state(BridgeStateEvent.LOGGED_OUT)
+            await self.push_bridge_state(BridgeStateEvent.BAD_CREDENTIALS)
         self.client = None
         self.mqtt = None
         self.state = None
