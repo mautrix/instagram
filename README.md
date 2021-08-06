@@ -1,8 +1,8 @@
 # mautrix-instagram
-![Languages](https://img.shields.io/github/languages/top/tulir/mautrix-instagram.svg)
-[![License](https://img.shields.io/github/license/tulir/mautrix-instagram.svg)](LICENSE)
-[![Release](https://img.shields.io/github/release/tulir/mautrix-instagram/all.svg)](https://github.com/tulir/mautrix-instagram/releases)
-[![GitLab CI](https://mau.dev/tulir/mautrix-instagram/badges/master/pipeline.svg)](https://mau.dev/tulir/mautrix-instagram/container_registry)
+![Languages](https://img.shields.io/github/languages/top/mautrix/instagram.svg)
+[![License](https://img.shields.io/github/license/mautrix/instagram.svg)](LICENSE)
+[![Release](https://img.shields.io/github/release/mautrix/instagram/all.svg)](https://github.com/mautrix/instagram/releases)
+[![GitLab CI](https://mau.dev/mautrix/instagram/badges/master/pipeline.svg)](https://mau.dev/mautrix/instagram/container_registry)
 
 A Matrix-Instagram DM puppeting bridge.
 
@@ -16,7 +16,7 @@ Some quick links:
 * Basic usage: [Authentication](https://docs.mau.fi/bridges/python/instagram/authentication.html)
 
 ### Features & Roadmap
-[ROADMAP.md](https://github.com/tulir/mautrix-instagram/blob/master/ROADMAP.md)
+[ROADMAP.md](https://github.com/mautrix/instagram/blob/master/ROADMAP.md)
 contains a general overview of what is supported by the bridge.
 
 ## Discussion

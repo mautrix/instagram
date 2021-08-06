@@ -35,7 +35,7 @@ linkified_version = {linkified_version!r}
 setuptools.setup(
     name="mautrix-instagram",
     version=version,
-    url="https://github.com/tulir/mautrix-instagram",
+    url="https://github.com/mautrix/instagram",
 
     author="Tulir Asokan",
     author_email="tulir@maunium.net",
