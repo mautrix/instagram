@@ -82,9 +82,11 @@ class Portal(DBPortal, BasePortal):
     _typing: Set[UserID]
 
     def __init__(self, thread_id: str, receiver: int, other_user_pk: Optional[int],
-                 mxid: Optional[RoomID] = None, name: Optional[str] = None, encrypted: bool = False
-                 ) -> None:
-        super().__init__(thread_id, receiver, other_user_pk, mxid, name, encrypted)
+                 mxid: Optional[RoomID] = None, name: Optional[str] = None,
+                 avatar_url: Optional[ContentURI] = None, encrypted: bool = False,
+                 name_set: bool = False, avatar_set: bool = False) -> None:
+        super().__init__(thread_id, receiver, other_user_pk, mxid, name, avatar_url, encrypted,
+                         name_set, avatar_set)
         self._create_room_lock = asyncio.Lock()
         self.log = self.log.getChild(thread_id)
         self._msgid_dedup = deque(maxlen=100)
@@ -686,37 +688,62 @@ class Portal(DBPortal, BasePortal):
 
     async def update_info(self, thread: Thread, source: 'u.User') -> None:
         changed = await self._update_name(self._get_thread_name(thread))
+        changed = await self._update_participants(thread.users, source) or changed
         if changed:
             await self.update_bridge_info()
             await self.update()
-        await self._update_participants(thread.users, source)
         # TODO update power levels with thread.admin_user_ids
 
     async def _update_name(self, name: str) -> bool:
-        if self.name != name and name:
+        if name and (self.name != name or not self.name_set):
             self.name = name
             if self.mxid:
-                await self.main_intent.set_room_name(self.mxid, name)
+                try:
+                    await self.main_intent.set_room_name(self.mxid, name)
+                    self.name_set = True
+                except Exception:
+                    self.log.exception("Failed to update name")
+                    self.name_set = False
             return True
         return False
 
-    async def _update_participants(self, users: List[ThreadUser], source: 'u.User') -> None:
-        if not self.mxid:
-            return
+    async def _update_photo_from_puppet(self, puppet: 'p.Puppet') -> bool:
+        if not self.private_chat_portal_meta and not self.encrypted:
+            return False
+        if self.avatar_set and self.avatar_url == puppet.photo_mxc:
+            return False
+        self.avatar_url = puppet.photo_mxc
+        if self.mxid:
+            try:
+                await self.main_intent.set_room_avatar(self.mxid, puppet.photo_mxc)
+                self.avatar_set = True
+            except Exception:
+                self.log.exception("Failed to set room avatar")
+                self.avatar_set = False
+        return True
+
+    async def _update_participants(self, users: List[ThreadUser], source: 'u.User') -> bool:
+        meta_changed = False
 
         # Make sure puppets who should be here are here
         for user in users:
             puppet = await p.Puppet.get_by_pk(user.pk)
             await puppet.update_info(user, source)
-            await puppet.intent_for(self).ensure_joined(self.mxid)
+            if self.mxid:
+                await puppet.intent_for(self).ensure_joined(self.mxid)
+            if puppet.pk == self.other_user_pk:
+                meta_changed = await self._update_photo_from_puppet(puppet)
 
-        # Kick puppets who shouldn't be here
-        current_members = {int(user.pk) for user in users}
-        for user_id in await self.main_intent.get_room_members(self.mxid):
-            pk = p.Puppet.get_id_from_mxid(user_id)
-            if pk and pk not in current_members and pk != self.other_user_pk:
-                await self.main_intent.kick_user(self.mxid, p.Puppet.get_mxid_from_id(pk),
-                                                 reason="User had left this Instagram DM")
+        if self.mxid:
+            # Kick puppets who shouldn't be here
+            current_members = {int(user.pk) for user in users}
+            for user_id in await self.main_intent.get_room_members(self.mxid):
+                pk = p.Puppet.get_id_from_mxid(user_id)
+                if pk and pk not in current_members and pk != self.other_user_pk:
+                    await self.main_intent.kick_user(self.mxid, p.Puppet.get_mxid_from_id(pk),
+                                                     reason="User had left this Instagram DM")
+
+        return meta_changed
 
     async def _update_read_receipts(self, receipts: Dict[Union[int, str], ThreadUserLastSeenAt]
                                     ) -> None:
@@ -804,6 +831,7 @@ class Portal(DBPortal, BasePortal):
             "channel": {
                 "id": self.thread_id,
                 "displayname": self.name,
+                "avatar_url": self.avatar_url,
             }
         }
 
