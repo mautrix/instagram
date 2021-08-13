@@ -14,7 +14,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from typing import (Dict, Tuple, Optional, List, Deque, Set, Any, Union, AsyncGenerator,
-                    Awaitable, NamedTuple, TYPE_CHECKING, cast)
+                    Awaitable, NamedTuple, Callable, TYPE_CHECKING, cast)
 from collections import deque
 from io import BytesIO
 import mimetypes
@@ -58,6 +58,8 @@ FileInfo = Union[AudioInfo, ImageInfo, VideoInfo]
 ReuploadedMediaInfo = NamedTuple('ReuploadedMediaInfo', mxc=Optional[ContentURI], url=str,
                                  decryption_info=Optional[EncryptedFile], msgtype=MessageType,
                                  file_name=str, info=FileInfo)
+MediaData = Union[RegularMediaItem, ExpiredMediaItem]
+MediaUploadFunc = Callable[['u.User', MediaData, IntentAPI], Awaitable[ReuploadedMediaInfo]]
 
 
 class Portal(DBPortal, BasePortal):
@@ -319,42 +321,47 @@ class Portal(DBPortal, BasePortal):
     # region Instagram event handling
 
     async def _reupload_instagram_media(self, source: 'u.User', media: RegularMediaItem,
-                                        intent: IntentAPI) -> Optional[ReuploadedMediaInfo]:
+                                        intent: IntentAPI) -> ReuploadedMediaInfo:
         if media.media_type == MediaType.IMAGE:
             image = media.best_image
             if not image:
-                return None
+                raise ValueError("Attachment not available: didn't find photo URL")
             url = image.url
             msgtype = MessageType.IMAGE
             info = ImageInfo(height=image.height, width=image.width)
         elif media.media_type == MediaType.VIDEO:
             video = media.best_video
             if not video:
-                return None
+                raise ValueError("Attachment not available: didn't find video URL")
             url = video.url
             msgtype = MessageType.VIDEO
             info = VideoInfo(height=video.height, width=video.width)
         else:
-            return None
+            raise ValueError("Attachment not available: unsupported media type")
         return await self._reupload_instagram_file(source, url, msgtype, info, intent)
 
     async def _reupload_instagram_animated(self, source: 'u.User', media: AnimatedMediaItem,
-                                           intent: IntentAPI) -> Optional[ReuploadedMediaInfo]:
+                                           intent: IntentAPI) -> ReuploadedMediaInfo:
         url = media.images.fixed_height.webp
         info = ImageInfo(height=int(media.images.fixed_height.height),
                          width=int(media.images.fixed_height.width))
         return await self._reupload_instagram_file(source, url, MessageType.IMAGE, info, intent)
 
     async def _reupload_instagram_voice(self, source: 'u.User', media: VoiceMediaItem,
-                                        intent: IntentAPI) -> Optional[ReuploadedMediaInfo]:
+                                        intent: IntentAPI) -> ReuploadedMediaInfo:
         url = media.media.audio.audio_src
         info = AudioInfo(duration=media.media.audio.duration)
         return await self._reupload_instagram_file(source, url, MessageType.AUDIO, info, intent)
 
     async def _reupload_instagram_file(self, source: 'u.User', url: str, msgtype: MessageType,
                                        info: FileInfo, intent: IntentAPI
-                                       ) -> Optional[ReuploadedMediaInfo]:
+                                       ) -> ReuploadedMediaInfo:
         async with await source.client.raw_http_get(url) as resp:
+            length = int(resp.headers["Content-Length"])
+            if length > self.matrix.media_config.upload_size:
+                self.log.debug(
+                    f"{url} was too large ({length} > {self.matrix.media_config.upload_size})")
+                raise ValueError("Attachment not available: too large")
             data = await resp.read()
             info.mimetype = resp.headers["Content-Type"] or magic.from_buffer(data, mime=True)
         info.size = len(data)
@@ -385,8 +392,7 @@ class Portal(DBPortal, BasePortal):
         return ReuploadedMediaInfo(mxc=mxc, url=url, decryption_info=decryption_info,
                                    file_name=file_name, msgtype=msgtype, info=info)
 
-    async def _handle_instagram_media(self, source: 'u.User', intent: IntentAPI, item: ThreadItem
-                                      ) -> Optional[EventID]:
+    def _get_instagram_media_info(self, item: ThreadItem) -> Tuple[MediaUploadFunc, MediaData]:
         # TODO maybe use a dict and item.item_type instead of a ton of ifs
         method = self._reupload_instagram_media
         if item.media:
@@ -406,22 +412,31 @@ class Portal(DBPortal, BasePortal):
         elif item.media_share:
             media_data = item.media_share
         else:
-            media_data = None
+            self.log.debug(f"Unknown media type in {item}")
+            raise ValueError("Attachment not available: unsupported media type")
         if not media_data:
-            self.log.debug(f"Unsupported media type in item {item}")
-            return None
+            self.log.debug(f"Didn't get media_data in {item}")
+            raise ValueError("Attachment not available: unsupported media type")
         elif isinstance(media_data, ExpiredMediaItem):
             self.log.debug(f"Expired media in item {item}")
-            # TODO send error message
-            return None
-        reuploaded = await method(source, media_data, intent)
-        if not reuploaded:
-            self.log.debug(f"Upload of {media_data} failed")
-            # TODO error message?
-            return None
-        content = MediaMessageEventContent(body=reuploaded.file_name, external_url=reuploaded.url,
-                                           url=reuploaded.mxc, file=reuploaded.decryption_info,
-                                           info=reuploaded.info, msgtype=reuploaded.msgtype)
+            raise ValueError("Attachment not available: media expired")
+        return method, media_data
+
+    async def _handle_instagram_media(self, source: 'u.User', intent: IntentAPI, item: ThreadItem
+                                      ) -> Optional[EventID]:
+        try:
+            reupload_func, media_data = self._get_instagram_media_info(item)
+            reuploaded = await reupload_func(source, media_data, intent)
+        except ValueError as e:
+            content = TextMessageEventContent(body=str(e), msgtype=MessageType.NOTICE)
+        except Exception:
+            self.log.warning("Failed to upload media", exc_info=True)
+            content = TextMessageEventContent(body="Attachment not available: failed to copy file",
+                                              msgtype=MessageType.NOTICE)
+        else:
+            content = MediaMessageEventContent(
+                body=reuploaded.file_name, external_url=reuploaded.url, url=reuploaded.mxc,
+                file=reuploaded.decryption_info, info=reuploaded.info, msgtype=reuploaded.msgtype)
         await self._add_instagram_reply(content, item.replied_to_message)
         return await self._send_message(intent, content, timestamp=item.timestamp // 1000)
 
@@ -431,7 +446,7 @@ class Portal(DBPortal, BasePortal):
         user_text = f"@{share_item.user.username}"
         user_link = (f'<a href="https://www.instagram.com/{share_item.user.username}/">'
                      f'{user_text}</a>')
-        item_type_name = "photo" if item.media_share else "story"
+        item_type_name = item.media_share.media_type.human_name if item.media_share else "story"
         prefix = TextMessageEventContent(msgtype=MessageType.NOTICE, format=Format.HTML,
                                          body=f"Sent {user_text}'s {item_type_name}",
                                          formatted_body=f"Sent {user_link}'s {item_type_name}")

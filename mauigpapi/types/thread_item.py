@@ -126,6 +126,11 @@ class MediaType(SerializableEnum):
     AUDIO = 11
     SHOWREEL_NATIVE = 12
 
+    @property
+    def human_name(self) -> str:
+        return self.name.lower().replace("_", " ")
+
+
 
 @dataclass(kw_only=True)
 class ExpiredMediaItem(SerializableAttrs):
@@ -145,8 +150,8 @@ class RegularMediaItem(SerializableAttrs):
     organic_tracking_token: Optional[str] = None
     creative_config: Optional[CreativeConfig] = None
     create_mode_attribution: Optional[CreateModeAttribution] = None
-
-    # TODO carousel_media shares
+    is_commercial: Optional[bool] = None
+    commerciality_status: Optional[str] = None  # TODO enum? commercial
 
     @property
     def best_image(self) -> Optional[ImageVersion]:
@@ -214,6 +219,12 @@ class Location(SerializableAttrs):
 
 
 @dataclass(kw_only=True)
+class CarouselMediaItem(RegularMediaItem, SerializableAttrs):
+    carousel_parent_id: str
+    pk: int
+
+
+@dataclass(kw_only=True)
 class MediaShareItem(RegularMediaItem, SerializableAttrs):
     taken_at: int
     pk: int
@@ -238,6 +249,7 @@ class MediaShareItem(RegularMediaItem, SerializableAttrs):
     caption: Optional[Caption] = None
     can_viewer_save: bool = True
     location: Optional[Location] = None
+    carousel_media: Optional[List[CarouselMediaItem]] = None
 
 
 @dataclass
