@@ -24,7 +24,7 @@ from .account import BaseResponseUser
 
 @dataclass
 class SearchResultUser(BaseResponseUser, SerializableAttrs):
-    mutual_followers_count: int
+    mutual_followers_count: Optional[int] = None
     social_context: Optional[str] = None
     search_social_context: Optional[str] = None
 
