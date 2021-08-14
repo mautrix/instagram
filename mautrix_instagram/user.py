@@ -24,7 +24,7 @@ from mauigpapi.mqtt import Connect, Disconnect, GraphQLSubscription, SkywalkerSu
 from mauigpapi.types import (CurrentUser, MessageSyncEvent, Operation, RealtimeDirectEvent,
                              ActivityIndicatorData, TypingStatus, ThreadSyncEvent, Thread)
 from mauigpapi.errors import (IGNotLoggedInError, MQTTNotLoggedIn, MQTTNotConnected,
-                              IrisSubscribeError)
+                              IrisSubscribeError, IGUserIDNotFoundError)
 from mautrix.bridge import BaseUser, BridgeState, async_getter_lock
 from mautrix.types import UserID, RoomID, EventID, TextMessageEventContent, MessageType
 from mautrix.appservice import AppService
@@ -182,7 +182,14 @@ class User(DBUser, BaseUser):
 
     async def fill_bridge_state(self, state: BridgeState) -> None:
         await super().fill_bridge_state(state)
-        state.remote_id = str(self.igpk)
+        if not state.remote_id:
+            if self.igpk:
+                state.remote_id = str(self.igpk)
+            else:
+                try:
+                    state.remote_id = self.state.user_id
+                except IGUserIDNotFoundError:
+                    state.remote_id = None
         state.remote_name = f"@{self.username}"
 
     async def send_bridge_notice(self, text: str, edit: Optional[EventID] = None,
