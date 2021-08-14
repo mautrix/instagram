@@ -65,6 +65,10 @@ class ProvisioningAPI:
             "Content-Type": "application/json",
         }
 
+    def _missing_key_error(self, err: KeyError) -> None:
+        raise web.HTTPBadRequest(text=json.dumps({"error": f"Missing key {err}"}),
+                                 headers=self._headers)
+
     async def login_options(self, _: web.Request) -> web.Response:
         return web.Response(status=200, headers=self._headers)
 
@@ -120,8 +124,8 @@ class ProvisioningAPI:
         try:
             username = data["username"]
             password = data["password"]
-        except KeyError:
-            raise web.HTTPBadRequest(text='{"error": "Missing keys"}', headers=self._headers)
+        except KeyError as e:
+            raise self._missing_key_error(e)
 
         api, state = await get_login_state(user, username, self.device_seed)
         try:
@@ -151,7 +155,7 @@ class ProvisioningAPI:
                         ) -> Tuple['u.User', JSON]:
         user = await self.check_token(request)
         if check_state and (not user.command_status or user.command_status["action"] != "Login"):
-            raise web.HTTPNotFound(text='{"error": "No 2-factor login in progress}',
+            raise web.HTTPNotFound(text='{"error": "No 2-factor login in progress"}',
                                    headers=self._headers)
 
         try:
@@ -168,8 +172,8 @@ class ProvisioningAPI:
             code = data["code"]
             identifier = data["2fa_identifier"]
             is_totp = data["is_totp"]
-        except KeyError:
-            raise web.HTTPBadRequest(text='{"error": "Missing keys"}', headers=self._headers)
+        except KeyError as e:
+            raise self._missing_key_error(e)
 
         api: AndroidAPI = user.command_status["api"]
         state: AndroidState = user.command_status["state"]
@@ -194,8 +198,8 @@ class ProvisioningAPI:
 
         try:
             code = data["code"]
-        except KeyError:
-            raise web.HTTPBadRequest(text='{"error": "Missing keys"}', headers=self._headers)
+        except KeyError as e:
+            raise self._missing_key_error(e)
 
         api: AndroidAPI = user.command_status["api"]
         state: AndroidState = user.command_status["state"]
