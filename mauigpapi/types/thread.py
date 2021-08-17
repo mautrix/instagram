@@ -54,7 +54,8 @@ class Thread(SerializableAttrs):
 
     last_activity_at: int
     muted: bool
-    is_pin: bool
+    # This seems to be missing in some cases
+    is_pin: bool = False
     named: bool
     canonical: bool
     pending: bool
