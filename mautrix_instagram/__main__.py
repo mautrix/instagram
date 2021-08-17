@@ -13,7 +13,7 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import Optional
+from typing import Optional, Dict, Any
 import logging
 import asyncio
 
@@ -155,5 +155,12 @@ class InstagramBridge(Bridge):
     async def count_logged_in_users(self) -> int:
         return len([user for user in User.by_igpk.values() if user.igpk])
 
+    async def manhole_global_namespace(self, user_id: UserID) -> Dict[str, Any]:
+        return {
+            **await super().manhole_global_namespace(user_id),
+            "User": User,
+            "Portal": Portal,
+            "Puppet": Puppet,
+        }
 
 InstagramBridge().run()
