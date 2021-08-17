@@ -236,6 +236,7 @@ class User(DBUser, BaseUser):
             await self.sync()
         except Exception:
             self.log.exception("Exception while syncing")
+            await self.push_bridge_state(BridgeStateEvent.UNKNOWN_ERROR)
 
     async def get_direct_chats(self) -> Dict[UserID, List[RoomID]]:
         return {
