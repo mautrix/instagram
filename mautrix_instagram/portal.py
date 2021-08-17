@@ -357,10 +357,16 @@ class Portal(DBPortal, BasePortal):
                                        info: FileInfo, intent: IntentAPI
                                        ) -> ReuploadedMediaInfo:
         async with await source.client.raw_http_get(url) as resp:
-            length = int(resp.headers["Content-Length"])
+            try:
+                length = int(resp.headers["Content-Length"])
+            except KeyError:
+                # TODO can the download be short-circuited if there's too much data?
+                self.log.warning("Got file download response with no Content-Length header,"
+                                 "reading data dangerously")
+                length = 0
             if length > self.matrix.media_config.upload_size:
-                self.log.debug(
-                    f"{url} was too large ({length} > {self.matrix.media_config.upload_size})")
+                self.log.debug(f"{url} was too large ({length} "
+                               f"> {self.matrix.media_config.upload_size})")
                 raise ValueError("Attachment not available: too large")
             data = await resp.read()
             info.mimetype = resp.headers["Content-Type"] or magic.from_buffer(data, mime=True)
