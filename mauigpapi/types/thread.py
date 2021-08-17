@@ -26,7 +26,8 @@ from .thread_item import ThreadItem
 @dataclass
 class ThreadUser(BaseResponseUser, SerializableAttrs):
     interop_messaging_user_fbid: int
-    is_using_unified_inbox_for_direct: bool
+    interop_user_type: Optional[int] = None
+    is_using_unified_inbox_for_direct: Optional[bool] = None
 
 
 @dataclass

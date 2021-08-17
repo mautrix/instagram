@@ -257,6 +257,7 @@ class User(DBUser, BaseUser):
                         raise
                     retry_count += 1
                     self.log.exception("Error while syncing for refresh, retrying in 1 minute")
+                    await self.push_bridge_state(BridgeStateEvent.UNKNOWN_ERROR)
                     await asyncio.sleep(60)
         else:
             await self.start_listen()
