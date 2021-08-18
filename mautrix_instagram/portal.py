@@ -883,10 +883,19 @@ class Portal(DBPortal, BasePortal):
         async with self._create_room_lock:
             return await self._create_matrix_room(source, info)
 
+    def _get_invite_content(self, double_puppet: Optional['p.Puppet']) -> Dict[str, Any]:
+        invite_content = {}
+        if double_puppet:
+            invite_content["fi.mau.will_auto_accept"] = True
+        if self.is_direct:
+            invite_content["is_direct"] = True
+        return invite_content
+
     async def update_matrix_room(self, source: 'u.User', info: Thread, backfill: bool = False
                                  ) -> None:
-        await self.main_intent.invite_user(self.mxid, source.mxid, check_cache=True)
         puppet = await p.Puppet.get_by_custom_mxid(source.mxid)
+        await self.main_intent.invite_user(self.mxid, source.mxid, check_cache=True,
+                                           extra_content=self._get_invite_content(puppet))
         if puppet:
             did_join = await puppet.intent.ensure_joined(self.mxid)
             if did_join and self.is_direct:
@@ -930,7 +939,7 @@ class Portal(DBPortal, BasePortal):
             "state_key": self.bridge_info_state_key,
             "content": self.bridge_info,
         }]
-        invites = [source.mxid]
+        invites = []
         if self.config["bridge.encryption.default"] and self.matrix.e2ee:
             self.encrypted = True
             initial_state.append({
@@ -966,17 +975,20 @@ class Portal(DBPortal, BasePortal):
             await self.update()
             self.log.debug(f"Matrix room created: {self.mxid}")
             self.by_mxid[self.mxid] = self
-            await self._update_participants(info.users, source)
 
             puppet = await p.Puppet.get_by_custom_mxid(source.mxid)
+            await self.main_intent.invite_user(self.mxid, source.mxid,
+                                               extra_content=self._get_invite_content(puppet))
             if puppet:
                 try:
-                    await puppet.intent.join_room_by_id(self.mxid)
                     if self.is_direct:
                         await source.update_direct_chats({self.main_intent.mxid: [self.mxid]})
+                    await puppet.intent.join_room_by_id(self.mxid)
                 except MatrixError:
                     self.log.debug("Failed to join custom puppet into newly created portal",
                                    exc_info=True)
+
+            await self._update_participants(info.users, source)
 
             # TODO
             # in_community = await source._community_helper.add_room(source._community_id, self.mxid)
