@@ -91,6 +91,7 @@ class User(DBUser, BaseUser):
         self.username = None
         self._is_logged_in = False
         self._is_connected = False
+        self._is_refreshing = False
         self.shutdown = False
         self._listen_task = None
         self.remote_typing_status = None
@@ -190,7 +191,18 @@ class User(DBUser, BaseUser):
                     state.remote_id = self.state.user_id
                 except IGUserIDNotFoundError:
                     state.remote_id = None
-        state.remote_name = f"@{self.username}"
+        if self.username:
+            state.remote_name = f"@{self.username}"
+
+    async def get_bridge_states(self) -> List[BridgeState]:
+        if not self.state:
+            return []
+        state = BridgeState(state_event=BridgeStateEvent.UNKNOWN_ERROR)
+        if self.is_connected:
+            state.state_event = BridgeStateEvent.CONNECTED
+        elif self._is_refreshing or self.mqtt:
+            state.state_event = BridgeStateEvent.TRANSIENT_DISCONNECT
+        return [state]
 
     async def send_bridge_notice(self, text: str, edit: Optional[EventID] = None,
                                  state_event: Optional[BridgeStateEvent] = None,
@@ -246,22 +258,26 @@ class User(DBUser, BaseUser):
         }
 
     async def refresh(self, resync: bool = True) -> None:
-        await self.stop_listen()
-        if resync:
-            retry_count = 0
-            while True:
-                try:
-                    await self.sync()
-                    return
-                except Exception:
-                    if retry_count >= 4:
-                        raise
-                    retry_count += 1
-                    self.log.exception("Error while syncing for refresh, retrying in 1 minute")
-                    await self.push_bridge_state(BridgeStateEvent.UNKNOWN_ERROR)
-                    await asyncio.sleep(60)
-        else:
-            await self.start_listen()
+        self._is_refreshing = True
+        try:
+            await self.stop_listen()
+            if resync:
+                retry_count = 0
+                while True:
+                    try:
+                        await self.sync()
+                        return
+                    except Exception:
+                        if retry_count >= 4:
+                            raise
+                        retry_count += 1
+                        self.log.exception("Error while syncing for refresh, retrying in 1 minute")
+                        await self.push_bridge_state(BridgeStateEvent.UNKNOWN_ERROR)
+                        await asyncio.sleep(60)
+            else:
+                await self.start_listen()
+        finally:
+            self._is_refreshing = False
 
     async def _sync_thread(self, thread: Thread, min_active_at: int) -> None:
         portal = await po.Portal.get_by_thread(thread, self.igpk)
