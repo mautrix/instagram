@@ -1,5 +1,5 @@
 # mautrix-instagram - A Matrix-Instagram puppeting bridge.
-# Copyright (C) 2020 Tulir Asokan
+# Copyright (C) 2021 Tulir Asokan
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as published by
@@ -525,6 +525,12 @@ class Portal(DBPortal, BasePortal):
         await self._add_instagram_reply(content, item.replied_to_message)
         return await self._send_message(intent, content, timestamp=item.timestamp // 1000)
 
+    async def _send_instagram_unhandled(self, intent: IntentAPI, item: ThreadItem) -> EventID:
+        content = TextMessageEventContent(msgtype=MessageType.NOTICE,
+                                          body="Unsupported message type")
+        await self._add_instagram_reply(content, item.replied_to_message)
+        return await self._send_message(intent, content, timestamp=item.timestamp // 1000)
+
     async def _handle_instagram_location(self, intent: IntentAPI, item: ThreadItem
                                          ) -> Optional[EventID]:
         loc = item.location
@@ -627,6 +633,10 @@ class Portal(DBPortal, BasePortal):
                 event_id = await self._handle_instagram_reel_share(source, intent, item)
             elif item.media_share or item.story_share:
                 event_id = await self._handle_instagram_media_share(source, intent, item)
+            elif item.action_log:
+                # These probably don't need to be bridged
+                self.log.debug(f"Ignoring action log message {item.item_id}")
+                return
             # TODO handle item.clip?
             if item.text:
                 event_id = await self._handle_instagram_text(intent, item, item.text)
@@ -635,16 +645,22 @@ class Portal(DBPortal, BasePortal):
                 event_id = await self._handle_instagram_text(intent, item, item.like)
             elif item.link:
                 event_id = await self._handle_instagram_text(intent, item, item.link.text)
-            if event_id:
-                msg = DBMessage(mxid=event_id, mx_room=self.mxid, item_id=item.item_id,
-                                receiver=self.receiver, sender=sender.pk)
-                await msg.insert()
-                await self._send_delivery_receipt(event_id)
-                self.log.debug(f"Handled Instagram message {item.item_id} -> {event_id}")
-                if is_backfill and item.reactions:
-                    await self._handle_instagram_reactions(msg, item.reactions.emojis)
-            else:
+            handled = bool(event_id)
+            if not event_id:
                 self.log.debug(f"Unhandled Instagram message {item.item_id}")
+                event_id = await self._send_instagram_unhandled(intent, item)
+
+            msg = DBMessage(mxid=event_id, mx_room=self.mxid, item_id=item.item_id,
+                            receiver=self.receiver, sender=sender.pk)
+            await msg.insert()
+            await self._send_delivery_receipt(event_id)
+            if handled:
+                self.log.debug(f"Handled Instagram message {item.item_id} -> {event_id}")
+            else:
+                self.log.debug(f"Unhandled Instagram message {item.item_id} "
+                               f"(type {item.item_type} -> fallback error {event_id})")
+            if is_backfill and item.reactions:
+                await self._handle_instagram_reactions(msg, item.reactions.emojis)
 
     async def handle_instagram_remove(self, item_id: str) -> None:
         message = await DBMessage.get_by_item_id(item_id, self.receiver)
