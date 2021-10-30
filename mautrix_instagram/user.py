@@ -175,9 +175,15 @@ class User(DBUser, BaseUser):
                 # don't make a new room
                 if self.notice_room:
                     return self.notice_room
+                creation_content = {}
+                if not self.config["bridge.federate_rooms"]:
+                    creation_content["m.federate"] = False
                 self.notice_room = await self.az.intent.create_room(
-                    is_direct=True, invitees=[self.mxid],
-                    topic="Instagram bridge notices")
+                    is_direct=True,
+                    invitees=[self.mxid],
+                    topic="Instagram bridge notices",
+                    creation_content=creation_content,
+                )
                 await self.update()
         return self.notice_room
 
