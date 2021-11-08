@@ -23,6 +23,10 @@ import asyncio
 import asyncpg
 import magic
 
+# for relaybot
+from html import escape as escape_html
+from string import Template
+
 from mauigpapi.types import (Thread, ThreadUser, ThreadItem, RegularMediaItem, MediaType,
                              ReactionStatus, Reaction, AnimatedMediaItem, ThreadItemType,
                              VoiceMediaItem, ExpiredMediaItem, MessageSyncMessage, ReelShareType,
@@ -30,7 +34,9 @@ from mauigpapi.types import (Thread, ThreadUser, ThreadItem, RegularMediaItem, M
 from mautrix.appservice import AppService, IntentAPI
 from mautrix.bridge import BasePortal, NotificationDisabler, async_getter_lock
 from mautrix.types import (EventID, MessageEventContent, RoomID, EventType, MessageType, ImageInfo,
-                           VideoInfo, MediaMessageEventContent, TextMessageEventContent, AudioInfo,
+                           VideoInfo, MediaMessageEventContent,
+                           UserID, TextMessageEventContent, Format, #for relaybot
+                           TextMessageEventContent, AudioInfo,
                            ContentURI, EncryptedFile, LocationMessageEventContent, Format, UserID)
 from mautrix.errors import MatrixError, MForbidden, MNotFound, SessionNotFound
 from mautrix.util.simple_lock import SimpleLock
@@ -158,6 +164,24 @@ class Portal(DBPortal, BasePortal):
     # endregion
     # region Matrix event handling
 
+    async def get_displayname(self, user: 'u.User') -> str:
+        return await self.main_intent.get_room_displayname(self.mxid, user.mxid) or user.mxid
+
+    async def _apply_msg_format(self, sender: 'u.User', content: MessageEventContent) -> None:
+        if not isinstance(content, TextMessageEventContent) or content.format != Format.HTML:
+            content.format = Format.HTML
+            content.formatted_body = escape_html(content.body).replace("\n", "<br/>")
+        tpl = (self.config[f"relaybot.message_formats.[{content.msgtype.value}]"]
+                or "*$sender_displayname*: $message")
+        displayname = await self.get_displayname(sender)
+        tpl_args = dict(sender_mxid=sender.mxid,
+                        sender_username=sender.mxid, #TODO
+                        sender_displayname=escape_html(displayname),
+                        message=content.formatted_body,
+                        body=content.body, formatted_body=content.formatted_body)
+        content.formatted_body = Template(tpl).safe_substitute(tpl_args)
+        content.body = Template(tpl).safe_substitute(tpl_args)
+
     async def handle_matrix_message(self, sender: 'u.User', message: MessageEventContent,
                                     event_id: EventID) -> None:
         try:
@@ -168,7 +192,7 @@ class Portal(DBPortal, BasePortal):
                                           "(see logs for more details)")
 
     async def _handle_matrix_message(self, sender: 'u.User', message: MessageEventContent,
-                                     event_id: EventID) -> None:
+                                     event_id: EventID, relay_sender = None) -> None:
         if ((message.get(self.bridge.real_user_content_key, False)
              and await p.Puppet.get_by_custom_mxid(sender.mxid))):
             self.log.debug(f"Ignoring puppet-sent message by confirmed puppet user {sender.mxid}")
@@ -176,6 +200,17 @@ class Portal(DBPortal, BasePortal):
         elif not sender.is_connected:
             await self._send_bridge_error("You're not connected to Instagram", confirmed=True)
             return
+
+        if not await sender.is_logged_in() and self.config['bridge.relaybot.enable']:
+            self.log.trace(f"Message sent by non signal-user {sender.mxid}")
+            async for user in u.User.all_logged_in():
+                await self._apply_msg_format(sender, message)
+                if await user.is_in_portal(self) and user.is_relaybot:
+                    await self._handle_matrix_message(user, message, event_id, True)
+                    return
+        else:
+            await self._handle_matrix_message(sender, message, event_id)
+
         request_id = sender.state.gen_client_context()
         self._reqid_dedup.add(request_id)
         self.log.debug(f"Handling Matrix message {event_id} from {sender.mxid}/{sender.igpk} "
@@ -188,6 +223,9 @@ class Portal(DBPortal, BasePortal):
             resp = await sender.mqtt.send_text(self.thread_id, text=text,
                                                client_context=request_id)
         elif message.msgtype.is_media:
+            if relay_sender:
+                self.log.trace(f"Format text for relay")
+                text = message.body
             if message.file and decrypt_attachment:
                 data = await self.main_intent.download_media(message.file.url)
                 data = decrypt_attachment(data, message.file.key.key,
@@ -243,6 +281,19 @@ class Portal(DBPortal, BasePortal):
         if not message or message.is_internal:
             self.log.debug(f"Ignoring reaction to unknown event {reacting_to}")
             return
+
+        if not await sender.is_logged_in() and self.config['bridge.relaybot.enable']:
+            self.log.trace(f"Reaction by non signal-user {sender.mxid}")
+            react_permitted = False
+            async for user in u.User.all_logged_in():
+                if await user.is_in_portal(self) and user.is_relaybot:
+                    self.log.trace(f"Set new sender to {user.mxid}")
+                    react_permitted = True
+                    sender=user
+                    break
+            if not react_permitted:
+                self.log.debug(f"Reaction not permitted.")
+                return
 
         existing = await DBReaction.get_by_item_id(message.item_id, message.receiver, sender.igpk)
         if existing and existing.reaction == emoji:

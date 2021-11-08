@@ -125,3 +125,6 @@ class MatrixHandler(BaseMatrixHandler):
             await self.handle_typing(evt.room_id, evt.content.user_ids)
         else:
             await super().handle_ephemeral_event(evt)
+
+    async def allow_bridging_message(self, user: 'BaseUser', portal: 'BasePortal') -> bool:
+        return self.config['bridge.relaybot.enable'] or await user.is_logged_in()
