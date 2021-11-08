@@ -85,6 +85,23 @@ instagram:
     # logging out, because Instagram is insecure.
     device_seed: generate
 
+
+    # Path to instagramd unix socket
+    socket_path: /var/run/instagramd/instagramd.sock
+    # Directory for temp files when sending files to Signal. This should be an
+    # absolute path that instagramd can read. For attachments in the other direction,
+    # make sure instagramd is configured to use an absolute path as the data directory.
+    outgoing_attachment_dir: /tmp
+    # Directory where instagramd stores avatars for groups.
+    avatar_dir: ~/.config/instagramd/avatars
+    # Directory where instagramd stores auth data. Used to delete data when logging out.
+    data_dir: ~/.config/instagramd/data
+    # Whether or not unknown instagramd accounts should be deleted when the bridge is started.
+    # When this is enabled, any UserInUse errors should be resolved by restarting the bridge.
+    delete_unknown_accounts_on_start: false
+    # Whether or not message attachments should be removed from disk after they're bridged.
+    remove_file_after_handling: true
+
 # Bridge config
 bridge:
     # Localpart template of MXIDs for Instagram users.
@@ -95,12 +112,23 @@ bridge:
     # {username} is replaced with the username of the Instagram user.
     displayname_template: "{displayname} (Instagram)"
     # Displayname template for 1:1 chat portals. Same variables as displayname_template.
+
+    #
+    # Multi-user instances are recommended to disallow contact list names, as otherwise there can
+    # be conflicts between names from different users' contact lists.
+    contact_list_names: disallow
+
     private_chat_name_template: "{displayname}"
     # Displayname template for group chat portals. Only {name} is available.
     group_chat_name_template: "{name}"
 
     # Maximum length of displayname
     displayname_max_length: 100
+
+    # Whether or not to create portals for all groups on login/connect.
+    autocreate_group_portal: true
+    # Whether or not to create portals for all contacts on login/connect.
+    autocreate_contact_portal: false
 
     # Maximum number of seconds since the last activity in a chat to automatically create portals.
     portal_create_max_age: 86400
@@ -187,6 +215,10 @@ bridge:
     # This field will automatically be changed back to false after it,
     # except if the config file is not writable.
     resend_bridge_info: false
+
+     # Interval at which to resync contacts (in seconds).
+    periodic_sync: 0
+
     # Whether or not unimportant bridge notices should be sent to the user.
     # (e.g. connected, disconnected but will retry)
     unimportant_bridge_notices: true
@@ -207,8 +239,22 @@ bridge:
     # The prefix for commands. Only required in non-management rooms.
     command_prefix: "!ig"
 
+    # Messages sent upon joining a management room.
+    # Markdown is supported. The defaults are listed below.
+    management_room_text:
+        # Sent when joining a room.
+        welcome: "Hello, I'm a Signal bridge bot."
+        # Sent when joining a management room and the user is already logged in.
+        welcome_connected: "Use `help` for help."
+        # Sent when joining a management room and the user is not logged in.
+        welcome_unconnected: "Use `help` for help or `register` to log in."
+        # Optional extra text sent when joining a management room.
+        additional_help: ""
+
+
     # Permissions for using the bridge.
     # Permitted values:
+    #      relay - Allowed to be relayed through the bridge, no access to commands.
     #       user - Use the bridge with puppeting.
     #      admin - Use and administrate the bridge.
     # Permitted keys:
@@ -216,9 +262,30 @@ bridge:
     #   domain - All users on that homeserver
     #     mxid - Specific user
     permissions:
+        "*": "relay"
         "example.com": "user"
         "@admin:example.com": "admin"
 
+    relay:
+        # Whether or not relay mode should be allowed. If allowed, `!signal set-relay` can be used to turn any
+        # authenticated user into a relaybot for that chat.
+        enabled: false
+        # The formats to use when sending messages to Signal via a relay user.
+        #
+        # Available variables:
+        #   $sender_displayname - The display name of the sender (e.g. Example User)
+        #   $sender_username    - The username (Matrix ID localpart) of the sender (e.g. exampleuser)
+        #   $sender_mxid        - The Matrix ID of the sender (e.g. @exampleuser:example.com)
+        #   $message            - The message content
+        message_formats:
+            m.text: '$sender_displayname: $message'
+            m.notice: '$sender_displayname: $message'
+            m.emote: '* $sender_displayname $message'
+            m.file: '$sender_displayname sent a file'
+            m.image: '$sender_displayname  sent an image'
+            m.audio: '$sender_displayname  sent an audio file'
+            m.video: '$sender_displayname  sent a video'
+            m.location: '$sender_displayname  sent a location'
 
 # Python logging configuration.
 #
