@@ -99,7 +99,6 @@ class Config(BaseBridgeConfig):
         copy_dict("bridge.permissions")
 
         copy("bridge.relay.enable")
-        copy("bridge.relay.users")
         copy_dict("bridge.relay.message_formats")
 
     def _get_permissions(self, key: str) -> Permissions:
@@ -120,17 +119,3 @@ class Config(BaseBridgeConfig):
 
         return self._get_permissions("*")
 
-    def get_relay_users(self, mxid: UserID) -> Permissions:
-        relay_users = self["bridge.relaybot.users"]
-        if not isinstance(relay_users, list):
-            return True
-        if len(relay_users) == 0:
-            return True
-        if mxid in relay_users:
-            return True
-
-        _, homeserver = Client.parse_user_id(mxid)
-        if homeserver in relay_users:
-            return True
-
-        return False

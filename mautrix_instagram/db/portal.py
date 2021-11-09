@@ -50,7 +50,7 @@ class Portal:
 
     async def update(self) -> None:
         q = ("UPDATE portal SET other_user_pk=$3, mxid=$4, name=$5, avatar_url=$6, encrypted=$7,"
-             "                  name_set=$8, avatar_set=$9, relay_user_id=$11 "
+             "                  name_set=$8, avatar_set=$9, relay_user_id=$10 "
              "WHERE thread_id=$1 AND receiver=$2")
         await self.db.execute(q, self.thread_id, self.receiver, self.other_user_pk,
                               self.mxid, self.name, self.avatar_url, self.encrypted,

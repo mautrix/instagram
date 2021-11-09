@@ -217,16 +217,17 @@ class Portal(DBPortal, BasePortal):
             return None, True
         return relay_sender, True
 
-    async def handle_matrix_message(self, sender: 'u.User', message: MessageEventContent,
-                                    event_id: EventID, relay_sender = None) -> None:
-        try:
-            await self._handle_matrix_message(sender, message, event_id)
-        except Exception:
-            self.log.exception(f"Fatal error handling Matrix event {event_id}")
-            await self._send_bridge_error("Fatal error in message handling "
-                                          "(see logs for more details)")
+    # async def handle_matrix_message(self, sender: 'u.User', message: MessageEventContent,
+    #                                 event_id: EventID, relay_sender = None) -> None:
+    #     print("AAAAAAAAAAA")
+    #     try:
+    #         await self._handle_matrix_message(sender, message, event_id)
+    #     except Exception:
+    #         self.log.exception(f"Fatal error handling Matrix event {event_id}")
+    #         await self._send_bridge_error("Fatal error in message handling "
+    #                                       "(see logs for more details)")
 
-    async def _handle_matrix_message(self, sender: 'u.User', message: MessageEventContent,
+    async def handle_matrix_message(self, sender: 'u.User', message: MessageEventContent,
                                      event_id: EventID, relay_sender = None) -> None:
         if ((message.get(self.bridge.real_user_content_key, False)
              and await p.Puppet.get_by_custom_mxid(sender.mxid))):
@@ -235,7 +236,6 @@ class Portal(DBPortal, BasePortal):
         elif not sender.is_connected:
             await self._send_bridge_error("You're not connected to Instagram", confirmed=True)
             return
-
         orig_sender = sender
         sender, is_relay = await self._get_relay_sender(sender, f"message {event_id}")
         if not sender:
@@ -247,11 +247,11 @@ class Portal(DBPortal, BasePortal):
             self.log.trace(f"Message sent by non signal-user {sender.mxid}")
             async for user in u.User.all_logged_in():
                 await self._apply_msg_format(sender, message)
-                if await user.is_in_portal(self) and user.is_relaybot:
+                if await user.is_in_portal(self) and user.is_relay:
                     await self._handle_matrix_message(user, message, event_id, True)
                     return
-        else:
-            await self._handle_matrix_message(sender, message, event_id)
+        # else:
+        #     await self._handle_matrix_message(sender, message, event_id)
 
         request_id = sender.state.gen_client_context()
         self._reqid_dedup.add(request_id)
@@ -329,7 +329,7 @@ class Portal(DBPortal, BasePortal):
             self.log.trace(f"Reaction by non signal-user {sender.mxid}")
             react_permitted = False
             async for user in u.User.all_logged_in():
-                if await user.is_in_portal(self) and user.is_relaybot:
+                if await user.is_in_portal(self) and user.is_relay:
                     self.log.trace(f"Set new sender to {user.mxid}")
                     react_permitted = True
                     sender=user
