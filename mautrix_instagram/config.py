@@ -98,8 +98,9 @@ class Config(BaseBridgeConfig):
 
         copy_dict("bridge.permissions")
 
-        copy("bridge.relaybot.enable")
-        copy("bridge.relaybot.users")
+        copy("bridge.relay.enable")
+        copy("bridge.relay.users")
+        copy_dict("bridge.relay.message_formats")
 
     def _get_permissions(self, key: str) -> Permissions:
         level = self["bridge.permissions"].get(key, "")

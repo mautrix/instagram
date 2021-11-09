@@ -63,6 +63,8 @@ class User(DBUser, BaseUser):
     az: AppService
     loop: asyncio.AbstractEventLoop
 
+    relay_whitelisted: bool
+
     client: Optional[AndroidAPI]
     mqtt: Optional[AndroidMQTT]
     _listen_task: Optional[asyncio.Task] = None

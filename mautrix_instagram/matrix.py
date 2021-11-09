@@ -126,5 +126,10 @@ class MatrixHandler(BaseMatrixHandler):
         else:
             await super().handle_ephemeral_event(evt)
 
-    async def allow_bridging_message(self, user: 'BaseUser', portal: 'BasePortal') -> bool:
-        return self.config['bridge.relaybot.enable'] or await user.is_logged_in()
+    async def allow_message(self, user: 'u.User') -> bool:
+        return user.relay_whitelisted
+
+    # async def allow_bridging_message(self, user: 'BaseUser', portal: 'BasePortal') -> bool:
+    #     return self.config['bridge.relaybot.enable'] or await user.is_logged_in()
+    async def allow_bridging_message(self, user: 'u.User', portal: 'po.Portal') -> bool:
+        return portal.has_relay or await user.is_logged_in()

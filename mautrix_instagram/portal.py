@@ -19,6 +19,8 @@ from collections import deque
 from io import BytesIO
 import mimetypes
 import asyncio
+import hashlib
+import os
 
 import asyncpg
 import magic
@@ -34,9 +36,7 @@ from mauigpapi.types import (Thread, ThreadUser, ThreadItem, RegularMediaItem, M
 from mautrix.appservice import AppService, IntentAPI
 from mautrix.bridge import BasePortal, NotificationDisabler, async_getter_lock
 from mautrix.types import (EventID, MessageEventContent, RoomID, EventType, MessageType, ImageInfo,
-                           VideoInfo, MediaMessageEventContent,
-                           UserID, TextMessageEventContent, Format, #for relaybot
-                           TextMessageEventContent, AudioInfo,
+                           VideoInfo, MediaMessageEventContent, TextMessageEventContent, AudioInfo,
                            ContentURI, EncryptedFile, LocationMessageEventContent, Format, UserID)
 from mautrix.errors import MatrixError, MForbidden, MNotFound, SessionNotFound
 from mautrix.util.simple_lock import SimpleLock
@@ -88,13 +88,15 @@ class Portal(DBPortal, BasePortal):
     _reaction_lock: asyncio.Lock
     _backfill_leave: Optional[Set[IntentAPI]]
     _typing: Set[UserID]
+    _relay_user: Optional['u.User']
 
     def __init__(self, thread_id: str, receiver: int, other_user_pk: Optional[int],
                  mxid: Optional[RoomID] = None, name: Optional[str] = None,
                  avatar_url: Optional[ContentURI] = None, encrypted: bool = False,
-                 name_set: bool = False, avatar_set: bool = False) -> None:
+                 relay_user_id: Optional[UserID] = None, name_set: bool = False,
+                 avatar_set: bool = False) -> None:
         super().__init__(thread_id, receiver, other_user_pk, mxid, name, avatar_url, encrypted,
-                         name_set, avatar_set)
+                         name_set, avatar_set, relay_user_id)
         self._create_room_lock = asyncio.Lock()
         self.log = self.log.getChild(thread_id)
         self._msgid_dedup = deque(maxlen=100)
@@ -108,6 +110,23 @@ class Portal(DBPortal, BasePortal):
         self._main_intent = None
         self._reaction_lock = asyncio.Lock()
         self._typing = set()
+        self._relay_user = None
+
+    @property
+    def has_relay(self) -> bool:
+        return self.config["bridge.relay.enabled"] and bool(self.relay_user_id)
+
+    async def get_relay_user(self) -> Optional['u.User']:
+        if not self.has_relay:
+            return None
+        if self._relay_user is None:
+            self._relay_user = await u.User.get_by_mxid(self.relay_user_id)
+        return self._relay_user if await self._relay_user.is_logged_in() else None
+
+    async def set_relay_user(self, user: Optional['u.User']) -> None:
+        self._relay_user = user
+        self.relay_user_id = user.mxid if user else None
+        await self.save()
 
     @property
     def is_direct(self) -> bool:
@@ -171,8 +190,8 @@ class Portal(DBPortal, BasePortal):
         if not isinstance(content, TextMessageEventContent) or content.format != Format.HTML:
             content.format = Format.HTML
             content.formatted_body = escape_html(content.body).replace("\n", "<br/>")
-        tpl = (self.config[f"relaybot.message_formats.[{content.msgtype.value}]"]
-                or "*$sender_displayname*: $message")
+        tpl = (self.config[f"relay.message_formats.[{content.msgtype.value}]"]
+                or "$sender_displayname: $message")
         displayname = await self.get_displayname(sender)
         tpl_args = dict(sender_mxid=sender.mxid,
                         sender_username=sender.mxid, #TODO
@@ -182,8 +201,24 @@ class Portal(DBPortal, BasePortal):
         content.formatted_body = Template(tpl).safe_substitute(tpl_args)
         content.body = Template(tpl).safe_substitute(tpl_args)
 
+    async def _get_relay_sender(self, sender: 'u.User', evt_identifier: str
+                                ) -> Tuple[Optional['u.User'], bool]:
+        if await sender.is_logged_in():
+            return sender, False
+
+        if not self.has_relay:
+            self.log.debug(f"Ignoring {evt_identifier} from non-logged-in user {sender.mxid}"
+                           " in chat with no relay user")
+            return None, True
+        relay_sender = await self.get_relay_user()
+        if not relay_sender:
+            self.log.debug(f"Ignoring {evt_identifier} from non-logged-in user {sender.mxid}: "
+                           f"relay user {self.relay_user_id} is not set up correctly")
+            return None, True
+        return relay_sender, True
+
     async def handle_matrix_message(self, sender: 'u.User', message: MessageEventContent,
-                                    event_id: EventID) -> None:
+                                    event_id: EventID, relay_sender = None) -> None:
         try:
             await self._handle_matrix_message(sender, message, event_id)
         except Exception:
@@ -200,6 +235,13 @@ class Portal(DBPortal, BasePortal):
         elif not sender.is_connected:
             await self._send_bridge_error("You're not connected to Instagram", confirmed=True)
             return
+
+        orig_sender = sender
+        sender, is_relay = await self._get_relay_sender(sender, f"message {event_id}")
+        if not sender:
+            return
+        elif is_relay:
+            await self._apply_msg_format(orig_sender, message)
 
         if not await sender.is_logged_in() and self.config['bridge.relaybot.enable']:
             self.log.trace(f"Message sent by non signal-user {sender.mxid}")
@@ -225,7 +267,8 @@ class Portal(DBPortal, BasePortal):
         elif message.msgtype.is_media:
             if relay_sender:
                 self.log.trace(f"Format text for relay")
-                text = message.body
+                # text = message.body
+                text = message.body if is_relay else None
             if message.file and decrypt_attachment:
                 data = await self.main_intent.download_media(message.file.url)
                 data = decrypt_attachment(data, message.file.key.key,
@@ -367,6 +410,50 @@ class Portal(DBPortal, BasePortal):
         else:
             self.log.debug(f"{user.mxid} left portal to {self.thread_id}")
             # TODO cleanup if empty
+
+    async def handle_matrix_name(self, user: 'u.User', name: str) -> None:
+        if self.name == name or self.is_direct or not name:
+            return
+        sender, is_relay = await self._get_relay_sender(user, "name change")
+        if not sender:
+            return
+        self.name = name
+        self.log.debug(f"{user.mxid} changed the group name, "
+                       f"sending to Signal through {sender.username}")
+        try:
+            await self.signal.update_group(sender.username, self.chat_id, title=name)
+        except Exception:
+            self.log.exception("Failed to update Instagram group name")
+            self.name = None
+
+    async def handle_matrix_avatar(self, user: 'u.User', url: ContentURI) -> None:
+            if self.is_direct or not url:
+                return
+            sender, is_relay = await self._get_relay_sender(user, "avatar change")
+            if not sender:
+                return
+
+            data = await self.main_intent.download_media(url)
+            new_hash = hashlib.sha256(data).hexdigest()
+            if new_hash == self.avatar_hash and self.avatar_set:
+                self.log.debug(f"New avatar from Matrix set by {user.mxid} is same as current one")
+                return
+            self.avatar_url = url
+            self.avatar_hash = new_hash
+            path = self._write_outgoing_file(data)
+            self.log.debug(f"{user.mxid} changed the group avatar, "
+                        f"sending to Signal through {sender.username}")
+            try:
+                await self.signal.update_group(sender.username, self.chat_id, avatar_path=path)
+                self.avatar_set = True
+            except Exception:
+                self.log.exception("Failed to update Signal group avatar")
+                self.avatar_set = False
+            if self.config["signal.remove_file_after_handling"]:
+                try:
+                    os.remove(path)
+                except FileNotFoundError:
+                    pass
 
     # endregion
     # region Instagram event handling

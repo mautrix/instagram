@@ -209,6 +209,7 @@ bridge:
 
     # Permissions for using the bridge.
     # Permitted values:
+    #      relay - Allowed to be relayed through the bridge, no access to commands.
     #       user - Use the bridge with puppeting.
     #      admin - Use and administrate the bridge.
     # Permitted keys:
@@ -219,23 +220,21 @@ bridge:
         "example.com": "user"
         "@admin:example.com": "admin"
 
-    relaybot:
+    relay:
         enable: false
-        # The formats to use when sending messages to Signal via the relaybot.
-        # (markdown/html is not supported by signal yet.)
+        # The formats to use when sending messages to Instagram via the relaybot.
+        # (markdown/html is not supported by instagram yet.)
+        # Messages are not formatted in instagram chats
         message_formats:
-            m.text: '*{{ .Sender.Displayname }}*: {{ .Message }}'
-            m.notice: '*{{ .Sender.Displayname }}*: {{ .Message }}'
-            m.emote: '*{{ .Sender.Displayname }}* {{ .Message }}'
-            m.file: '*{{ .Sender.Displayname }}* sent a file'
-            m.image: '*{{ .Sender.Displayname }}* sent an image'
-            m.audio: '*{{ .Sender.Displayname }}* sent an audio file'
-            m.video: '*{{ .Sender.Displayname }}* sent a video'
-            m.location: '*{{ .Sender.Displayname }}* sent a location'
-        # Users that may function as relaybot, means messages in signal are sent by these users.
-        # If empty all users may function as relaybot. Only the last reaction can be handled by signal.
-        users:
-         - '@signal_relaybot:example.com'
+            m.text: '{{ .Sender.Displayname }}: {{ .Message }}'
+            m.notice: '{{ .Sender.Displayname }}: {{ .Message }}'
+            m.emote: '{{ .Sender.Displayname }} {{ .Message }}'
+            m.file: '{{ .Sender.Displayname }} sent a file'
+            m.image: '{{ .Sender.Displayname }} sent an image'
+            m.audio: '{{ .Sender.Displayname }} sent an audio file'
+            m.video: '{{ .Sender.Displayname }} sent a video'
+            m.location: '{{ .Sender.Displayname }} sent a location'
+
 
 
 # Python logging configuration.
