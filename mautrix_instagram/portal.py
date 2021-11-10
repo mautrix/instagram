@@ -37,7 +37,7 @@ from mautrix.appservice import AppService, IntentAPI
 from mautrix.bridge import BasePortal, NotificationDisabler, async_getter_lock
 from mautrix.types import (EventID, MessageEventContent, RoomID, EventType, MessageType, ImageInfo,
                            VideoInfo, MediaMessageEventContent, TextMessageEventContent, AudioInfo,
-                           ContentURI, EncryptedFile, LocationMessageEventContent, Format, UserID)
+                           ContentURI, EncryptedFile, LocationMessageEventContent, Format, UserID, PowerLevelStateEventContent)
 from mautrix.errors import MatrixError, MForbidden, MNotFound, SessionNotFound
 from mautrix.util.simple_lock import SimpleLock
 
@@ -219,7 +219,6 @@ class Portal(DBPortal, BasePortal):
 
     # async def handle_matrix_message(self, sender: 'u.User', message: MessageEventContent,
     #                                 event_id: EventID, relay_sender = None) -> None:
-    #     print("AAAAAAAAAAA")
     #     try:
     #         await self._handle_matrix_message(sender, message, event_id)
     #     except Exception:
@@ -236,6 +235,7 @@ class Portal(DBPortal, BasePortal):
         elif not sender.is_connected:
             await self._send_bridge_error("You're not connected to Instagram", confirmed=True)
             return
+
         orig_sender = sender
         sender, is_relay = await self._get_relay_sender(sender, f"message {event_id}")
         if not sender:
@@ -243,7 +243,7 @@ class Portal(DBPortal, BasePortal):
         elif is_relay:
             await self._apply_msg_format(orig_sender, message)
 
-        if not await sender.is_logged_in() and self.config['bridge.relaybot.enable']:
+        if not await sender.is_logged_in() and self.config['bridge.relaybot.enabled']:
             self.log.trace(f"Message sent by non signal-user {sender.mxid}")
             async for user in u.User.all_logged_in():
                 await self._apply_msg_format(sender, message)
@@ -265,10 +265,10 @@ class Portal(DBPortal, BasePortal):
             resp = await sender.mqtt.send_text(self.thread_id, text=text,
                                                client_context=request_id)
         elif message.msgtype.is_media:
-            if relay_sender:
-                self.log.trace(f"Format text for relay")
+            text = message.body if is_relay else None
+            # if relay_sender:
+            #     self.log.trace(f"Format text for relay")
                 # text = message.body
-                text = message.body if is_relay else None
             if message.file and decrypt_attachment:
                 data = await self.main_intent.download_media(message.file.url)
                 data = decrypt_attachment(data, message.file.key.key,
@@ -325,7 +325,7 @@ class Portal(DBPortal, BasePortal):
             self.log.debug(f"Ignoring reaction to unknown event {reacting_to}")
             return
 
-        if not await sender.is_logged_in() and self.config['bridge.relaybot.enable']:
+        if not await sender.is_logged_in() and self.config['bridge.relaybot.enabled']:
             self.log.trace(f"Reaction by non signal-user {sender.mxid}")
             react_permitted = False
             async for user in u.User.all_logged_in():
@@ -354,7 +354,7 @@ class Portal(DBPortal, BasePortal):
 
     async def handle_matrix_redaction(self, sender: 'u.User', event_id: EventID,
                                       redaction_event_id: EventID) -> None:
-        if not self.mxid:
+        if not self.mxid or not await sender.is_logged_in():
             return
         elif not sender.is_connected:
             await self._send_bridge_error("You're not connected to Instagram",
@@ -400,7 +400,16 @@ class Portal(DBPortal, BasePortal):
             user.remote_typing_status = None
             await user.mqtt.indicate_activity(self.thread_id, status)
 
+    async def handle_matrix_join(self, user: 'u.User') -> None:
+        print("AAAAAAAAAAAAAA")
+        if self.is_direct or not await user.is_logged_in():
+            return
+        print("BBBBBBBB")
+
+
     async def handle_matrix_leave(self, user: 'u.User') -> None:
+        if not await user.is_logged_in():
+            return
         if self.is_direct:
             self.log.info(f"{user.mxid} left private chat portal with {self.other_user_pk}")
             if user.igpk == self.receiver:
@@ -420,11 +429,11 @@ class Portal(DBPortal, BasePortal):
         self.name = name
         self.log.debug(f"{user.mxid} changed the group name, "
                        f"sending to Signal through {sender.username}")
-        try:
-            await self.signal.update_group(sender.username, self.chat_id, title=name)
-        except Exception:
-            self.log.exception("Failed to update Instagram group name")
-            self.name = None
+        # try:
+        #     await self.signal.update_group(sender.username, self.chat_id, title=name)
+        # except Exception:
+        #     self.log.exception("Failed to update Instagram group name")
+        #     self.name = None
 
     async def handle_matrix_avatar(self, user: 'u.User', url: ContentURI) -> None:
             if self.is_direct or not url:
@@ -440,20 +449,20 @@ class Portal(DBPortal, BasePortal):
                 return
             self.avatar_url = url
             self.avatar_hash = new_hash
-            path = self._write_outgoing_file(data)
-            self.log.debug(f"{user.mxid} changed the group avatar, "
-                        f"sending to Signal through {sender.username}")
-            try:
-                await self.signal.update_group(sender.username, self.chat_id, avatar_path=path)
-                self.avatar_set = True
-            except Exception:
-                self.log.exception("Failed to update Signal group avatar")
-                self.avatar_set = False
-            if self.config["signal.remove_file_after_handling"]:
-                try:
-                    os.remove(path)
-                except FileNotFoundError:
-                    pass
+            # path = self._write_outgoing_file(data)
+            # self.log.debug(f"{user.mxid} changed the group avatar, "
+            #             f"sending to Signal through {sender.username}")
+            # try:
+            #     await self.signal.update_group(sender.username, self.chat_id, avatar_path=path)
+            #     self.avatar_set = True
+            # except Exception:
+            #     self.log.exception("Failed to update Signal group avatar")
+            #     self.avatar_set = False
+            # if self.config["signal.remove_file_after_handling"]:
+            #     try:
+            #         os.remove(path)
+            #     except FileNotFoundError:
+            #         pass
 
     # endregion
     # region Instagram event handling

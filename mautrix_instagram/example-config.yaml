@@ -217,11 +217,12 @@ bridge:
     #   domain - All users on that homeserver
     #     mxid - Specific user
     permissions:
+        "*": "relay"
         "example.com": "user"
         "@admin:example.com": "admin"
 
     relay:
-        enable: false
+        enabled: false
         # The formats to use when sending messages to Instagram via the relaybot.
         # (markdown/html is not supported by instagram yet.)
         # Messages are not formatted in instagram chats
