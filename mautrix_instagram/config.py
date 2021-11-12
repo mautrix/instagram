@@ -118,4 +118,3 @@ class Config(BaseBridgeConfig):
             return self._get_permissions(homeserver)
 
         return self._get_permissions("*")
-

@@ -39,7 +39,6 @@ class Portal:
     avatar_set: bool
     relay_user_id: Optional[UserID]
 
-
     async def insert(self) -> None:
         q = ("INSERT INTO portal (thread_id, receiver, other_user_pk, mxid, name, avatar_url, "
              "                    encrypted, name_set, avatar_set, relay_user_id) "

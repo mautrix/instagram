@@ -224,14 +224,15 @@ class Portal(DBPortal, BasePortal):
         orig_sender = sender
         sender, is_relay = await self._get_relay_sender(sender, f"message {event_id}")
 
+        if not sender.is_connected:
+            await self._send_bridge_error("You're not connected to Instagram", confirmed=True)
+            return
+
         if not sender:
             return
         elif is_relay:
             await self._apply_msg_format(orig_sender, message)
 
-        if not sender.is_connected:
-            await self._send_bridge_error("You're not connected to Instagram", confirmed=True)
-            return
 
         if not await sender.is_logged_in() and self.config['bridge.relaybot.enabled']:
             self.log.trace(f"Message sent by non instagram-user {sender.mxid}")
@@ -310,18 +311,7 @@ class Portal(DBPortal, BasePortal):
             self.log.debug(f"Ignoring reaction to unknown event {reacting_to}")
             return
 
-        if not await sender.is_logged_in() and self.config['bridge.relaybot.enabled']:
-            self.log.trace(f"Reaction by non instagram-user {sender.mxid}")
-            react_permitted = False
-            async for user in u.User.all_logged_in():
-                if await user.is_in_portal(self) and user.is_relay:
-                    self.log.trace(f"Set new sender to {user.mxid}")
-                    react_permitted = True
-                    sender=user
-                    break
-            if not react_permitted:
-                self.log.debug(f"Reaction not permitted.")
-                return
+        sender, _ = await self._get_relay_sender(sender, f"message {event_id}")
 
         existing = await DBReaction.get_by_item_id(message.item_id, message.receiver, sender.igpk)
         if existing and existing.reaction == emoji:

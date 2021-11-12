@@ -12,4 +12,3 @@ class CommandEvent(BaseCommandEvent):
     bridge: 'InstagramBridge'
     sender: 'User'
     portal: 'Portal'
-
