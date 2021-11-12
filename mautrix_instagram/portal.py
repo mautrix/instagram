@@ -404,29 +404,6 @@ class Portal(DBPortal, BasePortal):
             self.log.debug(f"{user.mxid} left portal to {self.thread_id}")
             # TODO cleanup if empty
 
-    async def handle_matrix_name(self, user: 'u.User', name: str) -> None:
-        if self.name == name or self.is_direct or not name:
-            return
-        sender, is_relay = await self._get_relay_sender(user, "name change")
-        if not sender:
-            return
-        self.name = name
-
-    async def handle_matrix_avatar(self, user: 'u.User', url: ContentURI) -> None:
-            if self.is_direct or not url:
-                return
-            sender, is_relay = await self._get_relay_sender(user, "avatar change")
-            if not sender:
-                return
-
-            data = await self.main_intent.download_media(url)
-            new_hash = hashlib.sha256(data).hexdigest()
-            if new_hash == self.avatar_hash and self.avatar_set:
-                self.log.debug(f"New avatar from Matrix set by {user.mxid} is same as current one")
-                return
-            self.avatar_url = url
-            self.avatar_hash = new_hash
-
     # endregion
     # region Instagram event handling
 

@@ -10,7 +10,3 @@ prometheus_client>=0.6,<0.12
 
 #/imageconvert
 pillow>=4,<9
-
-
-watchdog
-pyyaml
