@@ -215,6 +215,15 @@ class Portal(DBPortal, BasePortal):
         return relay_sender, True
 
     async def handle_matrix_message(self, sender: 'u.User', message: MessageEventContent,
+                                    event_id: EventID) -> None:
+        try:
+            await self._handle_matrix_message(sender, message, event_id)
+        except Exception:
+            self.log.exception(f"Fatal error handling Matrix event {event_id}")
+            await self._send_bridge_error("Fatal error in message handling "
+                                          "(see logs for more details)")
+
+    async def _handle_matrix_message(self, sender: 'u.User', message: MessageEventContent,
                                      event_id: EventID) -> None:
         if ((message.get(self.bridge.real_user_content_key, False)
              and await p.Puppet.get_by_custom_mxid(sender.mxid))):
