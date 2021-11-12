@@ -19,8 +19,6 @@ from collections import deque
 from io import BytesIO
 import mimetypes
 import asyncio
-import hashlib
-import os
 
 import asyncpg
 import magic
