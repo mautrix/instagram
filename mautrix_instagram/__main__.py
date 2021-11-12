@@ -61,8 +61,8 @@ class InstagramBridge(Bridge):
         self.state_store = PgBridgeStateStore(self.db, self.get_puppet, self.get_double_puppet)
 
     def prepare_db(self) -> None:
-        self.db = Database(self.config["appservice.database"], upgrade_table=upgrade_table,
-                           loop=self.loop, db_args=self.config["appservice.database_opts"])
+        self.db = Database.create(self.config["appservice.database"], upgrade_table=upgrade_table,
+                                  db_args=self.config["appservice.database_opts"])
         init_db(self.db)
 
     def prepare_bridge(self) -> None:
@@ -74,9 +74,9 @@ class InstagramBridge(Bridge):
 
     async def start(self) -> None:
         await self.db.start()
-        await self.state_store.upgrade_table.upgrade(self.db.pool)
+        await self.state_store.upgrade_table.upgrade(self.db)
         if self.matrix.e2ee:
-            self.matrix.e2ee.crypto_db.override_pool(self.db.pool)
+            self.matrix.e2ee.crypto_db.override_pool(self.db)
         self.add_startup_actions(User.init_cls(self))
         self.add_startup_actions(Puppet.init_cls(self))
         Portal.init_cls(self)
@@ -91,6 +91,10 @@ class InstagramBridge(Bridge):
         self.log.debug("Stopping puppet syncers")
         for puppet in Puppet.by_custom_mxid.values():
             puppet.stop()
+
+    async def stop(self) -> None:
+        await super().stop()
+        await self.db.stop()
 
     async def resend_bridge_info(self) -> None:
         self.config["bridge.resend_bridge_info"] = False
