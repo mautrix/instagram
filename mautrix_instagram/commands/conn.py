@@ -29,7 +29,7 @@ async def set_notice_room(evt: CommandEvent) -> None:
     await evt.reply("This room has been marked as your bridge notice room")
 
 @command_handler(needs_auth=True, management_only=False, help_section=SECTION_CONNECTION,
-                 help_text="Relay messages in this room through your Signal account.")
+                 help_text="Relay messages in this room through your Instagram account.")
 async def set_relay(evt: CommandEvent) -> EventID:
     if not evt.config["bridge.relay.enabled"]:
         return await evt.reply("Relay mode is not enable in this instance of the bridge.")
@@ -37,7 +37,7 @@ async def set_relay(evt: CommandEvent) -> EventID:
         return await evt.reply("This is not a portal room.")
     await evt.portal.set_relay_user(evt.sender)
     return await evt.reply("Messages from non-logged-in users in this room will now be bridged "
-                           "through your Signal account.")
+                           "through your Instagram account.")
 
 @command_handler(needs_auth=True, management_only=False, help_section=SECTION_CONNECTION,
                  help_text="Stop relaying messages in this room.")

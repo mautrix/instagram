@@ -29,9 +29,9 @@ RUN apk add --no-cache \
 COPY requirements.txt /opt/mautrix-instagram/requirements.txt
 COPY optional-requirements.txt /opt/mautrix-instagram/optional-requirements.txt
 WORKDIR /opt/mautrix-instagram
-RUN apk add --virtual .build-deps python3-dev libffi-dev build-base \
- && pip3 install -r requirements.txt -r optional-requirements.txt \
- && apk del .build-deps
+# RUN apk add --virtual .build-deps python3-dev libffi-dev build-base \
+#  && pip3 install -r requirements.txt -r optional-requirements.txt \
+#  && apk del .build-deps
 
 COPY . /opt/mautrix-instagram
 RUN apk add git && pip3 install .[all] && apk del git \
