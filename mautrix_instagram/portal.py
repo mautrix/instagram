@@ -186,17 +186,21 @@ class Portal(DBPortal, BasePortal):
         return await self.main_intent.get_room_displayname(self.mxid, user.mxid) or user.mxid
 
     async def _apply_msg_format(self, sender: 'u.User', content: MessageEventContent) -> None:
+
         tpl = (self.config[f"relay.message_formats.[{content.msgtype.value}]"]
                 or "$sender_displayname: $message")
         displayname = await self.get_displayname(sender)
+        username, _ = self.az.intent.parse_user_id(sender.mxid)
         tpl_args = dict(sender_mxid=sender.mxid,
-                        sender_username=sender.mxid, #TODO
+                        sender_username=username,
                         sender_displayname=escape_html(displayname),
                         message=content.body,
                         body=content.body,
                         )
         content.formatted_body = Template(tpl).safe_substitute(tpl_args)
         content.body = Template(tpl).safe_substitute(tpl_args)
+        if content.msgtype == MessageType.EMOTE:
+            content.msgtype = MessageType.TEXT
 
     async def _get_relay_sender(self, sender: 'u.User', evt_identifier: str
                                 ) -> Tuple[Optional['u.User'], bool]:
@@ -322,6 +326,10 @@ class Portal(DBPortal, BasePortal):
 
         sender, _ = await self._get_relay_sender(sender, f"message {event_id}")
 
+        if not await sender.is_logged_in():
+            self.log.trace(f"Ignoring reaction by non-logged-in user {sender.mxid}")
+            return
+
         existing = await DBReaction.get_by_item_id(message.item_id, message.receiver, sender.igpk)
         if existing and existing.reaction == emoji:
             return
@@ -338,6 +346,7 @@ class Portal(DBPortal, BasePortal):
 
     async def handle_matrix_redaction(self, sender: 'u.User', event_id: EventID,
                                       redaction_event_id: EventID) -> None:
+        sender, _ = await self._get_relay_sender(sender, f"message {event_id}")
         if not self.mxid or not await sender.is_logged_in():
             return
         elif not sender.is_connected:

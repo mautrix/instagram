@@ -87,7 +87,9 @@ async def upgrade_v2(conn: Connection) -> None:
     await conn.execute("ALTER TABLE portal ADD COLUMN avatar_url TEXT")
     await conn.execute("ALTER TABLE portal ADD COLUMN name_set BOOLEAN NOT NULL DEFAULT false")
     await conn.execute("ALTER TABLE portal ADD COLUMN avatar_set BOOLEAN NOT NULL DEFAULT false")
-
-    await conn.execute("ALTER TABLE portal ADD COLUMN relay_user_id TEXT")
-
     await conn.execute("UPDATE portal SET name_set=true WHERE name<>''")
+
+
+@upgrade_table.register(description="Add relay user field to portal table")
+async def upgrade_v3(conn: Connection) -> None:
+    await conn.execute("ALTER TABLE portal ADD COLUMN relay_user_id TEXT")
