@@ -37,7 +37,7 @@ from mautrix.appservice import AppService, IntentAPI
 from mautrix.bridge import BasePortal, NotificationDisabler, async_getter_lock
 from mautrix.types import (EventID, MessageEventContent, RoomID, EventType, MessageType, ImageInfo,
                            VideoInfo, MediaMessageEventContent, TextMessageEventContent, AudioInfo,
-                           ContentURI, EncryptedFile, LocationMessageEventContent, Format, UserID, PowerLevelStateEventContent)
+                           ContentURI, EncryptedFile, LocationMessageEventContent, Format, UserID)
 from mautrix.errors import MatrixError, MForbidden, MNotFound, SessionNotFound
 from mautrix.util.simple_lock import SimpleLock
 
@@ -188,9 +188,6 @@ class Portal(DBPortal, BasePortal):
         return await self.main_intent.get_room_displayname(self.mxid, user.mxid) or user.mxid
 
     async def _apply_msg_format(self, sender: 'u.User', content: MessageEventContent) -> None:
-        # if not isinstance(content, TextMessageEventContent) or content.format != Format.HTML:
-        #     content.format = Format.HTML
-        #     content.formatted_body = escape_html(content.body).replace("\n", "<br/>")
         tpl = (self.config[f"relay.message_formats.[{content.msgtype.value}]"]
                 or "$sender_displayname: $message")
         displayname = await self.get_displayname(sender)
