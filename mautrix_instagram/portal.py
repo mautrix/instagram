@@ -138,15 +138,14 @@ class Portal(DBPortal, BasePortal):
                                  event_type: EventType,
                                  message_type: Optional[MessageType] = None,
                                  msg: Optional[str] = None, confirmed: bool = False) -> None:
-        if self.config["homeserver.message_send_checkpoint_endpoint"]:
-            sender.send_remote_checkpoint(
-                MessageSendCheckpointStatus.PERM_FAILURE,
-                event_id,
-                self.mxid,
-                event_type,
-                message_type=message_type,
-                error=err
-            )
+        sender.send_remote_checkpoint(
+            MessageSendCheckpointStatus.PERM_FAILURE,
+            event_id,
+            self.mxid,
+            event_type,
+            message_type=message_type,
+            error=err
+        )
 
         if self.config["bridge.delivery_error_reports"]:
             event_type_str = {
