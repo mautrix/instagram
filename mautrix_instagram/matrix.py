@@ -19,6 +19,7 @@ from mautrix.bridge import BaseMatrixHandler
 from mautrix.types import (Event, ReactionEvent, RoomID, EventID, UserID, ReactionEventContent,
                            RelationType, EventType, ReceiptEvent, TypingEvent, PresenceEvent,
                            RedactionEvent, SingleReceiptEventContent)
+from mautrix.util.message_send_checkpoint import MessageSendCheckpointStatus
 
 from .db import Message as DBMessage
 from . import portal as po, user as u
@@ -64,6 +65,13 @@ class MatrixHandler(BaseMatrixHandler):
 
         portal = await po.Portal.get_by_mxid(room_id)
         if not portal:
+            user.send_remote_checkpoint(
+                MessageSendCheckpointStatus.PERM_FAILURE,
+                event_id,
+                self.mxid,
+                EventType.ROOM_REDACTION,
+                error=Exception(f"Redaction event {event_id} is in non-portal room {room_id}"),
+            )
             return
 
         await portal.handle_matrix_redaction(user, event_id, redaction_event_id)

@@ -144,7 +144,7 @@ class Portal(DBPortal, BasePortal):
             self.mxid,
             event_type,
             message_type=message_type,
-            error=err
+            error=err,
         )
 
         if self.config["bridge.delivery_error_reports"]:
@@ -388,6 +388,15 @@ class Portal(DBPortal, BasePortal):
                 )
                 await self._send_delivery_receipt(redaction_event_id)
                 self.log.trace(f"Removed {reaction} after Matrix redaction")
+            return
+
+        sender.send_remote_checkpoint(
+            MessageSendCheckpointStatus.PERM_FAILURE,
+            event_id,
+            self.mxid,
+            EventType.ROOM_REDACTION,
+            error=Exception(f"No message or reaction found for redaction of {event_id}"),
+        )
 
     async def handle_matrix_typing(self, users: Set[UserID]) -> None:
         if users == self._typing:
