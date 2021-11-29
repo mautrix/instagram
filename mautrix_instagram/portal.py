@@ -324,9 +324,8 @@ class Portal(DBPortal, BasePortal):
 
     async def handle_matrix_redaction(self, sender: 'u.User', event_id: EventID,
                                       redaction_event_id: EventID) -> None:
-        if not self.mxid:
-            return
-        elif not sender.is_connected:
+        assert self.mxid
+        if not sender.is_connected:
             await self._send_bridge_error(
                 sender,
                 Exception("You're not connected to Instagram"),

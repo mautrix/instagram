@@ -61,6 +61,13 @@ class MatrixHandler(BaseMatrixHandler):
                                redaction_event_id: EventID) -> None:
         user = await u.User.get_by_mxid(user_id)
         if not user:
+            user.send_remote_checkpoint(
+                MessageSendCheckpointStatus.PERM_FAILURE,
+                event_id,
+                self.mxid,
+                EventType.ROOM_REDACTION,
+                error=Exception(f"No user entity found for {user_id}"),
+            )
             return
 
         portal = await po.Portal.get_by_mxid(room_id)
@@ -74,7 +81,16 @@ class MatrixHandler(BaseMatrixHandler):
             )
             return
 
-        await portal.handle_matrix_redaction(user, event_id, redaction_event_id)
+        try:
+            await portal.handle_matrix_redaction(user, event_id, redaction_event_id)
+        except Exception as e:
+            user.send_remote_checkpoint(
+                MessageSendCheckpointStatus.PERM_FAILURE,
+                event_id,
+                self.mxid,
+                EventType.ROOM_REDACTION,
+                error=e,
+            )
 
     @classmethod
     async def handle_reaction(cls, room_id: RoomID, user_id: UserID, event_id: EventID,
