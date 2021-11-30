@@ -68,9 +68,9 @@ class MatrixHandler(BaseMatrixHandler):
             user.send_remote_checkpoint(
                 MessageSendCheckpointStatus.PERM_FAILURE,
                 event_id,
-                self.mxid,
+                room_id,
                 EventType.ROOM_REDACTION,
-                error=Exception(f"Redaction event {event_id} is in non-portal room {room_id}"),
+                error=Exception("Ignoring redaction event in non-portal room"),
             )
             return
 
