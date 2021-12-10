@@ -11,9 +11,11 @@ homeserver:
     # Number of retries for all HTTP requests if the homeserver isn't reachable.
     http_retry_count: 4
     # The URL to push real-time bridge status to.
-    # If set, the bridge will make POST requests to this URL whenever a user's Facebook MQTT connection state changes.
+    # If set, the bridge will make POST requests to this URL whenever a user's Instagram MQTT connection state changes.
     # The bridge will use the appservice as_token to authorize requests.
     status_endpoint: null
+    # Endpoint for reporting per-message status.
+    message_send_checkpoint_endpoint: null
 
 # Application service host/registration related details
 # Changing these values requires regeneration of the registration.
@@ -209,6 +211,7 @@ bridge:
 
     # Permissions for using the bridge.
     # Permitted values:
+    #      relay - Allowed to be relayed through the bridge, no access to commands.
     #       user - Use the bridge with puppeting.
     #      admin - Use and administrate the bridge.
     # Permitted keys:
@@ -216,8 +219,25 @@ bridge:
     #   domain - All users on that homeserver
     #     mxid - Specific user
     permissions:
+        "*": "relay"
         "example.com": "user"
         "@admin:example.com": "admin"
+
+    relay:
+        enabled: false
+        # The formats to use when sending messages to Instagram via the relaybot.
+        # (markdown/html is not supported by instagram yet.)
+        # Messages are not formatted in instagram chats
+        message_formats:
+            m.text: '$sender_displayname: $message'
+            m.notice: '$sender_displayname: $message'
+            m.emote: '* $sender_displayname $message'
+            m.file: '$sender_displayname sent a file'
+            m.image: '$sender_displayname  sent an image'
+            m.audio: '$sender_displayname  sent an audio file'
+            m.video: '$sender_displayname  sent a video'
+            m.location: '$sender_displayname  sent a location'
+
 
 
 # Python logging configuration.

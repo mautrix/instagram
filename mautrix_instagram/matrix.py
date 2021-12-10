@@ -16,13 +16,13 @@
 from typing import List, Union, TYPE_CHECKING
 
 from mautrix.bridge import BaseMatrixHandler
-from mautrix.types import (Event, ReactionEvent, MessageEvent, StateEvent, EncryptedEvent, RoomID,
-                           EventID, UserID, ReactionEventContent, RelationType, EventType,
-                           ReceiptEvent, TypingEvent, PresenceEvent, RedactionEvent,
-                           SingleReceiptEventContent)
+from mautrix.types import (Event, ReactionEvent, RoomID, EventID, UserID, ReactionEventContent,
+                           RelationType, EventType, ReceiptEvent, TypingEvent, PresenceEvent,
+                           RedactionEvent, SingleReceiptEventContent)
+from mautrix.util.message_send_checkpoint import MessageSendCheckpointStatus
 
 from .db import Message as DBMessage
-from . import puppet as pu, portal as po, user as u
+from . import portal as po, user as u
 
 if TYPE_CHECKING:
     from .__main__ import InstagramBridge
@@ -36,15 +36,6 @@ class MatrixHandler(BaseMatrixHandler):
         self.user_id_suffix = f"{suffix}:{homeserver}"
 
         super().__init__(bridge=bridge)
-
-    def filter_matrix_event(self, evt: Event) -> bool:
-        if isinstance(evt, (ReceiptEvent, TypingEvent)):
-            return False
-        elif not isinstance(evt, (ReactionEvent, MessageEvent, StateEvent, EncryptedEvent,
-                                RedactionEvent)):
-            return True
-        return (evt.sender == self.az.bot_mxid
-                or pu.Puppet.get_id_from_mxid(evt.sender) is not None)
 
     async def send_welcome_message(self, room_id: RoomID, inviter: 'u.User') -> None:
         await super().send_welcome_message(room_id, inviter)
@@ -74,6 +65,13 @@ class MatrixHandler(BaseMatrixHandler):
 
         portal = await po.Portal.get_by_mxid(room_id)
         if not portal:
+            user.send_remote_checkpoint(
+                MessageSendCheckpointStatus.PERM_FAILURE,
+                event_id,
+                room_id,
+                EventType.ROOM_REDACTION,
+                error=Exception("Ignoring redaction event in non-portal room"),
+            )
             return
 
         await portal.handle_matrix_redaction(user, event_id, redaction_event_id)
@@ -125,3 +123,9 @@ class MatrixHandler(BaseMatrixHandler):
             await self.handle_typing(evt.room_id, evt.content.user_ids)
         else:
             await super().handle_ephemeral_event(evt)
+
+    async def allow_message(self, user: 'u.User') -> bool:
+        return user.relay_whitelisted
+
+    async def allow_bridging_message(self, user: 'u.User', portal: 'po.Portal') -> bool:
+        return portal.has_relay or await user.is_logged_in()

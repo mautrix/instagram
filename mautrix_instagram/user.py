@@ -25,10 +25,10 @@ from mauigpapi.types import (CurrentUser, MessageSyncEvent, Operation, RealtimeD
                              ActivityIndicatorData, TypingStatus, ThreadSyncEvent, Thread)
 from mauigpapi.errors import (IGNotLoggedInError, MQTTNotLoggedIn, MQTTNotConnected,
                               IrisSubscribeError, IGUserIDNotFoundError)
-from mautrix.bridge import BaseUser, BridgeState, async_getter_lock
+from mautrix.bridge import BaseUser, async_getter_lock
 from mautrix.types import UserID, RoomID, EventID, TextMessageEventContent, MessageType
 from mautrix.appservice import AppService
-from mautrix.util.bridge_state import BridgeStateEvent
+from mautrix.util.bridge_state import BridgeState, BridgeStateEvent
 from mautrix.util.logging import TraceLogger
 from mautrix.util.opt_prometheus import Summary, Gauge, async_time
 
@@ -63,6 +63,8 @@ class User(DBUser, BaseUser):
     az: AppService
     loop: asyncio.AbstractEventLoop
 
+    relay_whitelisted: bool
+
     client: Optional[AndroidAPI]
     mqtt: Optional[AndroidMQTT]
     _listen_task: Optional[asyncio.Task] = None
@@ -85,7 +87,6 @@ class User(DBUser, BaseUser):
         self._notice_room_lock = asyncio.Lock()
         self._notice_send_lock = asyncio.Lock()
         perms = self.config.get_permissions(mxid)
-        self.is_whitelisted, self.is_admin, self.permission_level = perms
         self.client = None
         self.mqtt = None
         self.username = None
@@ -95,6 +96,7 @@ class User(DBUser, BaseUser):
         self.shutdown = False
         self._listen_task = None
         self.remote_typing_status = None
+        self.relay_whitelisted, self.is_whitelisted, self.is_admin, self.permission_level = perms
 
     @classmethod
     def init_cls(cls, bridge: 'InstagramBridge') -> AsyncIterable[Awaitable[None]]:

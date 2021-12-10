@@ -22,6 +22,11 @@ import asyncio
 
 import asyncpg
 import magic
+from mautrix.util.message_send_checkpoint import MessageSendCheckpointStatus
+
+# for relaybot
+from html import escape as escape_html
+from string import Template
 
 from mauigpapi.types import (Thread, ThreadUser, ThreadItem, RegularMediaItem, MediaType,
                              ReactionStatus, Reaction, AnimatedMediaItem, ThreadItemType,
@@ -82,13 +87,15 @@ class Portal(DBPortal, BasePortal):
     _reaction_lock: asyncio.Lock
     _backfill_leave: Optional[Set[IntentAPI]]
     _typing: Set[UserID]
+    _relay_user: Optional['u.User']
 
     def __init__(self, thread_id: str, receiver: int, other_user_pk: Optional[int],
                  mxid: Optional[RoomID] = None, name: Optional[str] = None,
                  avatar_url: Optional[ContentURI] = None, encrypted: bool = False,
-                 name_set: bool = False, avatar_set: bool = False) -> None:
+                 relay_user_id: Optional[UserID] = None, name_set: bool = False,
+                 avatar_set: bool = False) -> None:
         super().__init__(thread_id, receiver, other_user_pk, mxid, name, avatar_url, encrypted,
-                         name_set, avatar_set)
+                         name_set, avatar_set, relay_user_id)
         self._create_room_lock = asyncio.Lock()
         self.log = self.log.getChild(thread_id)
         self._msgid_dedup = deque(maxlen=100)
@@ -102,6 +109,24 @@ class Portal(DBPortal, BasePortal):
         self._main_intent = None
         self._reaction_lock = asyncio.Lock()
         self._typing = set()
+        self._relay_user = None
+
+    @property
+    def has_relay(self) -> bool:
+        return self.config["bridge.relay.enabled"] and bool(self.relay_user_id)
+
+    async def get_relay_user(self) -> Optional['u.User']:
+        if not self.has_relay:
+            return None
+
+        if self._relay_user is None:
+            self._relay_user = await u.User.get_by_mxid(self.relay_user_id)
+        return self._relay_user if await self._relay_user.is_logged_in() else None
+
+    async def set_relay_user(self, user: Optional['u.User']) -> None:
+        self._relay_user = user
+        self.relay_user_id = user.mxid if user else None
+        await self.save()
 
     @property
     def is_direct(self) -> bool:
@@ -133,17 +158,32 @@ class Portal(DBPortal, BasePortal):
             except Exception:
                 self.log.exception("Failed to send delivery receipt for %s", event_id)
 
-    async def _send_bridge_error(self, msg: str, event_type: str = "message",
-                                 confirmed: bool = False) -> None:
+    async def _send_bridge_error(self, sender: 'u.User', err: Union[Exception, str],
+                                 event_id: EventID, event_type: EventType,
+                                 message_type: Optional[MessageType] = None,
+                                 msg: Optional[str] = None, confirmed: bool = False) -> None:
+        sender.send_remote_checkpoint(
+            MessageSendCheckpointStatus.PERM_FAILURE,
+            event_id,
+            self.mxid,
+            event_type,
+            message_type=message_type,
+            error=err,
+        )
+
         if self.config["bridge.delivery_error_reports"]:
+            event_type_str = {
+                EventType.REACTION: "reaction",
+                EventType.ROOM_REDACTION: "redaction",
+            }.get(event_type, "message")
             error_type = "was not" if confirmed else "may not have been"
             await self._send_message(self.main_intent, TextMessageEventContent(
                 msgtype=MessageType.NOTICE,
-                body=f"\u26a0 Your {event_type} {error_type} bridged: {msg}"))
+                body=f"\u26a0 Your {event_type_str} {error_type} bridged: {msg or str(err)}"))
 
-    async def _upsert_reaction(self, existing: DBReaction, intent: IntentAPI, mxid: EventID,
-                               message: DBMessage, sender: Union['u.User', 'p.Puppet'],
-                               reaction: str) -> None:
+    async def _upsert_reaction(self, existing: Optional[DBReaction], intent: IntentAPI,
+                               mxid: EventID, message: DBMessage,
+                               sender: Union['u.User', 'p.Puppet'], reaction: str) -> None:
         if existing:
             self.log.debug(f"_upsert_reaction redacting {existing.mxid} and inserting {mxid}"
                            f" (message: {message.mxid})")
@@ -158,14 +198,53 @@ class Portal(DBPortal, BasePortal):
     # endregion
     # region Matrix event handling
 
+    async def apply_msg_format(self, sender: 'u.User', content: MessageEventContent) -> None:
+
+        tpl = (self.config[f"relay.message_formats.[{content.msgtype.value}]"]
+                or "$sender_displayname: $message")
+        displayname = await self.get_displayname(sender)
+        username, _ = self.az.intent.parse_user_id(sender.mxid)
+        tpl_args = dict(sender_mxid=sender.mxid,
+                        sender_username=username,
+                        sender_displayname=escape_html(displayname),
+                        message=content.body,
+                        body=content.body,
+                        )
+        content.formatted_body = Template(tpl).safe_substitute(tpl_args)
+        content.body = Template(tpl).safe_substitute(tpl_args)
+        if content.msgtype == MessageType.EMOTE:
+            content.msgtype = MessageType.TEXT
+
+    async def get_relay_sender(self, sender: 'u.User', evt_identifier: str
+                                ) -> Tuple[Optional['u.User'], bool]:
+        if await sender.is_logged_in():
+            return sender, False
+
+        if not self.has_relay:
+            self.log.debug(f"Ignoring {evt_identifier} from non-logged-in user {sender.mxid}"
+                           " in chat with no relay user")
+            return None, True
+        relay_sender = await self.get_relay_user()
+        if not relay_sender:
+            self.log.debug(f"Ignoring {evt_identifier} from non-logged-in user {sender.mxid}: "
+                           f"relay user {self.relay_user_id} is not set up correctly")
+            return None, True
+        return relay_sender, True
+
     async def handle_matrix_message(self, sender: 'u.User', message: MessageEventContent,
                                     event_id: EventID) -> None:
         try:
             await self._handle_matrix_message(sender, message, event_id)
-        except Exception:
-            self.log.exception(f"Fatal error handling Matrix event {event_id}")
-            await self._send_bridge_error("Fatal error in message handling "
-                                          "(see logs for more details)")
+        except Exception as e:
+            self.log.exception(f"Fatal error handling Matrix event {event_id}: {e}")
+            await self._send_bridge_error(
+                sender,
+                e,
+                event_id,
+                EventType.ROOM_MESSAGE,
+                message_type=message.msgtype,
+                msg="Fatal error in message handling (see logs for more details)",
+            )
 
     async def _handle_matrix_message(self, sender: 'u.User', message: MessageEventContent,
                                      event_id: EventID) -> None:
@@ -173,9 +252,35 @@ class Portal(DBPortal, BasePortal):
              and await p.Puppet.get_by_custom_mxid(sender.mxid))):
             self.log.debug(f"Ignoring puppet-sent message by confirmed puppet user {sender.mxid}")
             return
-        elif not sender.is_connected:
-            await self._send_bridge_error("You're not connected to Instagram", confirmed=True)
+
+        orig_sender = sender
+        sender, is_relay = await self.get_relay_sender(sender, f"message {event_id}")
+
+        if not sender.is_connected:
+            await self._send_bridge_error(
+                sender,
+                "You're not connected to Instagram",
+                event_id,
+                EventType.ROOM_MESSAGE,
+                message_type=message.msgtype,
+                confirmed=True,
+            )
             return
+
+        if not sender:
+            return
+        elif is_relay:
+            await self.apply_msg_format(orig_sender, message)
+
+
+        if not await sender.is_logged_in() and self.config['bridge.relaybot.enabled']:
+            self.log.trace(f"Message sent by non instagram-user {sender.mxid}")
+            async for user in u.User.all_logged_in():
+                await self.apply_msg_format(sender, message)
+                if await user.is_in_portal(self) and user.is_relay:
+                    await self._handle_matrix_message(user, message, event_id, True)
+                    return
+
         request_id = sender.state.gen_client_context()
         self._reqid_dedup.add(request_id)
         self.log.debug(f"Handling Matrix message {event_id} from {sender.mxid}/{sender.igpk} "
@@ -188,6 +293,7 @@ class Portal(DBPortal, BasePortal):
             resp = await sender.mqtt.send_text(self.thread_id, text=text,
                                                client_context=request_id)
         elif message.msgtype.is_media:
+            text = message.body if is_relay else None
             if message.file and decrypt_attachment:
                 data = await self.main_intent.download_media(message.file.url)
                 data = decrypt_attachment(data, message.file.key.key,
@@ -213,8 +319,14 @@ class Portal(DBPortal, BasePortal):
                                                      upload_id=upload_resp.upload_id,
                                                      allow_full_aspect_ratio="1")
             else:
-                await self._send_bridge_error("Non-image files are currently not supported",
-                                              confirmed=True)
+                await self._send_bridge_error(
+                    sender,
+                    "Non-image files are currently not supported",
+                    event_id,
+                    EventType.ROOM_MESSAGE,
+                    message_type=message.msgtype,
+                    confirmed=True,
+                )
                 return
         else:
             self.log.debug(f"Unhandled Matrix message {event_id}: "
@@ -223,8 +335,23 @@ class Portal(DBPortal, BasePortal):
         self.log.trace(f"Got response to message send {request_id}: {resp}")
         if resp.status != "ok":
             self.log.warning(f"Failed to handle {event_id}: {resp}")
-            await self._send_bridge_error(resp.payload.message)
+            await self._send_bridge_error(
+                sender,
+                resp.payload.message,
+                event_id,
+                EventType.ROOM_MESSAGE,
+                message_type=message.msgtype,
+                confirmed=True,
+            )
         else:
+            sender.send_remote_checkpoint(
+                status=MessageSendCheckpointStatus.SUCCESS,
+                event_id=event_id,
+                room_id=self.mxid,
+                event_type=EventType.ROOM_MESSAGE,
+                message_type=message.msgtype,
+            )
+            await self._send_delivery_receipt(event_id)
             self._msgid_dedup.appendleft(resp.payload.item_id)
             try:
                 await DBMessage(mxid=event_id, mx_room=self.mxid, item_id=resp.payload.item_id,
@@ -233,7 +360,6 @@ class Portal(DBPortal, BasePortal):
                 self.log.warning(f"Error while persisting {event_id} "
                                  f"({resp.payload.client_context}) -> {resp.payload.item_id}: {e}")
             self._reqid_dedup.remove(request_id)
-            await self._send_delivery_receipt(event_id)
             self.log.debug(f"Handled Matrix message {event_id} ({resp.payload.client_context}) "
                            f"-> {resp.payload.item_id}")
 
@@ -244,6 +370,12 @@ class Portal(DBPortal, BasePortal):
             self.log.debug(f"Ignoring reaction to unknown event {reacting_to}")
             return
 
+        sender, _ = await self.get_relay_sender(sender, f"message {event_id}")
+
+        if not await sender.is_logged_in():
+            self.log.trace(f"Ignoring reaction by non-logged-in user {sender.mxid}")
+            return
+
         existing = await DBReaction.get_by_item_id(message.item_id, message.receiver, sender.igpk)
         if existing and existing.reaction == emoji:
             return
@@ -251,33 +383,73 @@ class Portal(DBPortal, BasePortal):
         dedup_id = (message.item_id, sender.igpk, emoji)
         self._reaction_dedup.appendleft(dedup_id)
         async with self._reaction_lock:
-            # TODO check response?
-            await sender.mqtt.send_reaction(self.thread_id, item_id=message.item_id, emoji=emoji)
-            await self._upsert_reaction(existing, self.main_intent, event_id, message, sender,
-                                        emoji)
-            self.log.trace(f"{sender.mxid} reacted to {message.item_id} with {emoji}")
-        await self._send_delivery_receipt(event_id)
+            try:
+                resp = await sender.mqtt.send_reaction(self.thread_id, item_id=message.item_id,
+                                                       emoji=emoji)
+                if resp.status != "ok":
+                    raise Exception(f"Failed to react to {event_id}: {resp}")
+            except Exception as e:
+                self.log.exception(f"Failed to handle {event_id}: {e}")
+                await self._send_bridge_error(
+                    sender,
+                    e,
+                    event_id,
+                    EventType.REACTION,
+                    confirmed=True,
+                )
+            else:
+                sender.send_remote_checkpoint(
+                    status=MessageSendCheckpointStatus.SUCCESS,
+                    event_id=event_id,
+                    room_id=self.mxid,
+                    event_type=EventType.REACTION,
+                )
+                await self._send_delivery_receipt(event_id)
+                self.log.trace(f"{sender.mxid} reacted to {message.item_id} with {emoji}")
+                await self._upsert_reaction(existing, self.main_intent, event_id, message, sender,
+                                            emoji)
 
     async def handle_matrix_redaction(self, sender: 'u.User', event_id: EventID,
                                       redaction_event_id: EventID) -> None:
-        if not self.mxid:
-            return
-        elif not sender.is_connected:
-            await self._send_bridge_error("You're not connected to Instagram",
-                                          event_type="redaction", confirmed=True)
+        sender, _ = await self.get_relay_sender(sender, f"message {event_id}")
+        if not self.mxid or not await sender.is_logged_in():
             return
 
-        # TODO implement
+        if not sender.is_connected:
+            await self._send_bridge_error(
+                sender,
+                "You're not connected to Instagram",
+                redaction_event_id,
+                EventType.ROOM_REDACTION,
+                confirmed=True,
+            )
+            return
+
         reaction = await DBReaction.get_by_mxid(event_id, self.mxid)
         if reaction:
             try:
                 await reaction.delete()
                 await sender.mqtt.send_reaction(self.thread_id, item_id=reaction.ig_item_id,
                                                 reaction_status=ReactionStatus.DELETED, emoji="")
+            except Exception as e:
+                self.log.exception("Removing reaction failed")
+                await self._send_bridge_error(
+                    sender,
+                    e,
+                    redaction_event_id,
+                    EventType.ROOM_REDACTION,
+                    confirmed=True,
+                    msg=f"Removing reaction {reaction.reaction} from {event_id} failed.",
+                )
+            else:
+                sender.send_remote_checkpoint(
+                    status=MessageSendCheckpointStatus.SUCCESS,
+                    event_id=redaction_event_id,
+                    room_id=self.mxid,
+                    event_type=EventType.ROOM_REDACTION,
+                )
                 await self._send_delivery_receipt(redaction_event_id)
                 self.log.trace(f"Removed {reaction} after Matrix redaction")
-            except Exception:
-                self.log.exception("Removing reaction failed")
             return
 
         message = await DBMessage.get_by_mxid(event_id, self.mxid)
@@ -286,8 +458,34 @@ class Portal(DBPortal, BasePortal):
                 await message.delete()
                 await sender.client.delete_item(self.thread_id, message.item_id)
                 self.log.trace(f"Removed {message} after Matrix redaction")
-            except Exception:
+            except Exception as e:
                 self.log.exception("Removing message failed")
+                await self._send_bridge_error(
+                    sender,
+                    e,
+                    redaction_event_id,
+                    EventType.ROOM_REDACTION,
+                    confirmed=True,
+                    msg=f"Removing message {event_id} failed.",
+                )
+            else:
+                sender.send_remote_checkpoint(
+                    status=MessageSendCheckpointStatus.SUCCESS,
+                    event_id=redaction_event_id,
+                    room_id=self.mxid,
+                    event_type=EventType.ROOM_REDACTION,
+                )
+                await self._send_delivery_receipt(redaction_event_id)
+                self.log.trace(f"Removed {reaction} after Matrix redaction")
+            return
+
+        sender.send_remote_checkpoint(
+            MessageSendCheckpointStatus.PERM_FAILURE,
+            redaction_event_id,
+            self.mxid,
+            EventType.ROOM_REDACTION,
+            error=Exception("No message or reaction found for redaction"),
+        )
 
     async def handle_matrix_typing(self, users: Set[UserID]) -> None:
         if users == self._typing:
@@ -306,7 +504,10 @@ class Portal(DBPortal, BasePortal):
             user.remote_typing_status = None
             await user.mqtt.indicate_activity(self.thread_id, status)
 
+
     async def handle_matrix_leave(self, user: 'u.User') -> None:
+        if not await user.is_logged_in():
+            return
         if self.is_direct:
             self.log.info(f"{user.mxid} left private chat portal with {self.other_user_pk}")
             if user.igpk == self.receiver:
