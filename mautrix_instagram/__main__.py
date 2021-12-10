@@ -1,5 +1,5 @@
 # mautrix-instagram - A Matrix-Instagram puppeting bridge.
-# Copyright (C) 2020 Tulir Asokan
+# Copyright (C) 2021 Tulir Asokan
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as published by
@@ -20,7 +20,6 @@ import asyncio
 from mautrix.types import UserID, RoomID
 from mautrix.bridge import Bridge
 from mautrix.bridge.state_store.asyncpg import PgBridgeStateStore
-from mautrix.util.async_db import Database
 
 from .config import Config
 from .db import upgrade_table, init as init_db
@@ -44,8 +43,8 @@ class InstagramBridge(Bridge):
     markdown_version = linkified_version
     config_class = Config
     matrix_class = MatrixHandler
+    upgrade_table = upgrade_table
 
-    db: Database
     config: Config
     matrix: MatrixHandler
     state_store: PgBridgeStateStore
@@ -61,8 +60,7 @@ class InstagramBridge(Bridge):
         self.state_store = PgBridgeStateStore(self.db, self.get_puppet, self.get_double_puppet)
 
     def prepare_db(self) -> None:
-        self.db = Database.create(self.config["appservice.database"], upgrade_table=upgrade_table,
-                                  db_args=self.config["appservice.database_opts"])
+        super().prepare_db()
         init_db(self.db)
 
     def prepare_bridge(self) -> None:
@@ -73,17 +71,13 @@ class InstagramBridge(Bridge):
         self.az.app.add_subapp(cfg["prefix"], self.provisioning_api.app)
 
     async def start(self) -> None:
-        await self.db.start()
-        await self.state_store.upgrade_table.upgrade(self.db)
-        if self.matrix.e2ee:
-            self.matrix.e2ee.crypto_db.override_pool(self.db)
         self.add_startup_actions(User.init_cls(self))
         self.add_startup_actions(Puppet.init_cls(self))
         Portal.init_cls(self)
         if self.config["bridge.resend_bridge_info"]:
             self.add_startup_actions(self.resend_bridge_info())
         await super().start()
-        self.periodic_reconnect_task = self.loop.create_task(self._try_periodic_reconnect_loop())
+        self.periodic_reconnect_task = asyncio.create_task(self._try_periodic_reconnect_loop())
 
     def prepare_stop(self) -> None:
         self.periodic_reconnect_task.cancel()
@@ -91,10 +85,6 @@ class InstagramBridge(Bridge):
         self.log.debug("Stopping puppet syncers")
         for puppet in Puppet.by_custom_mxid.values():
             puppet.stop()
-
-    async def stop(self) -> None:
-        await super().stop()
-        await self.db.stop()
 
     async def resend_bridge_info(self) -> None:
         self.config["bridge.resend_bridge_info"] = False

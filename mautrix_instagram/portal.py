@@ -158,8 +158,8 @@ class Portal(DBPortal, BasePortal):
             except Exception:
                 self.log.exception("Failed to send delivery receipt for %s", event_id)
 
-    async def _send_bridge_error(self, sender: 'u.User', err: Exception, event_id: EventID,
-                                 event_type: EventType,
+    async def _send_bridge_error(self, sender: 'u.User', err: Union[Exception, str],
+                                 event_id: EventID, event_type: EventType,
                                  message_type: Optional[MessageType] = None,
                                  msg: Optional[str] = None, confirmed: bool = False) -> None:
         sender.send_remote_checkpoint(
@@ -262,7 +262,7 @@ class Portal(DBPortal, BasePortal):
         if not sender.is_connected:
             await self._send_bridge_error(
                 sender,
-                Exception("You're not connected to Instagram"),
+                "You're not connected to Instagram",
                 event_id,
                 EventType.ROOM_MESSAGE,
                 message_type=message.msgtype,
@@ -324,7 +324,7 @@ class Portal(DBPortal, BasePortal):
             else:
                 await self._send_bridge_error(
                     sender,
-                    Exception("Non-image files are currently not supported"),
+                    "Non-image files are currently not supported",
                     event_id,
                     EventType.ROOM_MESSAGE,
                     message_type=message.msgtype,
@@ -340,7 +340,7 @@ class Portal(DBPortal, BasePortal):
             self.log.warning(f"Failed to handle {event_id}: {resp}")
             await self._send_bridge_error(
                 sender,
-                Exception(resp.payload.message),
+                resp.payload.message,
                 event_id,
                 EventType.ROOM_MESSAGE,
                 message_type=message.msgtype,
@@ -417,11 +417,12 @@ class Portal(DBPortal, BasePortal):
         sender, _ = await self._get_relay_sender(sender, f"message {event_id}")
         if not self.mxid or not await sender.is_logged_in():
             return
-        elif not sender.is_connected:
+
+        if not sender.is_connected:
             await self._send_bridge_error(
                 sender,
-                Exception("You're not connected to Instagram"),
-                event_id,
+                "You're not connected to Instagram",
+                redaction_event_id,
                 EventType.ROOM_REDACTION,
                 confirmed=True,
             )
@@ -438,15 +439,15 @@ class Portal(DBPortal, BasePortal):
                 await self._send_bridge_error(
                     sender,
                     e,
-                    event_id,
+                    redaction_event_id,
                     EventType.ROOM_REDACTION,
                     confirmed=True,
-                    msg=f"Remvoving reaction {reaction.reaction} from {event_id} failed.",
+                    msg=f"Removing reaction {reaction.reaction} from {event_id} failed.",
                 )
             else:
                 sender.send_remote_checkpoint(
                     status=MessageSendCheckpointStatus.SUCCESS,
-                    event_id=event_id,
+                    event_id=redaction_event_id,
                     room_id=self.mxid,
                     event_type=EventType.ROOM_REDACTION,
                 )
@@ -465,15 +466,15 @@ class Portal(DBPortal, BasePortal):
                 await self._send_bridge_error(
                     sender,
                     e,
-                    event_id,
+                    redaction_event_id,
                     EventType.ROOM_REDACTION,
                     confirmed=True,
-                    msg=f"Remvoving message {event_id} failed.",
+                    msg=f"Removing message {event_id} failed.",
                 )
             else:
                 sender.send_remote_checkpoint(
                     status=MessageSendCheckpointStatus.SUCCESS,
-                    event_id=event_id,
+                    event_id=redaction_event_id,
                     room_id=self.mxid,
                     event_type=EventType.ROOM_REDACTION,
                 )
@@ -483,10 +484,10 @@ class Portal(DBPortal, BasePortal):
 
         sender.send_remote_checkpoint(
             MessageSendCheckpointStatus.PERM_FAILURE,
-            event_id,
+            redaction_event_id,
             self.mxid,
             EventType.ROOM_REDACTION,
-            error=Exception(f"No message or reaction found for redaction of {event_id}"),
+            error=Exception("No message or reaction found for redaction"),
         )
 
     async def handle_matrix_typing(self, users: Set[UserID]) -> None:

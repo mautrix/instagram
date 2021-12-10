@@ -25,10 +25,10 @@ from mauigpapi.types import (CurrentUser, MessageSyncEvent, Operation, RealtimeD
                              ActivityIndicatorData, TypingStatus, ThreadSyncEvent, Thread)
 from mauigpapi.errors import (IGNotLoggedInError, MQTTNotLoggedIn, MQTTNotConnected,
                               IrisSubscribeError, IGUserIDNotFoundError)
-from mautrix.bridge import BaseUser, BridgeState, async_getter_lock
+from mautrix.bridge import BaseUser, async_getter_lock
 from mautrix.types import UserID, RoomID, EventID, TextMessageEventContent, MessageType
 from mautrix.appservice import AppService
-from mautrix.util.bridge_state import BridgeStateEvent
+from mautrix.util.bridge_state import BridgeState, BridgeStateEvent
 from mautrix.util.logging import TraceLogger
 from mautrix.util.opt_prometheus import Summary, Gauge, async_time
 
