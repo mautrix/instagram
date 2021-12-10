@@ -198,10 +198,7 @@ class Portal(DBPortal, BasePortal):
     # endregion
     # region Matrix event handling
 
-    async def get_displayname(self, user: 'u.User') -> str:
-        return await self.main_intent.get_room_displayname(self.mxid, user.mxid) or user.mxid
-
-    async def _apply_msg_format(self, sender: 'u.User', content: MessageEventContent) -> None:
+    async def apply_msg_format(self, sender: 'u.User', content: MessageEventContent) -> None:
 
         tpl = (self.config[f"relay.message_formats.[{content.msgtype.value}]"]
                 or "$sender_displayname: $message")
@@ -218,7 +215,7 @@ class Portal(DBPortal, BasePortal):
         if content.msgtype == MessageType.EMOTE:
             content.msgtype = MessageType.TEXT
 
-    async def _get_relay_sender(self, sender: 'u.User', evt_identifier: str
+    async def get_relay_sender(self, sender: 'u.User', evt_identifier: str
                                 ) -> Tuple[Optional['u.User'], bool]:
         if await sender.is_logged_in():
             return sender, False
@@ -257,7 +254,7 @@ class Portal(DBPortal, BasePortal):
             return
 
         orig_sender = sender
-        sender, is_relay = await self._get_relay_sender(sender, f"message {event_id}")
+        sender, is_relay = await self.get_relay_sender(sender, f"message {event_id}")
 
         if not sender.is_connected:
             await self._send_bridge_error(
@@ -273,13 +270,13 @@ class Portal(DBPortal, BasePortal):
         if not sender:
             return
         elif is_relay:
-            await self._apply_msg_format(orig_sender, message)
+            await self.apply_msg_format(orig_sender, message)
 
 
         if not await sender.is_logged_in() and self.config['bridge.relaybot.enabled']:
             self.log.trace(f"Message sent by non instagram-user {sender.mxid}")
             async for user in u.User.all_logged_in():
-                await self._apply_msg_format(sender, message)
+                await self.apply_msg_format(sender, message)
                 if await user.is_in_portal(self) and user.is_relay:
                     await self._handle_matrix_message(user, message, event_id, True)
                     return
@@ -373,7 +370,7 @@ class Portal(DBPortal, BasePortal):
             self.log.debug(f"Ignoring reaction to unknown event {reacting_to}")
             return
 
-        sender, _ = await self._get_relay_sender(sender, f"message {event_id}")
+        sender, _ = await self.get_relay_sender(sender, f"message {event_id}")
 
         if not await sender.is_logged_in():
             self.log.trace(f"Ignoring reaction by non-logged-in user {sender.mxid}")
@@ -414,7 +411,7 @@ class Portal(DBPortal, BasePortal):
 
     async def handle_matrix_redaction(self, sender: 'u.User', event_id: EventID,
                                       redaction_event_id: EventID) -> None:
-        sender, _ = await self._get_relay_sender(sender, f"message {event_id}")
+        sender, _ = await self.get_relay_sender(sender, f"message {event_id}")
         if not self.mxid or not await sender.is_logged_in():
             return
 
