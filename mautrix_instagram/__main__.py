@@ -19,7 +19,6 @@ import asyncio
 
 from mautrix.types import UserID, RoomID
 from mautrix.bridge import Bridge
-from mautrix.bridge.state_store.asyncpg import PgBridgeStateStore
 
 from .config import Config
 from .db import upgrade_table, init as init_db
@@ -47,7 +46,6 @@ class InstagramBridge(Bridge):
 
     config: Config
     matrix: MatrixHandler
-    state_store: PgBridgeStateStore
     provisioning_api: ProvisioningAPI
 
     periodic_reconnect_task: Optional[asyncio.Task]
@@ -55,9 +53,6 @@ class InstagramBridge(Bridge):
     def preinit(self) -> None:
         self.periodic_reconnect_task = None
         super().preinit()
-
-    def make_state_store(self) -> None:
-        self.state_store = PgBridgeStateStore(self.db, self.get_puppet, self.get_double_puppet)
 
     def prepare_db(self) -> None:
         super().prepare_db()
