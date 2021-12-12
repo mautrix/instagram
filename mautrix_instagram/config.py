@@ -21,7 +21,7 @@ from mautrix.client import Client
 from mautrix.util.config import ConfigUpdateHelper, ForbiddenKey, ForbiddenDefault
 from mautrix.bridge.config import BaseBridgeConfig
 
-Permissions = NamedTuple("Permissions", user=bool, admin=bool, level=str)
+Permissions = NamedTuple("Permissions", relay=bool, user=bool, admin=bool, level=str)
 
 
 class Config(BaseBridgeConfig):
@@ -102,7 +102,8 @@ class Config(BaseBridgeConfig):
         level = self["bridge.permissions"].get(key, "")
         admin = level == "admin"
         user = level == "user" or admin
-        return Permissions(user, admin, level)
+        relay = level == "relay" or user
+        return Permissions(relay, user, admin, level)
 
     def get_permissions(self, mxid: UserID) -> Permissions:
         permissions = self["bridge.permissions"]

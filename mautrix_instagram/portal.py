@@ -87,9 +87,10 @@ class Portal(DBPortal, BasePortal):
     def __init__(self, thread_id: str, receiver: int, other_user_pk: Optional[int],
                  mxid: Optional[RoomID] = None, name: Optional[str] = None,
                  avatar_url: Optional[ContentURI] = None, encrypted: bool = False,
-                 name_set: bool = False, avatar_set: bool = False) -> None:
+                 name_set: bool = False, avatar_set: bool = False,
+                 relay_user_id: Optional[UserID] = None) -> None:
         super().__init__(thread_id, receiver, other_user_pk, mxid, name, avatar_url, encrypted,
-                         name_set, avatar_set)
+                         name_set, avatar_set, relay_user_id)
         self._create_room_lock = asyncio.Lock()
         self.log = self.log.getChild(thread_id)
         self._msgid_dedup = deque(maxlen=100)
@@ -103,6 +104,7 @@ class Portal(DBPortal, BasePortal):
         self._main_intent = None
         self._reaction_lock = asyncio.Lock()
         self._typing = set()
+        self._relay_user = None
 
     @property
     def is_direct(self) -> bool:
@@ -189,9 +191,20 @@ class Portal(DBPortal, BasePortal):
                 msg="Fatal error in message handling (see logs for more details)",
             )
 
-    async def _handle_matrix_message(self, sender: 'u.User', message: MessageEventContent,
+    async def _handle_matrix_message(self, orig_sender: 'u.User', message: MessageEventContent,
                                      event_id: EventID) -> None:
-        if not sender.is_connected:
+        sender, is_relay = await self.get_relay_sender(orig_sender, f"message {event_id}")
+        if not sender:
+            orig_sender.send_remote_checkpoint(
+                status=MessageSendCheckpointStatus.PERM_FAILURE,
+                event_id=event_id,
+                room_id=self.mxid,
+                event_type=EventType.ROOM_MESSAGE,
+                message_type=message.msgtype,
+                error="user is not logged in",
+            )
+            return
+        elif not sender.is_connected:
             await self._send_bridge_error(
                 sender,
                 "You're not connected to Instagram",
@@ -201,6 +214,9 @@ class Portal(DBPortal, BasePortal):
                 confirmed=True,
             )
             return
+        elif is_relay:
+            await self.apply_relay_message_format(orig_sender, message)
+
         request_id = sender.state.gen_client_context()
         self._reqid_dedup.add(request_id)
         self.log.debug(f"Handling Matrix message {event_id} from {sender.mxid}/{sender.igpk} "
@@ -289,6 +305,10 @@ class Portal(DBPortal, BasePortal):
             self.log.debug(f"Ignoring reaction to unknown event {reacting_to}")
             return
 
+        if not await sender.is_logged_in():
+            self.log.debug(f"Ignoring reaction by non-logged-in user {sender.mxid}")
+            return
+
         existing = await DBReaction.get_by_item_id(message.item_id, message.receiver, sender.igpk)
         if existing and existing.reaction == emoji:
             return
@@ -322,9 +342,19 @@ class Portal(DBPortal, BasePortal):
                 await self._upsert_reaction(existing, self.main_intent, event_id, message, sender,
                                             emoji)
 
-    async def handle_matrix_redaction(self, sender: 'u.User', event_id: EventID,
+    async def handle_matrix_redaction(self, orig_sender: 'u.User', event_id: EventID,
                                       redaction_event_id: EventID) -> None:
-        if not sender.is_connected:
+        sender, _ = await self.get_relay_sender(orig_sender, f"redaction {event_id}")
+        if not sender:
+            orig_sender.send_remote_checkpoint(
+                status=MessageSendCheckpointStatus.PERM_FAILURE,
+                event_id=redaction_event_id,
+                room_id=self.mxid,
+                event_type=EventType.ROOM_REDACTION,
+                error="user is not logged in",
+            )
+            return
+        elif not sender.is_connected:
             await self._send_bridge_error(
                 sender,
                 "You're not connected to Instagram",
@@ -414,6 +444,8 @@ class Portal(DBPortal, BasePortal):
             await user.mqtt.indicate_activity(self.thread_id, status)
 
     async def handle_matrix_leave(self, user: 'u.User') -> None:
+        if not await user.is_logged_in():
+            return
         if self.is_direct:
             self.log.info(f"{user.mxid} left private chat portal with {self.other_user_pk}")
             if user.igpk == self.receiver:
