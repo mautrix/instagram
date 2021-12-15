@@ -37,7 +37,6 @@ class InstagramBridge(Bridge):
     command = "python -m mautrix-instagram"
     description = "A Matrix-Instagram DM puppeting bridge."
     repo_url = "https://github.com/mautrix/instagram"
-    real_user_content_key = "net.maunium.instagram.puppet"
     version = version
     markdown_version = linkified_version
     config_class = Config
