@@ -109,6 +109,11 @@ class User(DBUser, BaseUser):
     async def is_logged_in(self) -> bool:
         return bool(self.client) and self._is_logged_in
 
+    async def get_puppet(self) -> Optional[pu.Puppet]:
+        if not self.igpk:
+            return None
+        return await pu.Puppet.get_by_pk(self.igpk)
+
     async def try_connect(self) -> None:
         try:
             await self.connect()
