@@ -22,7 +22,6 @@ import asyncio
 
 import asyncpg
 import magic
-from mautrix.types.event.message import Audio, ExtensibleFile, Voice
 from mautrix.util.message_send_checkpoint import MessageSendCheckpointStatus
 
 from mauigpapi.types import (Thread, ThreadUser, ThreadItem, RegularMediaItem, MediaType,
@@ -470,14 +469,17 @@ class Portal(DBPortal, BasePortal):
         info = AudioInfo(duration=media.media.audio.duration)
         waveform = [int(p * 1000) for p in media.media.audio.waveform_data]
         content = await self._reupload_instagram_file(source, url, MessageType.AUDIO, info, intent)
-        content.extensible_file = ExtensibleFile(
-            file=content.file,
-            name=content.body,
-            mimetype=content.info.mimetype,
-            size=content.info.size,
-        )
-        content.audio = Audio(duration=media.media.audio.duration, waveform=waveform)
-        content.voice = Voice()
+        content["org.matrix.msc1767.file"] = {
+            "url": content.url,
+            "name": content.body,
+            **(content.file.serialize() if content.file else {}),
+            **(content.info.serialize() if content.info else {}),
+        }
+        content["org.matrix.msc1767.audio"] = {
+            "duration": media.media.audio.duration,
+            "waveform": waveform,
+        }
+        content["org.matrix.msc3245.voice"] = {}
         return content
 
     async def _reupload_instagram_file(self, source: 'u.User', url: str, msgtype: MessageType,
