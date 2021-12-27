@@ -15,6 +15,7 @@ RUN apk add --no-cache \
       # Other dependencies
       ca-certificates \
       su-exec \
+      ffmpeg \
       # encryption
       py3-olm \
       py3-cffi \
