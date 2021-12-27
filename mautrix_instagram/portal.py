@@ -36,6 +36,8 @@ from mautrix.types import (EventID, MessageEventContent, RoomID, EventType, Mess
 from mautrix.errors import MatrixError, MForbidden, MNotFound, SessionNotFound
 from mautrix.util.simple_lock import SimpleLock
 
+from mautrix_instagram.util.audio_convert import to_ogg
+
 
 from .db import Portal as DBPortal, Message as DBMessage, Reaction as DBReaction
 from .config import Config
@@ -465,10 +467,18 @@ class Portal(DBPortal, BasePortal):
 
     async def _reupload_instagram_voice(self, source: 'u.User', media: VoiceMediaItem,
                                         intent: IntentAPI) -> MediaMessageEventContent:
+        async def convert_to_ogg(data, mimetype):
+            converted = await to_ogg(data, mimetype)
+            if converted is None:
+                raise ChildProcessError("Failed to convert to OGG")
+            return converted, "audio/ogg"
+
         url = media.media.audio.audio_src
         info = AudioInfo(duration=media.media.audio.duration)
         waveform = [int(p * 1000) for p in media.media.audio.waveform_data]
-        content = await self._reupload_instagram_file(source, url, MessageType.AUDIO, info, intent)
+        content = await self._reupload_instagram_file(
+            source, url, MessageType.AUDIO, info, intent, convert_to_ogg
+        )
         content["org.matrix.msc1767.file"] = {
             "url": content.url,
             "name": content.body,
@@ -482,9 +492,10 @@ class Portal(DBPortal, BasePortal):
         content["org.matrix.msc3245.voice"] = {}
         return content
 
-    async def _reupload_instagram_file(self, source: 'u.User', url: str, msgtype: MessageType,
-                                       info: FileInfo, intent: IntentAPI
-                                       ) -> MediaMessageEventContent:
+    async def _reupload_instagram_file(
+        self, source: 'u.User', url: str, msgtype: MessageType, info: FileInfo, intent: IntentAPI,
+        convert_fn: Optional[Callable[[bytes, str], Awaitable[Tuple[bytes, str]]]] = None,
+    ) -> MediaMessageEventContent:
         async with await source.client.raw_http_get(url) as resp:
             try:
                 length = int(resp.headers["Content-Length"])
@@ -499,12 +510,18 @@ class Portal(DBPortal, BasePortal):
                 raise ValueError("Attachment not available: too large")
             data = await resp.read()
             info.mimetype = resp.headers["Content-Type"] or magic.from_buffer(data, mime=True)
+
+        # Run the conversion function on the data.
+        if convert_fn is not None:
+            data, info.mimetype = await convert_fn(data, info.mimetype)
+
         info.size = len(data)
         extension = {
             "image/webp": ".webp",
             "image/jpeg": ".jpg",
             "video/mp4": ".mp4",
             "audio/mp4": ".m4a",
+            "audio/ogg": ".ogg",
         }.get(info.mimetype)
         extension = extension or mimetypes.guess_extension(info.mimetype) or ""
         file_name = f"{msgtype.value[2:]}{extension}"
