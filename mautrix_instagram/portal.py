@@ -35,9 +35,7 @@ from mautrix.types import (EventID, MessageEventContent, RoomID, EventType, Mess
                            ContentURI, LocationMessageEventContent, Format, UserID)
 from mautrix.errors import MatrixError, MForbidden, MNotFound, SessionNotFound
 from mautrix.util.simple_lock import SimpleLock
-
-from mautrix_instagram.util.audio_convert import to_ogg
-
+from mautrix.util.ffmpeg import convert_bytes
 
 from .db import Portal as DBPortal, Message as DBMessage, Reaction as DBReaction
 from .config import Config
@@ -468,9 +466,8 @@ class Portal(DBPortal, BasePortal):
     async def _reupload_instagram_voice(self, source: 'u.User', media: VoiceMediaItem,
                                         intent: IntentAPI) -> MediaMessageEventContent:
         async def convert_to_ogg(data, mimetype):
-            converted = await to_ogg(data, mimetype)
-            if converted is None:
-                raise ChildProcessError("Failed to convert to OGG")
+            converted = await convert_bytes(data, ".ogg", output_args=('-c:a', 'libvorbis'),
+                                            input_mime=mimetype)
             return converted, "audio/ogg"
 
         url = media.media.audio.audio_src
