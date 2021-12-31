@@ -14,7 +14,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from typing import (Dict, Tuple, Optional, List, Deque, Set, Any, Union, AsyncGenerator,
-                    Awaitable, NamedTuple, Callable, TYPE_CHECKING, cast)
+                    Awaitable, Callable, TYPE_CHECKING, cast)
 from collections import deque
 from io import BytesIO
 import mimetypes
@@ -27,14 +27,15 @@ from mautrix.util.message_send_checkpoint import MessageSendCheckpointStatus
 from mauigpapi.types import (Thread, ThreadUser, ThreadItem, RegularMediaItem, MediaType,
                              ReactionStatus, Reaction, AnimatedMediaItem, ThreadItemType,
                              VoiceMediaItem, ExpiredMediaItem, MessageSyncMessage, ReelShareType,
-                             TypingStatus, ThreadUserLastSeenAt, MediaShareItem)
+                             TypingStatus, ThreadUserLastSeenAt, MediaShareItem, ReelMediaShareItem)
 from mautrix.appservice import AppService, IntentAPI
 from mautrix.bridge import BasePortal, NotificationDisabler, async_getter_lock
 from mautrix.types import (EventID, MessageEventContent, RoomID, EventType, MessageType, ImageInfo,
                            VideoInfo, MediaMessageEventContent, TextMessageEventContent, AudioInfo,
-                           ContentURI, EncryptedFile, LocationMessageEventContent, Format, UserID)
+                           ContentURI, LocationMessageEventContent, Format, UserID)
 from mautrix.errors import MatrixError, MForbidden, MNotFound, SessionNotFound
 from mautrix.util.simple_lock import SimpleLock
+from mautrix.util.ffmpeg import convert_bytes
 
 from .db import Portal as DBPortal, Message as DBMessage, Reaction as DBReaction
 from .config import Config
@@ -56,11 +57,15 @@ except ImportError:
 StateBridge = EventType.find("m.bridge", EventType.Class.STATE)
 StateHalfShotBridge = EventType.find("uk.half-shot.bridge", EventType.Class.STATE)
 FileInfo = Union[AudioInfo, ImageInfo, VideoInfo]
-ReuploadedMediaInfo = NamedTuple('ReuploadedMediaInfo', mxc=Optional[ContentURI], url=str,
-                                 decryption_info=Optional[EncryptedFile], msgtype=MessageType,
-                                 file_name=str, info=FileInfo)
-MediaData = Union[RegularMediaItem, ExpiredMediaItem]
-MediaUploadFunc = Callable[['u.User', MediaData, IntentAPI], Awaitable[ReuploadedMediaInfo]]
+MediaData = Union[
+    AnimatedMediaItem,
+    ExpiredMediaItem,
+    MediaShareItem,
+    ReelMediaShareItem,
+    RegularMediaItem,
+    VoiceMediaItem,
+]
+MediaUploadFunc = Callable[['u.User', MediaData, IntentAPI], Awaitable[MediaMessageEventContent]]
 
 
 class Portal(DBPortal, BasePortal):
@@ -432,7 +437,7 @@ class Portal(DBPortal, BasePortal):
     # region Instagram event handling
 
     async def _reupload_instagram_media(self, source: 'u.User', media: RegularMediaItem,
-                                        intent: IntentAPI) -> ReuploadedMediaInfo:
+                                        intent: IntentAPI) -> MediaMessageEventContent:
         if media.media_type == MediaType.IMAGE:
             image = media.best_image
             if not image:
@@ -452,21 +457,42 @@ class Portal(DBPortal, BasePortal):
         return await self._reupload_instagram_file(source, url, msgtype, info, intent)
 
     async def _reupload_instagram_animated(self, source: 'u.User', media: AnimatedMediaItem,
-                                           intent: IntentAPI) -> ReuploadedMediaInfo:
+                                           intent: IntentAPI) -> MediaMessageEventContent:
         url = media.images.fixed_height.webp
         info = ImageInfo(height=int(media.images.fixed_height.height),
                          width=int(media.images.fixed_height.width))
         return await self._reupload_instagram_file(source, url, MessageType.IMAGE, info, intent)
 
     async def _reupload_instagram_voice(self, source: 'u.User', media: VoiceMediaItem,
-                                        intent: IntentAPI) -> ReuploadedMediaInfo:
+                                        intent: IntentAPI) -> MediaMessageEventContent:
+        async def convert_to_ogg(data, mimetype):
+            converted = await convert_bytes(data, ".ogg", output_args=('-c:a', 'libvorbis'),
+                                            input_mime=mimetype)
+            return converted, "audio/ogg"
+
         url = media.media.audio.audio_src
         info = AudioInfo(duration=media.media.audio.duration)
-        return await self._reupload_instagram_file(source, url, MessageType.AUDIO, info, intent)
+        waveform = [int(p * 1000) for p in media.media.audio.waveform_data]
+        content = await self._reupload_instagram_file(
+            source, url, MessageType.AUDIO, info, intent, convert_to_ogg
+        )
+        content["org.matrix.msc1767.file"] = {
+            "url": content.url,
+            "name": content.body,
+            **(content.file.serialize() if content.file else {}),
+            **(content.info.serialize() if content.info else {}),
+        }
+        content["org.matrix.msc1767.audio"] = {
+            "duration": media.media.audio.duration,
+            "waveform": waveform,
+        }
+        content["org.matrix.msc3245.voice"] = {}
+        return content
 
-    async def _reupload_instagram_file(self, source: 'u.User', url: str, msgtype: MessageType,
-                                       info: FileInfo, intent: IntentAPI
-                                       ) -> ReuploadedMediaInfo:
+    async def _reupload_instagram_file(
+        self, source: 'u.User', url: str, msgtype: MessageType, info: FileInfo, intent: IntentAPI,
+        convert_fn: Optional[Callable[[bytes, str], Awaitable[Tuple[bytes, str]]]] = None,
+    ) -> MediaMessageEventContent:
         async with await source.client.raw_http_get(url) as resp:
             try:
                 length = int(resp.headers["Content-Length"])
@@ -481,12 +507,18 @@ class Portal(DBPortal, BasePortal):
                 raise ValueError("Attachment not available: too large")
             data = await resp.read()
             info.mimetype = resp.headers["Content-Type"] or magic.from_buffer(data, mime=True)
+
+        # Run the conversion function on the data.
+        if convert_fn is not None:
+            data, info.mimetype = await convert_fn(data, info.mimetype)
+
         info.size = len(data)
         extension = {
             "image/webp": ".webp",
             "image/jpeg": ".jpg",
             "video/mp4": ".mp4",
             "audio/mp4": ".m4a",
+            "audio/ogg": ".ogg",
         }.get(info.mimetype)
         extension = extension or mimetypes.guess_extension(info.mimetype) or ""
         file_name = f"{msgtype.value[2:]}{extension}"
@@ -506,8 +538,14 @@ class Portal(DBPortal, BasePortal):
             decryption_info.url = mxc
             mxc = None
 
-        return ReuploadedMediaInfo(mxc=mxc, url=url, decryption_info=decryption_info,
-                                   file_name=file_name, msgtype=msgtype, info=info)
+        return MediaMessageEventContent(
+            body=file_name,
+            external_url=url,
+            url=mxc,
+            file=decryption_info,
+            info=info,
+            msgtype=msgtype,
+        )
 
     def _get_instagram_media_info(self, item: ThreadItem) -> Tuple[MediaUploadFunc, MediaData]:
         # TODO maybe use a dict and item.item_type instead of a ton of ifs
@@ -543,17 +581,14 @@ class Portal(DBPortal, BasePortal):
                                       ) -> Optional[EventID]:
         try:
             reupload_func, media_data = self._get_instagram_media_info(item)
-            reuploaded = await reupload_func(source, media_data, intent)
+            content = await reupload_func(source, media_data, intent)
         except ValueError as e:
             content = TextMessageEventContent(body=str(e), msgtype=MessageType.NOTICE)
         except Exception:
             self.log.warning("Failed to upload media", exc_info=True)
             content = TextMessageEventContent(body="Attachment not available: failed to copy file",
                                               msgtype=MessageType.NOTICE)
-        else:
-            content = MediaMessageEventContent(
-                body=reuploaded.file_name, external_url=reuploaded.url, url=reuploaded.mxc,
-                file=reuploaded.decryption_info, info=reuploaded.info, msgtype=reuploaded.msgtype)
+
         await self._add_instagram_reply(content, item.replied_to_message)
         return await self._send_message(intent, content, timestamp=item.timestamp // 1000)
 
