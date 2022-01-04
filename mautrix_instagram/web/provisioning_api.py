@@ -136,7 +136,17 @@ class ProvisioningAPI:
                 "response": e.body.serialize(),
             }, status=202, headers=self._acao_headers)
         except IGCheckpointError as e:
-            await api.challenge_auto(reset=True)
+            try:
+                await api.challenge_auto(reset=True)
+            except Exception as e:
+                # Most likely means that the user has to go and verify the login on their phone.
+                # Return a 403 in this case so the client knows to show such verbiage.
+                self.log.exception("Challenge reset failed")
+                return web.json_response(
+                    data={"status": "checkpoint", "response": e},
+                    status=403,
+                    headers=self._acao_headers,
+                )
             return web.json_response(data={
                 "status": "checkpoint",
                 "response": e.body.serialize(),
@@ -186,7 +196,17 @@ class ProvisioningAPI:
                 "status": "incorrect-2fa-code",
             }, status=403, headers=self._acao_headers)
         except IGCheckpointError as e:
-            await api.challenge_auto(reset=True)
+            try:
+                await api.challenge_auto(reset=True)
+            except Exception as e:
+                # Most likely means that the user has to go and verify the login on their phone.
+                # Return a 403 in this case so the client knows to show such verbiage.
+                self.log.exception("Challenge reset failed")
+                return web.json_response(
+                    data={"status": "checkpoint", "response": e},
+                    status=403,
+                    headers=self._acao_headers,
+                )
             return web.json_response(data={
                 "status": "checkpoint",
                 "response": e.body.serialize(),
