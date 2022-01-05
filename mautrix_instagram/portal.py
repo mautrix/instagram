@@ -1,5 +1,5 @@
 # mautrix-instagram - A Matrix-Instagram puppeting bridge.
-# Copyright (C) 2021 Tulir Asokan
+# Copyright (C) 2022 Tulir Asokan
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as published by
@@ -19,6 +19,7 @@ from collections import deque
 from io import BytesIO
 import mimetypes
 import asyncio
+import json
 
 import asyncpg
 import magic
@@ -27,7 +28,8 @@ from mautrix.util.message_send_checkpoint import MessageSendCheckpointStatus
 from mauigpapi.types import (Thread, ThreadUser, ThreadItem, RegularMediaItem, MediaType,
                              ReactionStatus, Reaction, AnimatedMediaItem, ThreadItemType,
                              VoiceMediaItem, ExpiredMediaItem, MessageSyncMessage, ReelShareType,
-                             TypingStatus, ThreadUserLastSeenAt, MediaShareItem, ReelMediaShareItem)
+                             TypingStatus, ThreadUserLastSeenAt, MediaShareItem,
+                             ReelMediaShareItem, CommandResponse, ShareVoiceResponse)
 from mautrix.appservice import AppService, IntentAPI
 from mautrix.bridge import BasePortal, NotificationDisabler, async_getter_lock
 from mautrix.types import (EventID, MessageEventContent, RoomID, EventType, MessageType, ImageInfo,
@@ -35,7 +37,7 @@ from mautrix.types import (EventID, MessageEventContent, RoomID, EventType, Mess
                            ContentURI, LocationMessageEventContent, Format, UserID)
 from mautrix.errors import MatrixError, MForbidden, MNotFound, SessionNotFound
 from mautrix.util.simple_lock import SimpleLock
-from mautrix.util.ffmpeg import convert_bytes
+from mautrix.util import ffmpeg
 
 from .db import Portal as DBPortal, Message as DBMessage, Reaction as DBReaction
 from .config import Config
@@ -204,6 +206,80 @@ class Portal(DBPortal, BasePortal):
                 confirmed=True,
             )
 
+    async def _handle_matrix_image(
+        self, sender: 'u.User', event_id: EventID, request_id: str, data: bytes, mime_type: str,
+        width: Optional[int] = None, height: Optional[int] = None
+    ) -> CommandResponse:
+        if mime_type not in ("image/jpeg", "image/webp"):
+            with BytesIO(data) as inp, BytesIO() as out:
+                img = Image.open(inp)
+                img.convert("RGBA").save(out, format="WEBP")
+                data = out.getvalue()
+                mime_type = "image/webp"
+
+        self.log.trace(f"Uploading photo from {event_id} (mime: {mime_type})")
+        upload_resp = await sender.client.upload_photo(
+            data, mime=mime_type, width=width, height=height
+        )
+        self.log.trace(f"Broadcasting uploaded photo with request ID {request_id}")
+        return await sender.client.broadcast(
+            self.thread_id,
+            ThreadItemType.CONFIGURE_PHOTO,
+            client_context=request_id,
+            upload_id=upload_resp.upload_id,
+            allow_full_aspect_ratio="1",
+        )
+
+    async def _handle_matrix_video(
+        self, sender: 'u.User', event_id: EventID, request_id: str, data: bytes, mime_type: str,
+        duration: Optional[int] = None, width: Optional[int] = None, height: Optional[int] = None,
+    ) -> CommandResponse:
+        if mime_type != "video/mp4":
+            data = await ffmpeg.convert_bytes(
+                data,
+                output_extension=".mp4",
+                output_args=("-c:v", "libx264", "-c:a", "aac"),
+                input_mime=mime_type
+            )
+
+        self.log.trace(f"Uploading video from {event_id}")
+        _, upload_id = await sender.client.upload_mp4(
+            data, duration_ms=duration, width=width, height=height
+        )
+        self.log.trace(f"Broadcasting uploaded video with request ID {request_id}")
+        return await sender.client.broadcast(
+            self.thread_id,
+            ThreadItemType.CONFIGURE_VIDEO,
+            client_context=request_id,
+            upload_id=upload_id,
+            video_result="",
+        )
+
+    async def _handle_matrix_audio(
+        self, sender: 'u.User', event_id: EventID, request_id: str, data: bytes, mime_type: str,
+        waveform: List[int], duration: Optional[int] = None,
+    ) -> CommandResponse:
+        if mime_type != "audio/mp4":
+            data = await ffmpeg.convert_bytes(
+                data,
+                output_extension=".m4a",
+                output_args=("-c:a", "aac"),
+                input_mime=mime_type
+            )
+
+        self.log.trace(f"Uploading audio from {event_id}")
+        _, upload_id = await sender.client.upload_mp4(data, audio=True, duration_ms=duration)
+        self.log.trace(f"Broadcasting uploaded audio with request ID {request_id}")
+        return await sender.client.broadcast_audio(
+            self.thread_id,
+            is_direct=self.is_direct,
+            client_context=request_id,
+            upload_id=upload_id,
+            waveform=json.dumps([(part or 0) / 1024 for part in waveform],
+                                separators=(",", ":")),
+            waveform_sampling_frequency_hz="10",
+        )
+
     async def _handle_matrix_message(self, orig_sender: 'u.User', message: MessageEventContent,
                                      event_id: EventID) -> None:
         sender, is_relay = await self.get_relay_sender(orig_sender, f"message {event_id}")
@@ -232,25 +308,26 @@ class Portal(DBPortal, BasePortal):
             else:
                 data = await self.main_intent.download_media(message.url)
             mime_type = message.info.mimetype or magic.from_buffer(data, mime=True)
-            if mime_type != "image/jpeg" and mime_type.startswith("image/"):
-                with BytesIO(data) as inp:
-                    img = Image.open(inp)
-                    with BytesIO() as out:
-                        img.convert("RGB").save(out, format="JPEG", quality=80)
-                        data = out.getvalue()
-                mime_type = "image/jpeg"
-            if mime_type == "image/jpeg":
-                self.log.trace(f"Uploading photo from {event_id}")
-                upload_resp = await sender.client.upload_jpeg_photo(data)
-                self.log.trace(f"Broadcasting uploaded photo with request ID {request_id}")
-                # TODO is it possible to do this with MQTT?
-                resp = await sender.client.broadcast(self.thread_id,
-                                                     ThreadItemType.CONFIGURE_PHOTO,
-                                                     client_context=request_id,
-                                                     upload_id=upload_resp.upload_id,
-                                                     allow_full_aspect_ratio="1")
+            if message.msgtype == MessageType.IMAGE:
+                resp = await self._handle_matrix_image(
+                    sender, event_id, request_id, data, mime_type,
+                    width=message.info.width, height=message.info.height,
+                )
+            elif message.msgtype == MessageType.AUDIO:
+                waveform = message.get("org.matrix.msc1767.audio", {}).get("waveform", [0] * 30)
+                resp = await self._handle_matrix_audio(
+                    sender, event_id, request_id, data, mime_type,
+                    waveform, duration=message.info.duration,
+                )
+            elif message.msgtype == MessageType.VIDEO:
+                resp = await self._handle_matrix_video(
+                    sender, event_id, request_id, data, mime_type, duration=message.info.duration,
+                    width=message.info.width, height=message.info.height,
+                )
             else:
-                raise NotImplementedError("Non-image files are currently not supported")
+                raise NotImplementedError(
+                    "Non-image/video/audio files are currently not supported"
+                )
         else:
             raise NotImplementedError(f"Unknown message type {message.msgtype}")
 
@@ -466,13 +543,13 @@ class Portal(DBPortal, BasePortal):
     async def _reupload_instagram_voice(self, source: 'u.User', media: VoiceMediaItem,
                                         intent: IntentAPI) -> MediaMessageEventContent:
         async def convert_to_ogg(data, mimetype):
-            converted = await convert_bytes(data, ".ogg", output_args=('-c:a', 'libvorbis'),
-                                            input_mime=mimetype)
+            converted = await ffmpeg.convert_bytes(data, ".ogg", output_args=('-c:a', 'libvorbis'),
+                                                   input_mime=mimetype)
             return converted, "audio/ogg"
 
         url = media.media.audio.audio_src
         info = AudioInfo(duration=media.media.audio.duration)
-        waveform = [int(p * 1000) for p in media.media.audio.waveform_data]
+        waveform = [int(p * 1024) for p in media.media.audio.waveform_data]
         content = await self._reupload_instagram_file(
             source, url, MessageType.AUDIO, info, intent, convert_to_ogg
         )

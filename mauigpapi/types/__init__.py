@@ -7,7 +7,8 @@ from .account import (CurrentUser, EntityText, HDProfilePictureVersion, CurrentU
                       FriendshipStatus, UserIdentifier, BaseFullResponseUser, BaseResponseUser,
                       ProfileEditParams)
 from .direct_inbox import DMInboxResponse, DMInboxCursor, DMInbox, DMThreadResponse
-from .upload import UploadPhotoResponse
+from .upload import (UploadPhotoResponse, UploadVideoResponse, FinishUploadResponse,
+                     ShareVoiceResponse, ShareVoiceResponseMessage)
 from .thread_item import (ThreadItemType, ThreadItemActionLog, ViewMode, CreativeConfig, MediaType,
                           CreateModeAttribution, ImageVersion, ImageVersions, VisualMedia, Caption,
                           RegularMediaItem, MediaShareItem, ReplayableMediaItem, VideoVersion,

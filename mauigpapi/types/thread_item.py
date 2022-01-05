@@ -1,5 +1,5 @@
 # mautrix-instagram - A Matrix-Instagram puppeting bridge.
-# Copyright (C) 2020 Tulir Asokan
+# Copyright (C) 2022 Tulir Asokan
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as published by
@@ -35,6 +35,8 @@ class ThreadItemType(SerializableEnum):
     PROFILE = "profile"
     MEDIA_SHARE = "media_share"
     CONFIGURE_PHOTO = "configure_photo"
+    CONFIGURE_VIDEO = "configure_video"
+    SHARE_VOICE = "share_voice"
     LOCATION = "location"
     ACTION_LOG = "action_log"
     TITLE = "title"

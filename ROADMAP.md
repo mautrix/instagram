@@ -5,8 +5,8 @@
     * [x] Text
     * [ ] Media
       * [x] Images
-      * [ ] Videos
-      * [ ] Voice messages
+      * [x] Videos
+      * [x] Voice messages
       * [ ] Locations
       * [ ] †Files
     * [ ] Replies
@@ -42,9 +42,7 @@
     * [x] At startup
     * [x] When receiving message
   * [ ] Private chat creation by inviting Matrix puppet of Instagram user to new room
-  * [ ] Option to use own Matrix account for messages sent from other Instagram clients
-    * [x] Automatic login with shared secret
-    * [ ] Manual login with `login-matrix`
+  * [x] Option to use own Matrix account for messages sent from other Instagram clients
   * [x] End-to-bridge encryption in Matrix rooms
 
 † Not supported on Instagram

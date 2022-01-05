@@ -1,5 +1,5 @@
 # mautrix-instagram - A Matrix-Instagram puppeting bridge.
-# Copyright (C) 2020 Tulir Asokan
+# Copyright (C) 2022 Tulir Asokan
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as published by
@@ -13,12 +13,11 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import Optional, AsyncIterable
-from uuid import uuid4
+from typing import Optional, AsyncIterable, Type, Union
 
-from .base import BaseAndroidAPI
+from .base import BaseAndroidAPI, T
 from ..types import (DMInboxResponse, DMThreadResponse, Thread, ThreadItem, ThreadAction,
-                     ThreadItemType, CommandResponse)
+                     ThreadItemType, CommandResponse, ShareVoiceResponse)
 
 
 class ThreadAPI(BaseAndroidAPI):
@@ -86,13 +85,15 @@ class ThreadAPI(BaseAndroidAPI):
                                  data={"_csrftoken": self.state.cookies.csrf_token,
                                        "_uuid": self.state.device.uuid})
 
-    async def broadcast(self, thread_id: str, item_type: ThreadItemType, signed: bool = False,
-                        client_context: Optional[str] = None, **kwargs) -> CommandResponse:
+    async def _broadcast(self, thread_id: str, item_type: str, response_type: Type[T],
+                         signed: bool = False, client_context: Optional[str] = None, **kwargs
+                         ) -> T:
         client_context = client_context or self.state.gen_client_context()
         form = {
             "action": ThreadAction.SEND_ITEM.value,
-            "send_attribution": "inbox",
-            "thread_id": thread_id,
+            "send_attribution": "direct_thread",
+            "thread_ids": f"[{thread_id}]",
+            "is_shh_mode": "0",
             "client_context": client_context,
             "_csrftoken": self.state.cookies.csrf_token,
             "device_id": self.state.device.id,
@@ -101,5 +102,17 @@ class ThreadAPI(BaseAndroidAPI):
             **kwargs,
             "offline_threading_id": client_context,
         }
-        return await self.std_http_post(f"/api/v1/direct_v2/threads/broadcast/{item_type.value}/",
-                                        data=form, raw=not signed, response_type=CommandResponse)
+        return await self.std_http_post(f"/api/v1/direct_v2/threads/broadcast/{item_type}/",
+                                        data=form, raw=not signed, response_type=response_type)
+
+    async def broadcast(self, thread_id: str, item_type: ThreadItemType, signed: bool = False,
+                        client_context: Optional[str] = None, **kwargs) -> CommandResponse:
+        return await self._broadcast(thread_id, item_type.value, CommandResponse, signed,
+                                     client_context, **kwargs)
+
+    async def broadcast_audio(self, thread_id: str, is_direct: bool,
+                              client_context: Optional[str] = None, **kwargs
+                              ) -> Union[ShareVoiceResponse, CommandResponse]:
+        response_type = ShareVoiceResponse if is_direct else CommandResponse
+        return await self._broadcast(thread_id, "share_voice", response_type, False,
+                                     client_context, **kwargs)
