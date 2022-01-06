@@ -641,6 +641,8 @@ class Portal(DBPortal, BasePortal):
             media_data = item.reel_share.media
         elif item.story_share:
             media_data = item.story_share.media
+        elif item.clip:
+            media_data = item.clip.clip
         elif item.media_share:
             media_data = item.media_share
         else:
@@ -671,11 +673,20 @@ class Portal(DBPortal, BasePortal):
 
     async def _handle_instagram_media_share(self, source: 'u.User', intent: IntentAPI,
                                             item: ThreadItem) -> Optional[EventID]:
-        share_item = item.media_share or item.story_share.media
+        if item.media_share:
+            share_item = item.media_share
+            item_type_name = share_item.media_type.human_name
+        elif item.clip:
+            share_item = item.clip.clip
+            item_type_name = "clip"
+        elif item.story_share:
+            share_item = item.story_share.media
+            item_type_name = "story"
+        else:
+            raise ValueError("no media to share")
         user_text = f"@{share_item.user.username}"
         user_link = (f'<a href="https://www.instagram.com/{share_item.user.username}/">'
                      f'{user_text}</a>')
-        item_type_name = item.media_share.media_type.human_name if item.media_share else "story"
         prefix = TextMessageEventContent(msgtype=MessageType.NOTICE, format=Format.HTML,
                                          body=f"Sent {user_text}'s {item_type_name}",
                                          formatted_body=f"Sent {user_link}'s {item_type_name}")
@@ -750,7 +761,7 @@ class Portal(DBPortal, BasePortal):
 
     async def _send_instagram_unhandled(self, intent: IntentAPI, item: ThreadItem) -> EventID:
         content = TextMessageEventContent(msgtype=MessageType.NOTICE,
-                                          body="Unsupported message type")
+                                          body=f"Unsupported message type {item.item_type.value}")
         await self._add_instagram_reply(content, item.replied_to_message)
         return await self._send_message(intent, content, timestamp=item.timestamp // 1000)
 
@@ -854,7 +865,7 @@ class Portal(DBPortal, BasePortal):
                 event_id = await self._handle_instagram_location(intent, item)
             elif item.reel_share:
                 event_id = await self._handle_instagram_reel_share(source, intent, item)
-            elif item.media_share or item.story_share:
+            elif item.media_share or item.story_share or item.clip:
                 event_id = await self._handle_instagram_media_share(source, intent, item)
             elif item.action_log:
                 # These probably don't need to be bridged

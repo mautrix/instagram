@@ -85,8 +85,8 @@ class ViewMode(SerializableEnum):
 @dataclass(kw_only=True)
 class CreativeConfig(SerializableAttrs):
     capture_type: str
-    camera_facing: str
-    should_render_try_it_on: bool
+    camera_facing: Optional[str] = None
+    should_render_try_it_on: Optional[bool] = None
 
 
 @dataclass(kw_only=True)
@@ -131,7 +131,6 @@ class MediaType(SerializableEnum):
     @property
     def human_name(self) -> str:
         return self.name.lower().replace("_", " ")
-
 
 
 @dataclass(kw_only=True)
