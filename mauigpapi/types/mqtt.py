@@ -19,11 +19,11 @@ import json
 from attr import dataclass
 import attr
 
-from mautrix.types import SerializableAttrs, SerializableEnum, JSON
+from mautrix.types import JSON, SerializableAttrs, SerializableEnum
 
+from .account import BaseResponseUser
 from .thread import Thread
 from .thread_item import ThreadItem
-from .account import BaseResponseUser
 
 
 class Operation(SerializableEnum):
@@ -132,7 +132,7 @@ class ActivityIndicatorData(SerializableAttrs):
     activity_status: TypingStatus
 
     @classmethod
-    def deserialize(cls, data: JSON) -> 'ActivityIndicatorData':
+    def deserialize(cls, data: JSON) -> "ActivityIndicatorData":
         # The ActivityIndicatorData in PubsubPayloadData is actually a string,
         # so we need to unmarshal it first.
         if isinstance(data, str):

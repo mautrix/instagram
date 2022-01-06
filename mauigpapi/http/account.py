@@ -1,5 +1,5 @@
 # mautrix-instagram - A Matrix-Instagram puppeting bridge.
-# Copyright (C) 2020 Tulir Asokan
+# Copyright (C) 2022 Tulir Asokan
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as published by
@@ -13,27 +13,33 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import Optional, Type, TypeVar
+from __future__ import annotations
+
+from typing import Type, TypeVar
 import json
 
 from ..types import CurrentUserResponse
 from .base import BaseAndroidAPI
 
-T = TypeVar('T')
+T = TypeVar("T")
 
 
 class AccountAPI(BaseAndroidAPI):
     async def current_user(self) -> CurrentUserResponse:
-        return await self.std_http_get(f"/api/v1/accounts/current_user/", query={"edit": "true"},
-                                       response_type=CurrentUserResponse)
+        return await self.std_http_get(
+            f"/api/v1/accounts/current_user/",
+            query={"edit": "true"},
+            response_type=CurrentUserResponse,
+        )
 
     async def set_biography(self, text: str) -> CurrentUserResponse:
         # TODO entities?
         return await self.__command("set_biography", device_id=self.state.device.id, raw_text=text)
 
     async def set_profile_picture(self, upload_id: str) -> CurrentUserResponse:
-        return await self.__command("change_profile_picture",
-                                    use_fbuploader="true", upload_id=upload_id)
+        return await self.__command(
+            "change_profile_picture", use_fbuploader="true", upload_id=upload_id
+        )
 
     async def remove_profile_picture(self) -> CurrentUserResponse:
         return await self.__command("remove_profile_picture")
@@ -56,26 +62,44 @@ class AccountAPI(BaseAndroidAPI):
         # TODO parse response content
         return await self.std_http_post(f"/api/v1/accounts/send_recovery_flow_email/", data=req)
 
-    async def edit_profile(self, external_url: Optional[str] = None, gender: Optional[str] = None,
-                           phone_number: Optional[str] = None, username: Optional[str] = None,
-                           # TODO should there be a last_name?
-                           first_name: Optional[str] = None, biography: Optional[str] = None,
-                           email: Optional[str] = None) -> CurrentUserResponse:
-        return await self.__command("edit_profile", device_id=self.state.device.id, email=email,
-                                    external_url=external_url, first_name=first_name,
-                                    username=username, phone_number=phone_number, gender=gender,
-                                    biography=biography)
+    async def edit_profile(
+        self,
+        external_url: str | None = None,
+        gender: str | None = None,
+        phone_number: str | None = None,
+        username: str | None = None,
+        # TODO should there be a last_name?
+        first_name: str | None = None,
+        biography: str | None = None,
+        email: str | None = None,
+    ) -> CurrentUserResponse:
+        return await self.__command(
+            "edit_profile",
+            device_id=self.state.device.id,
+            email=email,
+            external_url=external_url,
+            first_name=first_name,
+            username=username,
+            phone_number=phone_number,
+            gender=gender,
+            biography=biography,
+        )
 
-    async def __command(self, command: str, response_type: Type[T] = CurrentUserResponse,
-                        **kwargs: str) -> T:
+    async def __command(
+        self, command: str, response_type: Type[T] = CurrentUserResponse, **kwargs: str
+    ) -> T:
         req = {
             "_csrftoken": self.state.cookies.csrf_token,
             "_uid": self.state.cookies.user_id,
             "_uuid": self.state.device.uuid,
             **kwargs,
         }
-        return await self.std_http_post(f"/api/v1/accounts/{command}/", data=req,
-                                        filter_nulls=True, response_type=response_type)
+        return await self.std_http_post(
+            f"/api/v1/accounts/{command}/",
+            data=req,
+            filter_nulls=True,
+            response_type=response_type,
+        )
 
     async def read_msisdn_header(self, usage: str = "default"):
         req = {
@@ -116,5 +140,6 @@ class AccountAPI(BaseAndroidAPI):
             "_uuid": self.state.device.uuid,
             "google_tokens": json.dumps([]),
         }
-        return await self.std_http_post("/api/v1/accounts/process_contact_point_signals/",
-                                        data=req)
+        return await self.std_http_post(
+            "/api/v1/accounts/process_contact_point_signals/", data=req
+        )

@@ -1,5 +1,5 @@
-# mautrix-twitter - A Matrix-Twitter DM puppeting bridge
-# Copyright (C) 2020 Tulir Asokan
+# mautrix-instagram - A Matrix-Instagram puppeting bridge.
+# Copyright (C) 2022 Tulir Asokan
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as published by
@@ -13,28 +13,33 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import Tuple, TYPE_CHECKING
+from __future__ import annotations
+
 import hashlib
 import hmac
 
-from mautrix.bridge.commands import HelpSection, command_handler
-from mauigpapi.state import AndroidState
+from mauigpapi.errors import (
+    IGBad2FACodeError,
+    IGChallengeWrongCodeError,
+    IGCheckpointError,
+    IGLoginBadPasswordError,
+    IGLoginInvalidUserError,
+    IGLoginTwoFactorRequiredError,
+)
 from mauigpapi.http import AndroidAPI
-from mauigpapi.errors import (IGLoginTwoFactorRequiredError, IGLoginBadPasswordError,
-                              IGLoginInvalidUserError, IGBad2FACodeError, IGCheckpointError,
-                              IGChallengeWrongCodeError)
+from mauigpapi.state import AndroidState
 from mauigpapi.types import BaseResponseUser
+from mautrix.bridge.commands import HelpSection, command_handler
 
+from .. import user as u
 from .typehint import CommandEvent
-
-if TYPE_CHECKING:
-    from ..user import User
 
 SECTION_AUTH = HelpSection("Authentication", 10, "")
 
 
-async def get_login_state(user: 'User', username: str, seed: str
-                          ) -> Tuple[AndroidAPI, AndroidState]:
+async def get_login_state(
+    user: u.User, username: str, seed: str
+) -> tuple[AndroidAPI, AndroidState]:
     if user.command_status and user.command_status["action"] == "Login":
         api: AndroidAPI = user.command_status["api"]
         state: AndroidState = user.command_status["state"]
@@ -52,8 +57,13 @@ async def get_login_state(user: 'User', username: str, seed: str
     return api, state
 
 
-@command_handler(needs_auth=False, management_only=True, help_section=SECTION_AUTH,
-                 help_text="Log in to Instagram", help_args="<_username_> <_password_>")
+@command_handler(
+    needs_auth=False,
+    management_only=True,
+    help_section=SECTION_AUTH,
+    help_text="Log in to Instagram",
+    help_args="<_username_> <_password_>",
+)
 async def login(evt: CommandEvent) -> None:
     if await evt.sender.is_logged_in():
         await evt.reply("You're already logged in")
@@ -74,8 +84,10 @@ async def login(evt: CommandEvent) -> None:
         elif tfa_info.sms_two_factor_on:
             msg += f"Send the code sent to {tfa_info.obfuscated_phone_number} here."
         else:
-            msg += ("Unfortunately, none of your two-factor authentication methods are currently "
-                    "supported by the bridge.")
+            msg += (
+                "Unfortunately, none of your two-factor authentication methods are currently "
+                "supported by the bridge."
+            )
             return
         evt.sender.command_status = {
             **evt.sender.command_status,
@@ -91,8 +103,10 @@ async def login(evt: CommandEvent) -> None:
             **evt.sender.command_status,
             "next": enter_login_security_code,
         }
-        await evt.reply("Username and password accepted, but Instagram wants to verify it's really"
-                        " you. Please confirm the login and enter the security code here.")
+        await evt.reply(
+            "Username and password accepted, but Instagram wants to verify it's really"
+            " you. Please confirm the login and enter the security code here."
+        )
     except IGLoginInvalidUserError:
         await evt.reply("Invalid username")
     except IGLoginBadPasswordError:
@@ -111,19 +125,24 @@ async def enter_login_2fa(evt: CommandEvent) -> None:
     username = evt.sender.command_status["username"]
     is_totp = evt.sender.command_status["is_totp"]
     try:
-        resp = await api.two_factor_login(username, code="".join(evt.args), identifier=identifier,
-                                          is_totp=is_totp)
+        resp = await api.two_factor_login(
+            username, code="".join(evt.args), identifier=identifier, is_totp=is_totp
+        )
     except IGBad2FACodeError:
-        await evt.reply("Invalid 2-factor authentication code. Please try again "
-                        "or use `$cmdprefix+sp cancel` to cancel.")
+        await evt.reply(
+            "Invalid 2-factor authentication code. Please try again "
+            "or use `$cmdprefix+sp cancel` to cancel."
+        )
     except IGCheckpointError:
         await api.challenge_auto(reset=True)
         evt.sender.command_status = {
             **evt.sender.command_status,
             "next": enter_login_security_code,
         }
-        await evt.reply("2-factor authentication code accepted, but Instagram wants to verify it's"
-                        " really you. Please confirm the login and enter the security code here.")
+        await evt.reply(
+            "2-factor authentication code accepted, but Instagram wants to verify it's"
+            " really you. Please confirm the login and enter the security code here."
+        )
     except Exception as e:
         evt.log.exception("Failed to log in")
         await evt.reply(f"Failed to log in: {e}")
@@ -146,8 +165,10 @@ async def enter_login_security_code(evt: CommandEvent) -> None:
         evt.sender.command_status = None
     else:
         if not resp.logged_in_user:
-            evt.log.error(f"Didn't get logged_in_user in challenge response "
-                          f"after entering security code: {resp.serialize()}")
+            evt.log.error(
+                f"Didn't get logged_in_user in challenge response "
+                f"after entering security code: {resp.serialize()}"
+            )
             await evt.reply("An unknown error occurred. Please check the bridge logs.")
             return
         evt.sender.command_status = None
@@ -158,14 +179,19 @@ async def _post_login(evt: CommandEvent, state: AndroidState, user: BaseResponse
     evt.sender.state = state
     pl = state.device.payload
     manufacturer, model = pl["manufacturer"], pl["model"]
-    await evt.reply(f"Successfully logged in as {user.full_name} ([@{user.username}]"
-                    f"(https://instagram.com/{user.username}), user ID: {user.pk}).\n\n"
-                    f"The bridge will show up on Instagram as {manufacturer} {model}.")
+    await evt.reply(
+        f"Successfully logged in as {user.full_name} ([@{user.username}]"
+        f"(https://instagram.com/{user.username}), user ID: {user.pk}).\n\n"
+        f"The bridge will show up on Instagram as {manufacturer} {model}."
+    )
     await evt.sender.try_connect()
 
 
-@command_handler(needs_auth=True, help_section=SECTION_AUTH, help_text="Disconnect the bridge from"
-                                                                       "your Instagram account")
+@command_handler(
+    needs_auth=True,
+    help_section=SECTION_AUTH,
+    help_text="Disconnect the bridge from your Instagram account",
+)
 async def logout(evt: CommandEvent) -> None:
     await evt.sender.logout()
     await evt.reply("Successfully logged out")

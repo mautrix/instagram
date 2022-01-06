@@ -14,22 +14,28 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from typing import Awaitable, Dict, Tuple
-import logging
 import asyncio
 import json
+import logging
 
 from aiohttp import web
 
-from mauigpapi import AndroidState, AndroidAPI
+from mauigpapi import AndroidAPI, AndroidState
+from mauigpapi.errors import (
+    IGBad2FACodeError,
+    IGChallengeWrongCodeError,
+    IGCheckpointError,
+    IGLoginBadPasswordError,
+    IGLoginInvalidUserError,
+    IGLoginTwoFactorRequiredError,
+    IGNotLoggedInError,
+)
 from mauigpapi.types import BaseResponseUser
-from mauigpapi.errors import (IGLoginTwoFactorRequiredError, IGLoginBadPasswordError,
-                              IGLoginInvalidUserError, IGBad2FACodeError, IGNotLoggedInError,
-                              IGCheckpointError, IGChallengeWrongCodeError)
-from mautrix.types import UserID, JSON
+from mautrix.types import JSON, UserID
 from mautrix.util.logging import TraceLogger
 
-from ..commands.auth import get_login_state
 from .. import user as u
+from ..commands.auth import get_login_state
 
 
 class ProvisioningAPI:
@@ -66,29 +72,33 @@ class ProvisioningAPI:
         }
 
     def _missing_key_error(self, err: KeyError) -> None:
-        raise web.HTTPBadRequest(text=json.dumps({"error": f"Missing key {err}"}),
-                                 headers=self._headers)
+        raise web.HTTPBadRequest(
+            text=json.dumps({"error": f"Missing key {err}"}), headers=self._headers
+        )
 
     async def login_options(self, _: web.Request) -> web.Response:
         return web.Response(status=200, headers=self._headers)
 
-    def check_token(self, request: web.Request) -> Awaitable['u.User']:
+    def check_token(self, request: web.Request) -> Awaitable["u.User"]:
         try:
             token = request.headers["Authorization"]
-            token = token[len("Bearer "):]
+            token = token[len("Bearer ") :]
         except KeyError:
-            raise web.HTTPBadRequest(text='{"error": "Missing Authorization header"}',
-                                     headers=self._headers)
+            raise web.HTTPBadRequest(
+                text='{"error": "Missing Authorization header"}', headers=self._headers
+            )
         except IndexError:
-            raise web.HTTPBadRequest(text='{"error": "Malformed Authorization header"}',
-                                     headers=self._headers)
+            raise web.HTTPBadRequest(
+                text='{"error": "Malformed Authorization header"}', headers=self._headers
+            )
         if token != self.shared_secret:
             raise web.HTTPForbidden(text='{"error": "Invalid token"}', headers=self._headers)
         try:
             user_id = request.query["user_id"]
         except KeyError:
-            raise web.HTTPBadRequest(text='{"error": "Missing user_id query param"}',
-                                     headers=self._headers)
+            raise web.HTTPBadRequest(
+                text='{"error": "Missing user_id query param"}', headers=self._headers
+            )
 
         return u.User.get_by_mxid(UserID(user_id))
 
@@ -104,11 +114,17 @@ class ProvisioningAPI:
                 resp = await user.client.current_user()
             except IGNotLoggedInError as e:
                 # TODO maybe don't always log out?
-                self.log.exception(f"Got error checking current user for %s, logging out. %s",
-                                   user.mxid, e.body.json())
-                await user.send_bridge_notice(f"You have been logged out of Instagram: {e!s}",
-                                              important=True, error_code="ig-auth-error",
-                                              error_message=str(e))
+                self.log.exception(
+                    f"Got error checking current user for %s, logging out. %s",
+                    user.mxid,
+                    e.body.json(),
+                )
+                await user.send_bridge_notice(
+                    f"You have been logged out of Instagram: {e!s}",
+                    important=True,
+                    error_code="ig-auth-error",
+                    error_message=str(e),
+                )
                 await user.logout(from_error=True)
             else:
                 data["instagram"] = resp.user.serialize()
@@ -131,10 +147,14 @@ class ProvisioningAPI:
         try:
             resp = await api.login(username, password)
         except IGLoginTwoFactorRequiredError as e:
-            return web.json_response(data={
-                "status": "two-factor",
-                "response": e.body.serialize(),
-            }, status=202, headers=self._acao_headers)
+            return web.json_response(
+                data={
+                    "status": "two-factor",
+                    "response": e.body.serialize(),
+                },
+                status=202,
+                headers=self._acao_headers,
+            )
         except IGCheckpointError as e:
             try:
                 await api.challenge_auto(reset=True)
@@ -147,26 +167,36 @@ class ProvisioningAPI:
                     status=403,
                     headers=self._acao_headers,
                 )
-            return web.json_response(data={
-                "status": "checkpoint",
-                "response": e.body.serialize(),
-            }, status=202, headers=self._acao_headers)
+            return web.json_response(
+                data={
+                    "status": "checkpoint",
+                    "response": e.body.serialize(),
+                },
+                status=202,
+                headers=self._acao_headers,
+            )
         except IGLoginInvalidUserError:
-            return web.json_response(data={"error": "Invalid username",
-                                           "status": "invalid-username"},
-                                     status=404, headers=self._acao_headers)
+            return web.json_response(
+                data={"error": "Invalid username", "status": "invalid-username"},
+                status=404,
+                headers=self._acao_headers,
+            )
         except IGLoginBadPasswordError:
-            return web.json_response(data={"error": "Incorrect password",
-                                           "status": "incorrect-password"},
-                                     status=403, headers=self._acao_headers)
+            return web.json_response(
+                data={"error": "Incorrect password", "status": "incorrect-password"},
+                status=403,
+                headers=self._acao_headers,
+            )
         return await self._finish_login(user, state, resp.logged_in_user)
 
-    async def _get_user(self, request: web.Request, check_state: bool = False
-                        ) -> Tuple['u.User', JSON]:
+    async def _get_user(
+        self, request: web.Request, check_state: bool = False
+    ) -> Tuple["u.User", JSON]:
         user = await self.check_token(request)
         if check_state and (not user.command_status or user.command_status["action"] != "Login"):
-            raise web.HTTPNotFound(text='{"error": "No 2-factor login in progress"}',
-                                   headers=self._headers)
+            raise web.HTTPNotFound(
+                text='{"error": "No 2-factor login in progress"}', headers=self._headers
+            )
 
         try:
             data = await request.json()
@@ -188,13 +218,18 @@ class ProvisioningAPI:
         api: AndroidAPI = user.command_status["api"]
         state: AndroidState = user.command_status["state"]
         try:
-            resp = await api.two_factor_login(username, code=code, identifier=identifier,
-                                              is_totp=is_totp)
+            resp = await api.two_factor_login(
+                username, code=code, identifier=identifier, is_totp=is_totp
+            )
         except IGBad2FACodeError:
-            return web.json_response(data={
-                "error": "Incorrect 2-factor authentication code",
-                "status": "incorrect-2fa-code",
-            }, status=403, headers=self._acao_headers)
+            return web.json_response(
+                data={
+                    "error": "Incorrect 2-factor authentication code",
+                    "status": "incorrect-2fa-code",
+                },
+                status=403,
+                headers=self._acao_headers,
+            )
         except IGCheckpointError as e:
             try:
                 await api.challenge_auto(reset=True)
@@ -207,10 +242,14 @@ class ProvisioningAPI:
                     status=403,
                     headers=self._acao_headers,
                 )
-            return web.json_response(data={
-                "status": "checkpoint",
-                "response": e.body.serialize(),
-            }, status=202, headers=self._acao_headers)
+            return web.json_response(
+                data={
+                    "status": "checkpoint",
+                    "response": e.body.serialize(),
+                },
+                status=202,
+                headers=self._acao_headers,
+            )
         return await self._finish_login(user, state, resp.logged_in_user)
 
     async def login_checkpoint(self, request: web.Request) -> web.Response:
@@ -226,23 +265,32 @@ class ProvisioningAPI:
         try:
             resp = await api.challenge_send_security_code(code=code)
         except IGChallengeWrongCodeError:
-            return web.json_response(data={
-                "error": "Incorrect challenge code",
-                "status": "incorrect-challenge-code",
-            }, status=403, headers=self._acao_headers)
+            return web.json_response(
+                data={
+                    "error": "Incorrect challenge code",
+                    "status": "incorrect-challenge-code",
+                },
+                status=403,
+                headers=self._acao_headers,
+            )
         return await self._finish_login(user, state, resp.logged_in_user)
 
-    async def _finish_login(self, user: 'u.User', state: AndroidState, resp_user: BaseResponseUser
-                            ) -> web.Response:
+    async def _finish_login(
+        self, user: "u.User", state: AndroidState, resp_user: BaseResponseUser
+    ) -> web.Response:
         user.state = state
         pl = state.device.payload
         manufacturer, model = pl["manufacturer"], pl["model"]
         await user.try_connect()
-        return web.json_response(data={
-            "status": "logged-in",
-            "device_displayname": f"{manufacturer} {model}",
-            "user": resp_user.serialize() if resp_user else None,
-        }, status=200, headers=self._acao_headers)
+        return web.json_response(
+            data={
+                "status": "logged-in",
+                "device_displayname": f"{manufacturer} {model}",
+                "user": resp_user.serialize() if resp_user else None,
+            },
+            status=200,
+            headers=self._acao_headers,
+        )
 
     async def logout(self, request: web.Request) -> web.Response:
         user = await self.check_token(request)

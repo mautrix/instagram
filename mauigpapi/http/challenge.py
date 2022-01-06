@@ -1,5 +1,5 @@
 # mautrix-instagram - A Matrix-Instagram puppeting bridge.
-# Copyright (C) 2020 Tulir Asokan
+# Copyright (C) 2022 Tulir Asokan
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as published by
@@ -13,11 +13,11 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import Union
+from __future__ import annotations
 
-from .base import BaseAndroidAPI
+from ..errors import IGChallengeWrongCodeError, IGResponseError
 from ..types import ChallengeStateResponse
-from ..errors import IGResponseError, IGChallengeWrongCodeError
+from .base import BaseAndroidAPI
 
 
 class ChallengeAPI(BaseAndroidAPI):
@@ -30,11 +30,13 @@ class ChallengeAPI(BaseAndroidAPI):
             "guid": self.state.device.uuid,
             "device_id": self.state.device.id,
         }
-        return self.__handle_resp(await self.std_http_get(self.__path, query=query,
-                                                          response_type=ChallengeStateResponse))
+        return self.__handle_resp(
+            await self.std_http_get(self.__path, query=query, response_type=ChallengeStateResponse)
+        )
 
-    async def challenge_select_method(self, choice: str, is_replay: bool = False
-                                      ) -> ChallengeStateResponse:
+    async def challenge_select_method(
+        self, choice: str, is_replay: bool = False
+    ) -> ChallengeStateResponse:
         path = self.__path
         if is_replay:
             path = path.replace("/challenge/", "/challenge/replay/")
@@ -44,8 +46,9 @@ class ChallengeAPI(BaseAndroidAPI):
             "guid": self.state.device.uuid,
             "device_id": self.state.device.id,
         }
-        return self.__handle_resp(await self.std_http_post(path, data=req,
-                                                           response_type=ChallengeStateResponse))
+        return self.__handle_resp(
+            await self.std_http_post(path, data=req, response_type=ChallengeStateResponse)
+        )
 
     async def challenge_delta_review(self, was_me: bool = True) -> ChallengeStateResponse:
         return await self.challenge_select_method("0" if was_me else "1")
@@ -57,10 +60,11 @@ class ChallengeAPI(BaseAndroidAPI):
             "guid": self.state.device.uuid,
             "device_id": self.state.device.id,
         }
-        return self.__handle_resp(await self.std_http_post(self.__path, data=req,
-                                                           response_type=ChallengeStateResponse))
+        return self.__handle_resp(
+            await self.std_http_post(self.__path, data=req, response_type=ChallengeStateResponse)
+        )
 
-    async def challenge_send_security_code(self, code: Union[str, int]) -> ChallengeStateResponse:
+    async def challenge_send_security_code(self, code: str | int) -> ChallengeStateResponse:
         req = {
             "security_code": code,
             "_csrftoken": self.state.cookies.csrf_token,
@@ -68,8 +72,11 @@ class ChallengeAPI(BaseAndroidAPI):
             "device_id": self.state.device.id,
         }
         try:
-            return self.__handle_resp(await self.std_http_post(
-                self.__path, data=req, response_type=ChallengeStateResponse))
+            return self.__handle_resp(
+                await self.std_http_post(
+                    self.__path, data=req, response_type=ChallengeStateResponse
+                )
+            )
         except IGResponseError as e:
             if e.response.status == 400:
                 raise IGChallengeWrongCodeError((await e.response.json())["message"]) from e
@@ -81,9 +88,13 @@ class ChallengeAPI(BaseAndroidAPI):
             "guid": self.state.device.uuid,
             "device_id": self.state.device.id,
         }
-        return self.__handle_resp(await self.std_http_post(
-            self.__path.replace("/challenge/", "/challenge/reset/"),
-            data=req, response_type=ChallengeStateResponse))
+        return self.__handle_resp(
+            await self.std_http_post(
+                self.__path.replace("/challenge/", "/challenge/reset/"),
+                data=req,
+                response_type=ChallengeStateResponse,
+            )
+        )
 
     async def challenge_auto(self, reset: bool = False) -> ChallengeStateResponse:
         if reset:

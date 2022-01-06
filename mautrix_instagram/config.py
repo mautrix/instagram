@@ -1,5 +1,5 @@
 # mautrix-instagram - A Matrix-Instagram puppeting bridge.
-# Copyright (C) 2020 Tulir Asokan
+# Copyright (C) 2022 Tulir Asokan
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as published by
@@ -13,13 +13,15 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import Any, List, NamedTuple
+from __future__ import annotations
+
+from typing import Any, NamedTuple
 import os
 
-from mautrix.types import UserID
-from mautrix.client import Client
-from mautrix.util.config import ConfigUpdateHelper, ForbiddenKey, ForbiddenDefault
 from mautrix.bridge.config import BaseBridgeConfig
+from mautrix.client import Client
+from mautrix.types import UserID
+from mautrix.util.config import ConfigUpdateHelper, ForbiddenDefault, ForbiddenKey
 
 Permissions = NamedTuple("Permissions", relay=bool, user=bool, admin=bool, level=str)
 
@@ -32,7 +34,7 @@ class Config(BaseBridgeConfig):
             return super().__getitem__(key)
 
     @property
-    def forbidden_defaults(self) -> List[ForbiddenDefault]:
+    def forbidden_defaults(self) -> list[ForbiddenDefault]:
         return [
             *super().forbidden_defaults,
             ForbiddenDefault("appservice.database", "postgres://username:password@hostname/db"),

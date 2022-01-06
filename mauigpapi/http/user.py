@@ -24,5 +24,6 @@ class UserAPI(BaseAndroidAPI):
             "q": query,
             "count": count,
         }
-        return await self.std_http_get("/api/v1/users/search/", query=req,
-                                       response_type=UserSearchResponse)
+        return await self.std_http_get(
+            "/api/v1/users/search/", query=req, response_type=UserSearchResponse
+        )

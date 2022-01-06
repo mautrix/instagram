@@ -13,8 +13,12 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from mautrix.util.logging.color import (ColorFormatter as BaseColorFormatter, PREFIX, MXID_COLOR,
-                                        RESET)
+from mautrix.util.logging.color import (
+    MXID_COLOR,
+    PREFIX,
+    RESET,
+    ColorFormatter as BaseColorFormatter,
+)
 
 MAUIGPAPI_COLOR = PREFIX + "35;1m"  # magenta
 
@@ -25,6 +29,13 @@ class ColorFormatter(BaseColorFormatter):
             return MAUIGPAPI_COLOR + module + RESET
         elif module.startswith("mau.instagram"):
             mau, instagram, subtype, user_id = module.split(".", 3)
-            return (MAUIGPAPI_COLOR + f"{mau}.{instagram}.{subtype}" + RESET
-                    + "." + MXID_COLOR + user_id + RESET)
+            return (
+                MAUIGPAPI_COLOR
+                + f"{mau}.{instagram}.{subtype}"
+                + RESET
+                + "."
+                + MXID_COLOR
+                + user_id
+                + RESET
+            )
         return super()._color_name(module)

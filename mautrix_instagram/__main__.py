@@ -1,5 +1,5 @@
 # mautrix-instagram - A Matrix-Instagram puppeting bridge.
-# Copyright (C) 2021 Tulir Asokan
+# Copyright (C) 2022 Tulir Asokan
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as published by
@@ -13,22 +13,24 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import Optional, Dict, Any
-import logging
+from __future__ import annotations
+
+from typing import Any
 import asyncio
+import logging
 
-from mautrix.types import UserID, RoomID
 from mautrix.bridge import Bridge
+from mautrix.types import RoomID, UserID
 
+from . import commands
 from .config import Config
-from .db import upgrade_table, init as init_db
-from .user import User
+from .db import init as init_db, upgrade_table
+from .matrix import MatrixHandler
 from .portal import Portal
 from .puppet import Puppet
-from .matrix import MatrixHandler
-from .version import version, linkified_version
+from .user import User
+from .version import linkified_version, version
 from .web import ProvisioningAPI
-from . import commands
 
 
 class InstagramBridge(Bridge):
@@ -47,7 +49,7 @@ class InstagramBridge(Bridge):
     matrix: MatrixHandler
     provisioning_api: ProvisioningAPI
 
-    periodic_reconnect_task: Optional[asyncio.Task]
+    periodic_reconnect_task: asyncio.Task | None
 
     def preinit(self) -> None:
         self.periodic_reconnect_task = None
@@ -60,8 +62,9 @@ class InstagramBridge(Bridge):
     def prepare_bridge(self) -> None:
         super().prepare_bridge()
         cfg = self.config["bridge.provisioning"]
-        self.provisioning_api = ProvisioningAPI(shared_secret=cfg["shared_secret"],
-                                                device_seed=self.config["instagram.device_seed"])
+        self.provisioning_api = ProvisioningAPI(
+            shared_secret=cfg["shared_secret"], device_seed=self.config["instagram.device_seed"]
+        )
         self.az.app.add_subapp(cfg["prefix"], self.provisioning_api.app)
 
     async def start(self) -> None:
@@ -143,12 +146,13 @@ class InstagramBridge(Bridge):
     async def count_logged_in_users(self) -> int:
         return len([user for user in User.by_igpk.values() if user.igpk])
 
-    async def manhole_global_namespace(self, user_id: UserID) -> Dict[str, Any]:
+    async def manhole_global_namespace(self, user_id: UserID) -> dict[str, Any]:
         return {
             **await super().manhole_global_namespace(user_id),
             "User": User,
             "Portal": Portal,
             "Puppet": Puppet,
         }
+
 
 InstagramBridge().run()

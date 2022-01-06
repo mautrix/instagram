@@ -8,5 +8,5 @@ if TYPE_CHECKING:
 
 
 class CommandEvent(BaseCommandEvent):
-    bridge: 'InstagramBridge'
-    sender: 'User'
+    bridge: "InstagramBridge"
+    sender: "User"

@@ -33,4 +33,4 @@ class TType(IntEnum):
     STRUCT = 12
 
     # internal
-    BOOL = 0xa1
+    BOOL = 0xA1

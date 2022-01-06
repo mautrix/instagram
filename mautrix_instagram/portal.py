@@ -13,41 +13,70 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import (Dict, Tuple, Optional, List, Deque, Set, Any, Union, AsyncGenerator,
-                    Awaitable, Callable, TYPE_CHECKING, cast)
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any, AsyncGenerator, Awaitable, Callable, Union, cast
 from collections import deque
 from io import BytesIO
-import mimetypes
 import asyncio
 import json
+import mimetypes
 
 import asyncpg
 import magic
-from mautrix.util.message_send_checkpoint import MessageSendCheckpointStatus
 
-from mauigpapi.types import (Thread, ThreadUser, ThreadItem, RegularMediaItem, MediaType,
-                             ReactionStatus, Reaction, AnimatedMediaItem, ThreadItemType,
-                             VoiceMediaItem, ExpiredMediaItem, MessageSyncMessage, ReelShareType,
-                             TypingStatus, ThreadUserLastSeenAt, MediaShareItem,
-                             ReelMediaShareItem, CommandResponse, ShareVoiceResponse)
+from mauigpapi.types import (
+    AnimatedMediaItem,
+    CommandResponse,
+    ExpiredMediaItem,
+    MediaShareItem,
+    MediaType,
+    MessageSyncMessage,
+    Reaction,
+    ReactionStatus,
+    ReelMediaShareItem,
+    ReelShareType,
+    RegularMediaItem,
+    Thread,
+    ThreadItem,
+    ThreadItemType,
+    ThreadUser,
+    ThreadUserLastSeenAt,
+    TypingStatus,
+    VoiceMediaItem,
+)
 from mautrix.appservice import AppService, IntentAPI
 from mautrix.bridge import BasePortal, NotificationDisabler, async_getter_lock
-from mautrix.types import (EventID, MessageEventContent, RoomID, EventType, MessageType, ImageInfo,
-                           VideoInfo, MediaMessageEventContent, TextMessageEventContent, AudioInfo,
-                           ContentURI, LocationMessageEventContent, Format, UserID)
 from mautrix.errors import MatrixError, MForbidden, MNotFound, SessionNotFound
-from mautrix.util.simple_lock import SimpleLock
+from mautrix.types import (
+    AudioInfo,
+    ContentURI,
+    EventID,
+    EventType,
+    Format,
+    ImageInfo,
+    LocationMessageEventContent,
+    MediaMessageEventContent,
+    MessageEventContent,
+    MessageType,
+    RoomID,
+    TextMessageEventContent,
+    UserID,
+    VideoInfo,
+)
 from mautrix.util import ffmpeg
+from mautrix.util.message_send_checkpoint import MessageSendCheckpointStatus
+from mautrix.util.simple_lock import SimpleLock
 
-from .db import Portal as DBPortal, Message as DBMessage, Reaction as DBReaction
+from . import matrix as m, puppet as p, user as u
 from .config import Config
-from . import user as u, puppet as p, matrix as m
+from .db import Message as DBMessage, Portal as DBPortal, Reaction as DBReaction
 
 if TYPE_CHECKING:
     from .__main__ import InstagramBridge
 
 try:
-    from mautrix.crypto.attachments import encrypt_attachment, decrypt_attachment
+    from mautrix.crypto.attachments import decrypt_attachment, encrypt_attachment
 except ImportError:
     encrypt_attachment = decrypt_attachment = None
 
@@ -58,7 +87,6 @@ except ImportError:
 
 StateBridge = EventType.find("m.bridge", EventType.Class.STATE)
 StateHalfShotBridge = EventType.find("uk.half-shot.bridge", EventType.Class.STATE)
-FileInfo = Union[AudioInfo, ImageInfo, VideoInfo]
 MediaData = Union[
     AnimatedMediaItem,
     ExpiredMediaItem,
@@ -67,37 +95,55 @@ MediaData = Union[
     RegularMediaItem,
     VoiceMediaItem,
 ]
-MediaUploadFunc = Callable[['u.User', MediaData, IntentAPI], Awaitable[MediaMessageEventContent]]
+MediaUploadFunc = Callable[["u.User", MediaData, IntentAPI], Awaitable[MediaMessageEventContent]]
 
 
 class Portal(DBPortal, BasePortal):
-    by_mxid: Dict[RoomID, 'Portal'] = {}
-    by_thread_id: Dict[Tuple[str, int], 'Portal'] = {}
+    by_mxid: dict[RoomID, Portal] = {}
+    by_thread_id: dict[tuple[str, int], Portal] = {}
     config: Config
-    matrix: 'm.MatrixHandler'
+    matrix: m.MatrixHandler
     az: AppService
     private_chat_portal_meta: bool
 
-    _main_intent: Optional[IntentAPI]
+    _main_intent: IntentAPI | None
     _create_room_lock: asyncio.Lock
     backfill_lock: SimpleLock
-    _msgid_dedup: Deque[str]
-    _reqid_dedup: Set[str]
-    _reaction_dedup: Deque[Tuple[str, int, str]]
+    _msgid_dedup: deque[str]
+    _reqid_dedup: set[str]
+    _reaction_dedup: deque[tuple[str, int, str]]
 
     _main_intent: IntentAPI
-    _last_participant_update: Set[int]
+    _last_participant_update: set[int]
     _reaction_lock: asyncio.Lock
-    _backfill_leave: Optional[Set[IntentAPI]]
-    _typing: Set[UserID]
+    _backfill_leave: set[IntentAPI] | None
+    _typing: set[UserID]
 
-    def __init__(self, thread_id: str, receiver: int, other_user_pk: Optional[int],
-                 mxid: Optional[RoomID] = None, name: Optional[str] = None,
-                 avatar_url: Optional[ContentURI] = None, encrypted: bool = False,
-                 name_set: bool = False, avatar_set: bool = False,
-                 relay_user_id: Optional[UserID] = None) -> None:
-        super().__init__(thread_id, receiver, other_user_pk, mxid, name, avatar_url, encrypted,
-                         name_set, avatar_set, relay_user_id)
+    def __init__(
+        self,
+        thread_id: str,
+        receiver: int,
+        other_user_pk: int | None,
+        mxid: RoomID | None = None,
+        name: str | None = None,
+        avatar_url: ContentURI | None = None,
+        encrypted: bool = False,
+        name_set: bool = False,
+        avatar_set: bool = False,
+        relay_user_id: UserID | None = None,
+    ) -> None:
+        super().__init__(
+            thread_id,
+            receiver,
+            other_user_pk,
+            mxid,
+            name,
+            avatar_url,
+            encrypted,
+            name_set,
+            avatar_set,
+            relay_user_id,
+        )
         self._create_room_lock = asyncio.Lock()
         self.log = self.log.getChild(thread_id)
         self._msgid_dedup = deque(maxlen=100)
@@ -105,8 +151,9 @@ class Portal(DBPortal, BasePortal):
         self._reqid_dedup = set()
         self._last_participant_update = set()
 
-        self.backfill_lock = SimpleLock("Waiting for backfilling to finish before handling %s",
-                                        log=self.log)
+        self.backfill_lock = SimpleLock(
+            "Waiting for backfilling to finish before handling %s", log=self.log
+        )
         self._backfill_leave = None
         self._main_intent = None
         self._reaction_lock = asyncio.Lock()
@@ -124,7 +171,7 @@ class Portal(DBPortal, BasePortal):
         return self._main_intent
 
     @classmethod
-    def init_cls(cls, bridge: 'InstagramBridge') -> None:
+    def init_cls(cls, bridge: "InstagramBridge") -> None:
         cls.config = bridge.config
         cls.matrix = bridge.matrix
         cls.az = bridge.az
@@ -143,12 +190,17 @@ class Portal(DBPortal, BasePortal):
             except Exception:
                 self.log.exception("Failed to send delivery receipt for %s", event_id)
 
-    async def _send_bridge_error(self, sender: 'u.User', err: Union[Exception, str],
-                                 event_id: EventID, event_type: EventType,
-                                 message_type: Optional[MessageType] = None,
-                                 msg: Optional[str] = None, confirmed: bool = False,
-                                 status: MessageSendCheckpointStatus = MessageSendCheckpointStatus.PERM_FAILURE,
-                                 ) -> None:
+    async def _send_bridge_error(
+        self,
+        sender: u.User,
+        err: Exception | str,
+        event_id: EventID,
+        event_type: EventType,
+        message_type: MessageType | None = None,
+        msg: str | None = None,
+        confirmed: bool = False,
+        status: MessageSendCheckpointStatus = MessageSendCheckpointStatus.PERM_FAILURE,
+    ) -> None:
         sender.send_remote_checkpoint(
             status,
             event_id,
@@ -164,34 +216,53 @@ class Portal(DBPortal, BasePortal):
                 EventType.ROOM_REDACTION: "redaction",
             }.get(event_type, "message")
             error_type = "was not" if confirmed else "may not have been"
-            await self._send_message(self.main_intent, TextMessageEventContent(
-                msgtype=MessageType.NOTICE,
-                body=f"\u26a0 Your {event_type_str} {error_type} bridged: {msg or str(err)}"))
+            await self._send_message(
+                self.main_intent,
+                TextMessageEventContent(
+                    msgtype=MessageType.NOTICE,
+                    body=f"\u26a0 Your {event_type_str} {error_type} bridged: {msg or str(err)}",
+                ),
+            )
 
-    async def _upsert_reaction(self, existing: Optional[DBReaction], intent: IntentAPI,
-                               mxid: EventID, message: DBMessage,
-                               sender: Union['u.User', 'p.Puppet'], reaction: str) -> None:
+    async def _upsert_reaction(
+        self,
+        existing: DBReaction | None,
+        intent: IntentAPI,
+        mxid: EventID,
+        message: DBMessage,
+        sender: u.User | p.Puppet,
+        reaction: str,
+    ) -> None:
         if existing:
-            self.log.debug(f"_upsert_reaction redacting {existing.mxid} and inserting {mxid}"
-                           f" (message: {message.mxid})")
+            self.log.debug(
+                f"_upsert_reaction redacting {existing.mxid} and inserting {mxid}"
+                f" (message: {message.mxid})"
+            )
             await intent.redact(existing.mx_room, existing.mxid)
             await existing.edit(reaction=reaction, mxid=mxid, mx_room=message.mx_room)
         else:
             self.log.debug(f"_upsert_reaction inserting {mxid} (message: {message.mxid})")
-            await DBReaction(mxid=mxid, mx_room=message.mx_room, ig_item_id=message.item_id,
-                             ig_receiver=self.receiver, ig_sender=sender.igpk, reaction=reaction
-                             ).insert()
+            await DBReaction(
+                mxid=mxid,
+                mx_room=message.mx_room,
+                ig_item_id=message.item_id,
+                ig_receiver=self.receiver,
+                ig_sender=sender.igpk,
+                reaction=reaction,
+            ).insert()
 
     # endregion
     # region Matrix event handling
 
-    def _status_from_exception(self, e: Exception) -> MessageSendCheckpointStatus:
+    @staticmethod
+    def _status_from_exception(e: Exception) -> MessageSendCheckpointStatus:
         if isinstance(e, NotImplementedError):
             return MessageSendCheckpointStatus.UNSUPPORTED
         return MessageSendCheckpointStatus.PERM_FAILURE
 
-    async def handle_matrix_message(self, sender: 'u.User', message: MessageEventContent,
-                                    event_id: EventID) -> None:
+    async def handle_matrix_message(
+        self, sender: u.User, message: MessageEventContent, event_id: EventID
+    ) -> None:
         try:
             await self._handle_matrix_message(sender, message, event_id)
         except Exception as e:
@@ -207,8 +278,14 @@ class Portal(DBPortal, BasePortal):
             )
 
     async def _handle_matrix_image(
-        self, sender: 'u.User', event_id: EventID, request_id: str, data: bytes, mime_type: str,
-        width: Optional[int] = None, height: Optional[int] = None
+        self,
+        sender: u.User,
+        event_id: EventID,
+        request_id: str,
+        data: bytes,
+        mime_type: str,
+        width: int | None = None,
+        height: int | None = None,
     ) -> CommandResponse:
         if mime_type not in ("image/jpeg", "image/webp"):
             with BytesIO(data) as inp, BytesIO() as out:
@@ -231,15 +308,22 @@ class Portal(DBPortal, BasePortal):
         )
 
     async def _handle_matrix_video(
-        self, sender: 'u.User', event_id: EventID, request_id: str, data: bytes, mime_type: str,
-        duration: Optional[int] = None, width: Optional[int] = None, height: Optional[int] = None,
+        self,
+        sender: u.User,
+        event_id: EventID,
+        request_id: str,
+        data: bytes,
+        mime_type: str,
+        duration: int | None = None,
+        width: int | None = None,
+        height: int | None = None,
     ) -> CommandResponse:
         if mime_type != "video/mp4":
             data = await ffmpeg.convert_bytes(
                 data,
                 output_extension=".mp4",
                 output_args=("-c:v", "libx264", "-c:a", "aac"),
-                input_mime=mime_type
+                input_mime=mime_type,
             )
 
         self.log.trace(f"Uploading video from {event_id}")
@@ -256,15 +340,18 @@ class Portal(DBPortal, BasePortal):
         )
 
     async def _handle_matrix_audio(
-        self, sender: 'u.User', event_id: EventID, request_id: str, data: bytes, mime_type: str,
-        waveform: List[int], duration: Optional[int] = None,
+        self,
+        sender: u.User,
+        event_id: EventID,
+        request_id: str,
+        data: bytes,
+        mime_type: str,
+        waveform: list[int],
+        duration: int | None = None,
     ) -> CommandResponse:
         if mime_type != "audio/mp4":
             data = await ffmpeg.convert_bytes(
-                data,
-                output_extension=".m4a",
-                output_args=("-c:a", "aac"),
-                input_mime=mime_type
+                data, output_extension=".m4a", output_args=("-c:a", "aac"), input_mime=mime_type
             )
 
         self.log.trace(f"Uploading audio from {event_id}")
@@ -275,13 +362,13 @@ class Portal(DBPortal, BasePortal):
             is_direct=self.is_direct,
             client_context=request_id,
             upload_id=upload_id,
-            waveform=json.dumps([(part or 0) / 1024 for part in waveform],
-                                separators=(",", ":")),
+            waveform=json.dumps([(part or 0) / 1024 for part in waveform], separators=(",", ":")),
             waveform_sampling_frequency_hz="10",
         )
 
-    async def _handle_matrix_message(self, orig_sender: 'u.User', message: MessageEventContent,
-                                     event_id: EventID) -> None:
+    async def _handle_matrix_message(
+        self, orig_sender: u.User, message: MessageEventContent, event_id: EventID
+    ) -> None:
         sender, is_relay = await self.get_relay_sender(orig_sender, f"message {event_id}")
         assert sender, "user is not logged in"
         assert sender.is_connected, "You're not connected to Instagram"
@@ -291,38 +378,58 @@ class Portal(DBPortal, BasePortal):
 
         request_id = sender.state.gen_client_context()
         self._reqid_dedup.add(request_id)
-        self.log.debug(f"Handling Matrix message {event_id} from {sender.mxid}/{sender.igpk} "
-                       f"with request ID {request_id}")
+        self.log.debug(
+            f"Handling Matrix message {event_id} from {sender.mxid}/{sender.igpk} "
+            f"with request ID {request_id}"
+        )
         if message.msgtype in (MessageType.EMOTE, MessageType.TEXT):
             text = message.body
             if message.msgtype == MessageType.EMOTE:
                 text = f"/me {text}"
             self.log.trace(f"Sending Matrix text from {event_id} with request ID {request_id}")
-            resp = await sender.mqtt.send_text(self.thread_id, text=text,
-                                               client_context=request_id)
+            resp = await sender.mqtt.send_text(
+                self.thread_id, text=text, client_context=request_id
+            )
         elif message.msgtype.is_media:
             if message.file and decrypt_attachment:
                 data = await self.main_intent.download_media(message.file.url)
-                data = decrypt_attachment(data, message.file.key.key,
-                                          message.file.hashes.get("sha256"), message.file.iv)
+                data = decrypt_attachment(
+                    data, message.file.key.key, message.file.hashes.get("sha256"), message.file.iv
+                )
             else:
                 data = await self.main_intent.download_media(message.url)
             mime_type = message.info.mimetype or magic.from_buffer(data, mime=True)
             if message.msgtype == MessageType.IMAGE:
                 resp = await self._handle_matrix_image(
-                    sender, event_id, request_id, data, mime_type,
-                    width=message.info.width, height=message.info.height,
+                    sender,
+                    event_id,
+                    request_id,
+                    data,
+                    mime_type,
+                    width=message.info.width,
+                    height=message.info.height,
                 )
             elif message.msgtype == MessageType.AUDIO:
                 waveform = message.get("org.matrix.msc1767.audio", {}).get("waveform", [0] * 30)
                 resp = await self._handle_matrix_audio(
-                    sender, event_id, request_id, data, mime_type,
-                    waveform, duration=message.info.duration,
+                    sender,
+                    event_id,
+                    request_id,
+                    data,
+                    mime_type,
+                    waveform,
+                    duration=message.info.duration,
                 )
             elif message.msgtype == MessageType.VIDEO:
                 resp = await self._handle_matrix_video(
-                    sender, event_id, request_id, data, mime_type, duration=message.info.duration,
-                    width=message.info.width, height=message.info.height,
+                    sender,
+                    event_id,
+                    request_id,
+                    data,
+                    mime_type,
+                    duration=message.info.duration,
+                    width=message.info.width,
+                    height=message.info.height,
                 )
             else:
                 raise NotImplementedError(
@@ -346,17 +453,27 @@ class Portal(DBPortal, BasePortal):
             await self._send_delivery_receipt(event_id)
             self._msgid_dedup.appendleft(resp.payload.item_id)
             try:
-                await DBMessage(mxid=event_id, mx_room=self.mxid, item_id=resp.payload.item_id,
-                                receiver=self.receiver, sender=sender.igpk).insert()
+                await DBMessage(
+                    mxid=event_id,
+                    mx_room=self.mxid,
+                    item_id=resp.payload.item_id,
+                    receiver=self.receiver,
+                    sender=sender.igpk,
+                ).insert()
             except asyncpg.UniqueViolationError as e:
-                self.log.warning(f"Error while persisting {event_id} "
-                                 f"({resp.payload.client_context}) -> {resp.payload.item_id}: {e}")
+                self.log.warning(
+                    f"Error while persisting {event_id} ({resp.payload.client_context}) "
+                    f"-> {resp.payload.item_id}: {e}"
+                )
             self._reqid_dedup.remove(request_id)
-            self.log.debug(f"Handled Matrix message {event_id} ({resp.payload.client_context}) "
-                           f"-> {resp.payload.item_id}")
+            self.log.debug(
+                f"Handled Matrix message {event_id} ({resp.payload.client_context}) "
+                f"-> {resp.payload.item_id}"
+            )
 
-    async def handle_matrix_reaction(self, sender: 'u.User', event_id: EventID,
-                                     reacting_to: EventID, emoji: str) -> None:
+    async def handle_matrix_reaction(
+        self, sender: u.User, event_id: EventID, reacting_to: EventID, emoji: str
+    ) -> None:
         try:
             await self._handle_matrix_reaction(sender, event_id, reacting_to, emoji)
         except Exception as e:
@@ -371,8 +488,9 @@ class Portal(DBPortal, BasePortal):
                 msg="Fatal error handling reaction (see logs for more details)",
             )
 
-    async def _handle_matrix_reaction(self, sender: 'u.User', event_id: EventID,
-                                      reacting_to: EventID, emoji: str) -> None:
+    async def _handle_matrix_reaction(
+        self, sender: u.User, event_id: EventID, reacting_to: EventID, emoji: str
+    ) -> None:
         message = await DBMessage.get_by_mxid(reacting_to, self.mxid)
         if not message or message.is_internal:
             self.log.debug(f"Ignoring reaction to unknown event {reacting_to}")
@@ -396,8 +514,9 @@ class Portal(DBPortal, BasePortal):
         self._reaction_dedup.appendleft(dedup_id)
         async with self._reaction_lock:
             try:
-                resp = await sender.mqtt.send_reaction(self.thread_id, item_id=message.item_id,
-                                                       emoji=emoji)
+                resp = await sender.mqtt.send_reaction(
+                    self.thread_id, item_id=message.item_id, emoji=emoji
+                )
                 if resp.status != "ok":
                     raise Exception(f"Failed to react to {event_id}: {resp}")
             except Exception as e:
@@ -412,11 +531,13 @@ class Portal(DBPortal, BasePortal):
                 )
                 await self._send_delivery_receipt(event_id)
                 self.log.trace(f"{sender.mxid} reacted to {message.item_id} with {emoji}")
-                await self._upsert_reaction(existing, self.main_intent, event_id, message, sender,
-                                            emoji)
+                await self._upsert_reaction(
+                    existing, self.main_intent, event_id, message, sender, emoji
+                )
 
-    async def handle_matrix_redaction(self, orig_sender: 'u.User', event_id: EventID,
-                                      redaction_event_id: EventID) -> None:
+    async def handle_matrix_redaction(
+        self, orig_sender: u.User, event_id: EventID, redaction_event_id: EventID
+    ) -> None:
         sender = None
         try:
             sender, _ = await self.get_relay_sender(orig_sender, f"redaction {event_id}")
@@ -435,8 +556,9 @@ class Portal(DBPortal, BasePortal):
                 confirmed=True,
             )
 
-    async def _handle_matrix_redaction(self, sender: 'u.User', event_id: EventID,
-                                       redaction_event_id: EventID) -> None:
+    async def _handle_matrix_redaction(
+        self, sender: u.User, event_id: EventID, redaction_event_id: EventID
+    ) -> None:
         if not sender.is_connected:
             raise Exception("You're not connected to Instagram")
 
@@ -444,8 +566,12 @@ class Portal(DBPortal, BasePortal):
         if reaction:
             try:
                 await reaction.delete()
-                await sender.mqtt.send_reaction(self.thread_id, item_id=reaction.ig_item_id,
-                                                reaction_status=ReactionStatus.DELETED, emoji="")
+                await sender.mqtt.send_reaction(
+                    self.thread_id,
+                    item_id=reaction.ig_item_id,
+                    reaction_status=ReactionStatus.DELETED,
+                    emoji="",
+                )
             except Exception as e:
                 raise Exception(f"Removing reaction failed: {e}")
             else:
@@ -480,7 +606,7 @@ class Portal(DBPortal, BasePortal):
 
         raise Exception("No message or reaction found for redaction")
 
-    async def handle_matrix_typing(self, users: Set[UserID]) -> None:
+    async def handle_matrix_typing(self, users: set[UserID]) -> None:
         if users == self._typing:
             return
         old_typing = self._typing
@@ -488,23 +614,28 @@ class Portal(DBPortal, BasePortal):
         await self._handle_matrix_typing(old_typing - users, TypingStatus.OFF)
         await self._handle_matrix_typing(users - old_typing, TypingStatus.TEXT)
 
-    async def _handle_matrix_typing(self, users: Set[UserID], status: TypingStatus) -> None:
+    async def _handle_matrix_typing(self, users: set[UserID], status: TypingStatus) -> None:
         for mxid in users:
             user = await u.User.get_by_mxid(mxid, create=False)
-            if ((not user or not await user.is_logged_in() or user.remote_typing_status == status
-                 or not user.is_connected)):
+            if (
+                not user
+                or not await user.is_logged_in()
+                or user.remote_typing_status == status
+                or not user.is_connected
+            ):
                 continue
             user.remote_typing_status = None
             await user.mqtt.indicate_activity(self.thread_id, status)
 
-    async def handle_matrix_leave(self, user: 'u.User') -> None:
+    async def handle_matrix_leave(self, user: u.User) -> None:
         if not await user.is_logged_in():
             return
         if self.is_direct:
             self.log.info(f"{user.mxid} left private chat portal with {self.other_user_pk}")
             if user.igpk == self.receiver:
-                self.log.info(f"{user.mxid} was the recipient of this portal. "
-                              "Cleaning up and deleting...")
+                self.log.info(
+                    f"{user.mxid} was the recipient of this portal. Cleaning up and deleting..."
+                )
                 await self.cleanup_and_delete()
         else:
             self.log.debug(f"{user.mxid} left portal to {self.thread_id}")
@@ -513,8 +644,9 @@ class Portal(DBPortal, BasePortal):
     # endregion
     # region Instagram event handling
 
-    async def _reupload_instagram_media(self, source: 'u.User', media: RegularMediaItem,
-                                        intent: IntentAPI) -> MediaMessageEventContent:
+    async def _reupload_instagram_media(
+        self, source: u.User, media: RegularMediaItem, intent: IntentAPI
+    ) -> MediaMessageEventContent:
         if media.media_type == MediaType.IMAGE:
             image = media.best_image
             if not image:
@@ -533,18 +665,23 @@ class Portal(DBPortal, BasePortal):
             raise ValueError("Attachment not available: unsupported media type")
         return await self._reupload_instagram_file(source, url, msgtype, info, intent)
 
-    async def _reupload_instagram_animated(self, source: 'u.User', media: AnimatedMediaItem,
-                                           intent: IntentAPI) -> MediaMessageEventContent:
+    async def _reupload_instagram_animated(
+        self, source: u.User, media: AnimatedMediaItem, intent: IntentAPI
+    ) -> MediaMessageEventContent:
         url = media.images.fixed_height.webp
-        info = ImageInfo(height=int(media.images.fixed_height.height),
-                         width=int(media.images.fixed_height.width))
+        info = ImageInfo(
+            height=int(media.images.fixed_height.height),
+            width=int(media.images.fixed_height.width),
+        )
         return await self._reupload_instagram_file(source, url, MessageType.IMAGE, info, intent)
 
-    async def _reupload_instagram_voice(self, source: 'u.User', media: VoiceMediaItem,
-                                        intent: IntentAPI) -> MediaMessageEventContent:
+    async def _reupload_instagram_voice(
+        self, source: u.User, media: VoiceMediaItem, intent: IntentAPI
+    ) -> MediaMessageEventContent:
         async def convert_to_ogg(data, mimetype):
-            converted = await ffmpeg.convert_bytes(data, ".ogg", output_args=('-c:a', 'libvorbis'),
-                                                   input_mime=mimetype)
+            converted = await ffmpeg.convert_bytes(
+                data, ".ogg", output_args=("-c:a", "libvorbis"), input_mime=mimetype
+            )
             return converted, "audio/ogg"
 
         url = media.media.audio.audio_src
@@ -553,12 +690,6 @@ class Portal(DBPortal, BasePortal):
         content = await self._reupload_instagram_file(
             source, url, MessageType.AUDIO, info, intent, convert_to_ogg
         )
-        content["org.matrix.msc1767.file"] = {
-            "url": content.url,
-            "name": content.body,
-            **(content.file.serialize() if content.file else {}),
-            **(content.info.serialize() if content.info else {}),
-        }
         content["org.matrix.msc1767.audio"] = {
             "duration": media.media.audio.duration,
             "waveform": waveform,
@@ -567,20 +698,28 @@ class Portal(DBPortal, BasePortal):
         return content
 
     async def _reupload_instagram_file(
-        self, source: 'u.User', url: str, msgtype: MessageType, info: FileInfo, intent: IntentAPI,
-        convert_fn: Optional[Callable[[bytes, str], Awaitable[Tuple[bytes, str]]]] = None,
+        self,
+        source: u.User,
+        url: str,
+        msgtype: MessageType,
+        info: ImageInfo | VideoInfo | AudioInfo,
+        intent: IntentAPI,
+        convert_fn: Callable[[bytes, str], Awaitable[tuple[bytes, str]]] | None = None,
     ) -> MediaMessageEventContent:
-        async with await source.client.raw_http_get(url) as resp:
+        async with source.client.raw_http_get(url) as resp:
             try:
                 length = int(resp.headers["Content-Length"])
             except KeyError:
                 # TODO can the download be short-circuited if there's too much data?
-                self.log.warning("Got file download response with no Content-Length header,"
-                                 "reading data dangerously")
+                self.log.warning(
+                    "Got file download response with no Content-Length header,"
+                    "reading data dangerously"
+                )
                 length = 0
             if length > self.matrix.media_config.upload_size:
-                self.log.debug(f"{url} was too large ({length} "
-                               f"> {self.matrix.media_config.upload_size})")
+                self.log.debug(
+                    f"{url} was too large ({length} > {self.matrix.media_config.upload_size})"
+                )
                 raise ValueError("Attachment not available: too large")
             data = await resp.read()
             info.mimetype = resp.headers["Content-Type"] or magic.from_buffer(data, mime=True)
@@ -608,8 +747,9 @@ class Portal(DBPortal, BasePortal):
             upload_mime_type = "application/octet-stream"
             upload_file_name = None
 
-        mxc = await intent.upload_media(data, mime_type=upload_mime_type,
-                                        filename=upload_file_name)
+        mxc = await intent.upload_media(
+            data, mime_type=upload_mime_type, filename=upload_file_name
+        )
 
         if decryption_info:
             decryption_info.url = mxc
@@ -624,7 +764,7 @@ class Portal(DBPortal, BasePortal):
             msgtype=msgtype,
         )
 
-    def _get_instagram_media_info(self, item: ThreadItem) -> Tuple[MediaUploadFunc, MediaData]:
+    def _get_instagram_media_info(self, item: ThreadItem) -> tuple[MediaUploadFunc, MediaData]:
         # TODO maybe use a dict and item.item_type instead of a ton of ifs
         method = self._reupload_instagram_media
         if item.media:
@@ -658,8 +798,9 @@ class Portal(DBPortal, BasePortal):
             raise ValueError("Attachment not available: media expired")
         return method, media_data
 
-    async def _handle_instagram_media(self, source: 'u.User', intent: IntentAPI, item: ThreadItem
-                                      ) -> Optional[EventID]:
+    async def _handle_instagram_media(
+        self, source: u.User, intent: IntentAPI, item: ThreadItem
+    ) -> EventID | None:
         try:
             reupload_func, media_data = self._get_instagram_media_info(item)
             content = await reupload_func(source, media_data, intent)
@@ -667,14 +808,16 @@ class Portal(DBPortal, BasePortal):
             content = TextMessageEventContent(body=str(e), msgtype=MessageType.NOTICE)
         except Exception:
             self.log.warning("Failed to upload media", exc_info=True)
-            content = TextMessageEventContent(body="Attachment not available: failed to copy file",
-                                              msgtype=MessageType.NOTICE)
+            content = TextMessageEventContent(
+                body="Attachment not available: failed to copy file", msgtype=MessageType.NOTICE
+            )
 
         await self._add_instagram_reply(content, item.replied_to_message)
         return await self._send_message(intent, content, timestamp=item.timestamp // 1000)
 
-    async def _handle_instagram_media_share(self, source: 'u.User', intent: IntentAPI,
-                                            item: ThreadItem) -> Optional[EventID]:
+    async def _handle_instagram_media_share(
+        self, source: u.User, intent: IntentAPI, item: ThreadItem
+    ) -> EventID | None:
         if item.media_share:
             share_item = item.media_share
             item_type_name = share_item.media_type.human_name
@@ -690,28 +833,41 @@ class Portal(DBPortal, BasePortal):
         else:
             return None
         user_text = f"@{share_item.user.username}"
-        user_link = (f'<a href="https://www.instagram.com/{share_item.user.username}/">'
-                     f'{user_text}</a>')
-        prefix = TextMessageEventContent(msgtype=MessageType.NOTICE, format=Format.HTML,
-                                         body=f"Sent {user_text}'s {item_type_name}",
-                                         formatted_body=f"Sent {user_link}'s {item_type_name}")
+        user_link = (
+            f'<a href="https://www.instagram.com/{share_item.user.username}/">' f"{user_text}</a>"
+        )
+        prefix = TextMessageEventContent(
+            msgtype=MessageType.NOTICE,
+            format=Format.HTML,
+            body=f"Sent {user_text}'s {item_type_name}",
+            formatted_body=f"Sent {user_link}'s {item_type_name}",
+        )
         await self._send_message(intent, prefix, timestamp=item.timestamp // 1000)
         event_id = await self._handle_instagram_media(source, intent, item)
         if share_item.caption:
             external_url = f"https://www.instagram.com/p/{share_item.code}/"
-            body = (f"> {share_item.caption.user.username}: {share_item.caption.text}\n\n"
-                    f"{external_url}")
-            formatted_body = (f"<blockquote><strong>{share_item.caption.user.username}</strong>"
-                              f" {share_item.caption.text}</blockquote>"
-                              f'<a href="{external_url}">instagram.com/p/{share_item.code}</a>')
-            caption = TextMessageEventContent(msgtype=MessageType.TEXT, body=body,
-                                              formatted_body=formatted_body, format=Format.HTML,
-                                              external_url=external_url)
+            body = (
+                f"> {share_item.caption.user.username}: {share_item.caption.text}\n\n"
+                f"{external_url}"
+            )
+            formatted_body = (
+                f"<blockquote><strong>{share_item.caption.user.username}</strong>"
+                f" {share_item.caption.text}</blockquote>"
+                f'<a href="{external_url}">instagram.com/p/{share_item.code}</a>'
+            )
+            caption = TextMessageEventContent(
+                msgtype=MessageType.TEXT,
+                body=body,
+                formatted_body=formatted_body,
+                format=Format.HTML,
+                external_url=external_url,
+            )
             await self._send_message(intent, caption, timestamp=item.timestamp // 1000)
         return event_id
 
-    async def _handle_instagram_reel_share(self, source: 'u.User', intent: IntentAPI,
-                                           item: ThreadItem) -> Optional[EventID]:
+    async def _handle_instagram_reel_share(
+        self, source: u.User, intent: IntentAPI, item: ThreadItem
+    ) -> EventID | None:
         media = item.reel_share.media
         prefix_html = None
         if item.reel_share.type == ReelShareType.REPLY:
@@ -754,24 +910,32 @@ class Portal(DBPortal, BasePortal):
                 content.set_reply(existing.mxid)
             else:
                 media_event_id = await self._handle_instagram_media(source, intent, item)
-                await DBMessage(mxid=media_event_id, mx_room=self.mxid, item_id=fake_item_id,
-                                receiver=self.receiver, sender=media.user.pk).insert()
+                await DBMessage(
+                    mxid=media_event_id,
+                    mx_room=self.mxid,
+                    item_id=fake_item_id,
+                    receiver=self.receiver,
+                    sender=media.user.pk,
+                ).insert()
         return await self._send_message(intent, content, timestamp=item.timestamp // 1000)
 
-    async def _handle_instagram_text(self, intent: IntentAPI, item: ThreadItem, text: str,
-                                     ) -> EventID:
+    async def _handle_instagram_text(
+        self, intent: IntentAPI, item: ThreadItem, text: str
+    ) -> EventID:
         content = TextMessageEventContent(msgtype=MessageType.TEXT, body=text)
         await self._add_instagram_reply(content, item.replied_to_message)
         return await self._send_message(intent, content, timestamp=item.timestamp // 1000)
 
     async def _send_instagram_unhandled(self, intent: IntentAPI, item: ThreadItem) -> EventID:
-        content = TextMessageEventContent(msgtype=MessageType.NOTICE,
-                                          body=f"Unsupported message type {item.item_type.value}")
+        content = TextMessageEventContent(
+            msgtype=MessageType.NOTICE, body=f"Unsupported message type {item.item_type.value}"
+        )
         await self._add_instagram_reply(content, item.replied_to_message)
         return await self._send_message(intent, content, timestamp=item.timestamp // 1000)
 
-    async def _handle_instagram_location(self, intent: IntentAPI, item: ThreadItem
-                                         ) -> Optional[EventID]:
+    async def _handle_instagram_location(
+        self, intent: IntentAPI, item: ThreadItem
+    ) -> EventID | None:
         loc = item.location
         if not loc.lng or not loc.lat:
             # TODO handle somehow
@@ -779,8 +943,10 @@ class Portal(DBPortal, BasePortal):
         long_char = "E" if loc.lng > 0 else "W"
         lat_char = "N" if loc.lat > 0 else "S"
 
-        body = (f"{loc.name} - {round(abs(loc.lat), 4)}° {lat_char}, "
-                f"{round(abs(loc.lng), 4)}° {long_char}")
+        body = (
+            f"{loc.name} - {round(abs(loc.lat), 4)}° {lat_char}, "
+            f"{round(abs(loc.lng), 4)}° {long_char}"
+        )
         url = f"https://www.openstreetmap.org/#map=15/{loc.lat}/{loc.lng}"
 
         external_url = None
@@ -788,8 +954,11 @@ class Portal(DBPortal, BasePortal):
             external_url = f"https://www.facebook.com/{loc.short_name}-{loc.facebook_places_id}"
 
         content = LocationMessageEventContent(
-            msgtype=MessageType.LOCATION, geo_uri=f"geo:{loc.lat},{loc.lng}",
-            body=f"Location: {body}\n{url}", external_url=external_url)
+            msgtype=MessageType.LOCATION,
+            geo_uri=f"geo:{loc.lat},{loc.lng}",
+            body=f"Location: {body}\n{url}",
+            external_url=external_url,
+        )
         content["format"] = str(Format.HTML)
         content["formatted_body"] = f"Location: <a href='{url}'>{body}</a>"
 
@@ -797,27 +966,31 @@ class Portal(DBPortal, BasePortal):
 
         return await self._send_message(intent, content, timestamp=item.timestamp // 1000)
 
-    async def _handle_instagram_profile(self, intent: IntentAPI, item: ThreadItem
-                                        ) -> Optional[EventID]:
+    async def _handle_instagram_profile(
+        self, intent: IntentAPI, item: ThreadItem
+    ) -> EventID | None:
         username = item.profile.username
         user_link = f'<a href="https://www.instagram.com/{username}/">@{username}</a>'
         text = f"Shared @{username}'s profile"
         html = f"Shared {user_link}'s profile"
-        content = TextMessageEventContent(msgtype=MessageType.TEXT, format=Format.HTML,
-                                          body=text, formatted_body=html)
+        content = TextMessageEventContent(
+            msgtype=MessageType.TEXT, format=Format.HTML, body=text, formatted_body=html
+        )
         await self._add_instagram_reply(content, item.replied_to_message)
         return await self._send_message(intent, content, timestamp=item.timestamp // 1000)
 
-    async def handle_instagram_item(self, source: 'u.User', sender: 'p.Puppet', item: ThreadItem,
-                                    is_backfill: bool = False) -> None:
+    async def handle_instagram_item(
+        self, source: u.User, sender: p.Puppet, item: ThreadItem, is_backfill: bool = False
+    ) -> None:
         try:
             await self._handle_instagram_item(source, sender, item, is_backfill)
         except Exception:
             self.log.exception("Fatal error handling Instagram item")
             self.log.trace("Item content: %s", item.serialize())
 
-    async def _add_instagram_reply(self, content: MessageEventContent,
-                                   reply_to: Optional[ThreadItem]) -> None:
+    async def _add_instagram_reply(
+        self, content: MessageEventContent, reply_to: ThreadItem | None
+    ) -> None:
         if not reply_to:
             return
 
@@ -847,23 +1020,32 @@ class Portal(DBPortal, BasePortal):
 
         content.set_reply(evt)
 
-    async def _handle_instagram_item(self, source: 'u.User', sender: 'p.Puppet', item: ThreadItem,
-                                     is_backfill: bool = False) -> None:
+    async def _handle_instagram_item(
+        self, source: u.User, sender: p.Puppet, item: ThreadItem, is_backfill: bool = False
+    ) -> None:
         if not isinstance(item, ThreadItem):
             # Parsing these items failed, they should have been logged already
             return
         elif item.client_context in self._reqid_dedup:
-            self.log.debug(f"Ignoring message {item.item_id} ({item.client_context}) by "
-                           f"{item.user_id} as it was sent by us (client_context in dedup queue)")
+            self.log.debug(
+                f"Ignoring message {item.item_id} ({item.client_context}) by "
+                f"{item.user_id} as it was sent by us (client_context in dedup queue)"
+            )
         elif item.item_id in self._msgid_dedup:
-            self.log.debug(f"Ignoring message {item.item_id} ({item.client_context}) by "
-                           f"{item.user_id} as it was already handled (message.id in dedup queue)")
+            self.log.debug(
+                f"Ignoring message {item.item_id} ({item.client_context}) by "
+                f"{item.user_id} as it was already handled (message.id in dedup queue)"
+            )
         elif await DBMessage.get_by_item_id(item.item_id, self.receiver) is not None:
-            self.log.debug(f"Ignoring message {item.item_id} ({item.client_context}) by "
-                           f"{item.user_id} as it was already handled (message.id in database)")
+            self.log.debug(
+                f"Ignoring message {item.item_id} ({item.client_context}) by "
+                f"{item.user_id} as it was already handled (message.id in database)"
+            )
         else:
-            self.log.debug(f"Starting handling of message {item.item_id} ({item.client_context}) "
-                           f"by {item.user_id}")
+            self.log.debug(
+                f"Starting handling of message {item.item_id} ({item.client_context}) "
+                f"by {item.user_id}"
+            )
             self._msgid_dedup.appendleft(item.item_id)
             if self.backfill_lock.locked and sender.need_backfill_invite(self):
                 self.log.debug("Adding %s's default puppet to room for backfilling", sender.mxid)
@@ -902,15 +1084,22 @@ class Portal(DBPortal, BasePortal):
                 self.log.debug(f"Unhandled Instagram message {item.item_id}")
                 event_id = await self._send_instagram_unhandled(intent, item)
 
-            msg = DBMessage(mxid=event_id, mx_room=self.mxid, item_id=item.item_id,
-                            receiver=self.receiver, sender=sender.pk)
+            msg = DBMessage(
+                mxid=event_id,
+                mx_room=self.mxid,
+                item_id=item.item_id,
+                receiver=self.receiver,
+                sender=sender.pk,
+            )
             await msg.insert()
             await self._send_delivery_receipt(event_id)
             if handled:
                 self.log.debug(f"Handled Instagram message {item.item_id} -> {event_id}")
             else:
-                self.log.debug(f"Unhandled Instagram message {item.item_id} "
-                               f"(type {item.item_type} -> fallback error {event_id})")
+                self.log.debug(
+                    f"Unhandled Instagram message {item.item_id} "
+                    f"(type {item.item_type} -> fallback error {event_id})"
+                )
             if is_backfill and item.reactions:
                 await self._handle_instagram_reactions(msg, item.reactions.emojis)
 
@@ -926,11 +1115,14 @@ class Portal(DBPortal, BasePortal):
             await self.main_intent.redact(self.mxid, message.mxid)
         self.log.debug(f"Redacted {message.mxid} after Instagram unsend")
 
-    async def _handle_instagram_reactions(self, message: DBMessage, reactions: List[Reaction]
-                                          ) -> None:
-        old_reactions: Dict[int, DBReaction]
-        old_reactions = {reaction.ig_sender: reaction for reaction
-                         in await DBReaction.get_all_by_item_id(message.item_id, self.receiver)}
+    async def _handle_instagram_reactions(
+        self, message: DBMessage, reactions: list[Reaction]
+    ) -> None:
+        old_reactions: dict[int, DBReaction]
+        old_reactions = {
+            reaction.ig_sender: reaction
+            for reaction in await DBReaction.get_all_by_item_id(message.item_id, self.receiver)
+        }
         for new_reaction in reactions:
             old_reaction = old_reactions.pop(new_reaction.sender_id, None)
             if old_reaction and old_reaction.reaction == new_reaction.emoji:
@@ -938,8 +1130,9 @@ class Portal(DBPortal, BasePortal):
             puppet = await p.Puppet.get_by_pk(new_reaction.sender_id)
             intent = puppet.intent_for(self)
             reaction_event_id = await intent.react(self.mxid, message.mxid, new_reaction.emoji)
-            await self._upsert_reaction(old_reaction, intent, reaction_event_id, message,
-                                        puppet, new_reaction.emoji)
+            await self._upsert_reaction(
+                old_reaction, intent, reaction_event_id, message, puppet, new_reaction.emoji
+            )
         for old_reaction in old_reactions.values():
             await old_reaction.delete()
             puppet = await p.Puppet.get_by_pk(old_reaction.ig_sender)
@@ -955,8 +1148,9 @@ class Portal(DBPortal, BasePortal):
                 await puppet.intent_for(self).mark_read(self.mxid, message.mxid)
         else:
             async with self._reaction_lock:
-                await self._handle_instagram_reactions(message, (item.reactions.emojis
-                                                                 if item.reactions else []))
+                await self._handle_instagram_reactions(
+                    message, (item.reactions.emojis if item.reactions else [])
+                )
 
     # endregion
     # region Updating portal info
@@ -975,7 +1169,7 @@ class Portal(DBPortal, BasePortal):
         else:
             return ""
 
-    async def update_info(self, thread: Thread, source: 'u.User') -> None:
+    async def update_info(self, thread: Thread, source: u.User) -> None:
         changed = await self._update_name(self._get_thread_name(thread))
         changed = await self._update_participants(thread.users, source) or changed
         if changed:
@@ -996,7 +1190,7 @@ class Portal(DBPortal, BasePortal):
             return True
         return False
 
-    async def _update_photo_from_puppet(self, puppet: 'p.Puppet') -> bool:
+    async def _update_photo_from_puppet(self, puppet: p.Puppet) -> bool:
         if not self.private_chat_portal_meta and not self.encrypted:
             return False
         if self.avatar_set and self.avatar_url == puppet.photo_mxc:
@@ -1011,7 +1205,7 @@ class Portal(DBPortal, BasePortal):
                 self.avatar_set = False
         return True
 
-    async def _update_participants(self, users: List[ThreadUser], source: 'u.User') -> bool:
+    async def _update_participants(self, users: list[ThreadUser], source: u.User) -> bool:
         meta_changed = False
 
         # Make sure puppets who should be here are here
@@ -1029,13 +1223,15 @@ class Portal(DBPortal, BasePortal):
             for user_id in await self.main_intent.get_room_members(self.mxid):
                 pk = p.Puppet.get_id_from_mxid(user_id)
                 if pk and pk not in current_members and pk != self.other_user_pk:
-                    await self.main_intent.kick_user(self.mxid, p.Puppet.get_mxid_from_id(pk),
-                                                     reason="User had left this Instagram DM")
+                    await self.main_intent.kick_user(
+                        self.mxid,
+                        p.Puppet.get_mxid_from_id(pk),
+                        reason="User had left this Instagram DM",
+                    )
 
         return meta_changed
 
-    async def _update_read_receipts(self, receipts: Dict[Union[int, str], ThreadUserLastSeenAt]
-                                    ) -> None:
+    async def _update_read_receipts(self, receipts: dict[int | str, ThreadUserLastSeenAt]) -> None:
         for user_id, receipt in receipts.items():
             message = await DBMessage.get_by_item_id(receipt.item_id, self.receiver)
             if not message:
@@ -1046,15 +1242,21 @@ class Portal(DBPortal, BasePortal):
             try:
                 await puppet.intent_for(self).mark_read(message.mx_room, message.mxid)
             except Exception:
-                self.log.warning(f"Failed to mark {message.mxid} in {message.mx_room} "
-                                 f"as read by {puppet.intent.mxid}", exc_info=True)
+                self.log.warning(
+                    f"Failed to mark {message.mxid} in {message.mx_room} "
+                    f"as read by {puppet.intent.mxid}",
+                    exc_info=True,
+                )
 
     # endregion
     # region Backfilling
 
-    async def backfill(self, source: 'u.User', is_initial: bool = False) -> None:
-        limit = (self.config["bridge.backfill.initial_limit"] if is_initial
-                 else self.config["bridge.backfill.missed_limit"])
+    async def backfill(self, source: u.User, is_initial: bool = False) -> None:
+        limit = (
+            self.config["bridge.backfill.initial_limit"]
+            if is_initial
+            else self.config["bridge.backfill.missed_limit"]
+        )
         if limit == 0:
             return
         elif limit < 0:
@@ -1062,7 +1264,7 @@ class Portal(DBPortal, BasePortal):
         with self.backfill_lock:
             await self._backfill(source, is_initial, limit)
 
-    async def _backfill(self, source: 'u.User', is_initial: bool, limit: int) -> None:
+    async def _backfill(self, source: u.User, is_initial: bool, limit: int) -> None:
         self.log.debug("Backfilling history through %s", source.mxid)
 
         entries = await self._fetch_backfill_items(source, is_initial, limit)
@@ -1083,8 +1285,9 @@ class Portal(DBPortal, BasePortal):
         self._backfill_leave = None
         self.log.info("Backfilled %d messages through %s", len(entries), source.mxid)
 
-    async def _fetch_backfill_items(self, source: 'u.User', is_initial: bool, limit: int
-                                    ) -> List[ThreadItem]:
+    async def _fetch_backfill_items(
+        self, source: u.User, is_initial: bool, limit: int
+    ) -> list[ThreadItem]:
         items = []
         self.log.debug("Fetching up to %d messages through %s", limit, source.igpk)
         async for item in source.client.iter_thread(self.thread_id):
@@ -1094,8 +1297,10 @@ class Portal(DBPortal, BasePortal):
             elif not is_initial:
                 msg = await DBMessage.get_by_item_id(item.item_id, receiver=self.receiver)
                 if msg is not None:
-                    self.log.debug(f"Fetched {len(items)} messages and hit a message"
-                                   " that's already in the database.")
+                    self.log.debug(
+                        f"Fetched {len(items)} messages and hit a message"
+                        " that's already in the database."
+                    )
                     break
             items.append(item)
         return items
@@ -1108,7 +1313,7 @@ class Portal(DBPortal, BasePortal):
         return f"net.maunium.instagram://instagram/{self.thread_id}"
 
     @property
-    def bridge_info(self) -> Dict[str, Any]:
+    def bridge_info(self) -> dict[str, Any]:
         return {
             "bridgebot": self.az.bot_mxid,
             "creator": self.main_intent.mxid,
@@ -1121,7 +1326,7 @@ class Portal(DBPortal, BasePortal):
                 "id": self.thread_id,
                 "displayname": self.name,
                 "avatar_url": self.avatar_url,
-            }
+            },
         }
 
     async def update_bridge_info(self) -> None:
@@ -1130,18 +1335,20 @@ class Portal(DBPortal, BasePortal):
             return
         try:
             self.log.debug("Updating bridge info...")
-            await self.main_intent.send_state_event(self.mxid, StateBridge,
-                                                    self.bridge_info, self.bridge_info_state_key)
+            await self.main_intent.send_state_event(
+                self.mxid, StateBridge, self.bridge_info, self.bridge_info_state_key
+            )
             # TODO remove this once https://github.com/matrix-org/matrix-doc/pull/2346 is in spec
-            await self.main_intent.send_state_event(self.mxid, StateHalfShotBridge,
-                                                    self.bridge_info, self.bridge_info_state_key)
+            await self.main_intent.send_state_event(
+                self.mxid, StateHalfShotBridge, self.bridge_info, self.bridge_info_state_key
+            )
         except Exception:
             self.log.warning("Failed to update bridge info", exc_info=True)
 
     # endregion
     # region Creating Matrix rooms
 
-    async def create_matrix_room(self, source: 'u.User', info: Thread) -> Optional[RoomID]:
+    async def create_matrix_room(self, source: u.User, info: Thread) -> RoomID | None:
         if self.mxid:
             try:
                 await self.update_matrix_room(source, info)
@@ -1151,7 +1358,7 @@ class Portal(DBPortal, BasePortal):
         async with self._create_room_lock:
             return await self._create_matrix_room(source, info)
 
-    def _get_invite_content(self, double_puppet: Optional['p.Puppet']) -> Dict[str, Any]:
+    def _get_invite_content(self, double_puppet: p.Puppet | None) -> dict[str, bool]:
         invite_content = {}
         if double_puppet:
             invite_content["fi.mau.will_auto_accept"] = True
@@ -1159,11 +1366,16 @@ class Portal(DBPortal, BasePortal):
             invite_content["is_direct"] = True
         return invite_content
 
-    async def update_matrix_room(self, source: 'u.User', info: Thread, backfill: bool = False
-                                 ) -> None:
+    async def update_matrix_room(
+        self, source: u.User, info: Thread, backfill: bool = False
+    ) -> None:
         puppet = await p.Puppet.get_by_custom_mxid(source.mxid)
-        await self.main_intent.invite_user(self.mxid, source.mxid, check_cache=True,
-                                           extra_content=self._get_invite_content(puppet))
+        await self.main_intent.invite_user(
+            self.mxid,
+            source.mxid,
+            check_cache=True,
+            extra_content=self._get_invite_content(puppet),
+        )
         if puppet:
             did_join = await puppet.intent.ensure_joined(self.mxid)
             if did_join and self.is_direct:
@@ -1172,57 +1384,57 @@ class Portal(DBPortal, BasePortal):
         await self.update_info(info, source)
 
         if backfill:
-            last_msg = await DBMessage.get_by_item_id(info.last_permanent_item.item_id,
-                                                      receiver=self.receiver)
+            last_msg = await DBMessage.get_by_item_id(
+                info.last_permanent_item.item_id, receiver=self.receiver
+            )
             if last_msg is None:
-                self.log.debug(f"Last permanent item ({info.last_permanent_item.item_id})"
-                               " not found in database, starting backfilling")
+                self.log.debug(
+                    f"Last permanent item ({info.last_permanent_item.item_id})"
+                    " not found in database, starting backfilling"
+                )
                 await self.backfill(source, is_initial=False)
         await self._update_read_receipts(info.last_seen_at)
 
-        # TODO
-        # up = DBUserPortal.get(source.fbid, self.fbid, self.fb_receiver)
-        # if not up:
-        #     in_community = await source._community_helper.add_room(source._community_id, self.mxid)
-        #     DBUserPortal(user=source.fbid, portal=self.fbid, portal_receiver=self.fb_receiver,
-        #                  in_community=in_community).insert()
-        # elif not up.in_community:
-        #     in_community = await source._community_helper.add_room(source._community_id, self.mxid)
-        #     up.edit(in_community=in_community)
-
-    async def _create_matrix_room(self, source: 'u.User', info: Thread) -> Optional[RoomID]:
+    async def _create_matrix_room(self, source: u.User, info: Thread) -> RoomID | None:
         if self.mxid:
             await self.update_matrix_room(source, info)
             return self.mxid
         await self.update_info(info, source)
         self.log.debug("Creating Matrix room")
-        name: Optional[str] = None
-        initial_state = [{
-            "type": str(StateBridge),
-            "state_key": self.bridge_info_state_key,
-            "content": self.bridge_info,
-        }, {
+        name: str | None = None
+        initial_state = [
+            {
+                "type": str(StateBridge),
+                "state_key": self.bridge_info_state_key,
+                "content": self.bridge_info,
+            },
             # TODO remove this once https://github.com/matrix-org/matrix-doc/pull/2346 is in spec
-            "type": str(StateHalfShotBridge),
-            "state_key": self.bridge_info_state_key,
-            "content": self.bridge_info,
-        }]
+            {
+                "type": str(StateHalfShotBridge),
+                "state_key": self.bridge_info_state_key,
+                "content": self.bridge_info,
+            },
+        ]
         invites = []
         if self.config["bridge.encryption.default"] and self.matrix.e2ee:
             self.encrypted = True
-            initial_state.append({
-                "type": "m.room.encryption",
-                "content": {"algorithm": "m.megolm.v1.aes-sha2"},
-            })
+            initial_state.append(
+                {
+                    "type": "m.room.encryption",
+                    "content": {"algorithm": "m.megolm.v1.aes-sha2"},
+                }
+            )
             if self.is_direct:
                 invites.append(self.az.bot_mxid)
         if self.encrypted or self.private_chat_portal_meta or not self.is_direct:
             name = self.name
         if self.config["appservice.community_id"]:
-            initial_state.append({
-                "type": "m.room.related_groups",
-                "content": {"groups": [self.config["appservice.community_id"]]},
-            })
+            initial_state.append(
+                {
+                    "type": "m.room.related_groups",
+                    "content": {"groups": [self.config["appservice.community_id"]]},
+                }
+            )
 
         # We lock backfill lock here so any messages that come between the room being created
         # and the initial backfill finishing wouldn't be bridged before the backfill messages.
@@ -1244,31 +1456,27 @@ class Portal(DBPortal, BasePortal):
                 try:
                     await self.az.intent.ensure_joined(self.mxid)
                 except Exception:
-                    self.log.warning("Failed to add bridge bot "
-                                     f"to new private chat {self.mxid}")
+                    self.log.warning(f"Failed to add bridge bot to new private chat {self.mxid}")
 
             await self.update()
             self.log.debug(f"Matrix room created: {self.mxid}")
             self.by_mxid[self.mxid] = self
 
             puppet = await p.Puppet.get_by_custom_mxid(source.mxid)
-            await self.main_intent.invite_user(self.mxid, source.mxid,
-                                               extra_content=self._get_invite_content(puppet))
+            await self.main_intent.invite_user(
+                self.mxid, source.mxid, extra_content=self._get_invite_content(puppet)
+            )
             if puppet:
                 try:
                     if self.is_direct:
                         await source.update_direct_chats({self.main_intent.mxid: [self.mxid]})
                     await puppet.intent.join_room_by_id(self.mxid)
                 except MatrixError:
-                    self.log.debug("Failed to join custom puppet into newly created portal",
-                                   exc_info=True)
+                    self.log.debug(
+                        "Failed to join custom puppet into newly created portal", exc_info=True
+                    )
 
             await self._update_participants(info.users, source)
-
-            # TODO
-            # in_community = await source._community_helper.add_room(source._community_id, self.mxid)
-            # DBUserPortal(user=source.fbid, portal=self.fbid, portal_receiver=self.fb_receiver,
-            #              in_community=in_community).upsert()
 
             try:
                 await self.backfill(source, is_initial=True)
@@ -1285,8 +1493,11 @@ class Portal(DBPortal, BasePortal):
         self.by_thread_id[(self.thread_id, self.receiver)] = self
         if self.mxid:
             self.by_mxid[self.mxid] = self
-        self._main_intent = ((await p.Puppet.get_by_pk(self.other_user_pk)).default_mxid_intent
-                             if self.other_user_pk else self.az.intent)
+        self._main_intent = (
+            (await p.Puppet.get_by_pk(self.other_user_pk)).default_mxid_intent
+            if self.other_user_pk
+            else self.az.intent
+        )
 
     async def delete(self) -> None:
         await DBMessage.delete_all(self.mxid)
@@ -1299,16 +1510,15 @@ class Portal(DBPortal, BasePortal):
         await self.update()
 
     @classmethod
-    def all_with_room(cls) -> AsyncGenerator['Portal', None]:
+    def all_with_room(cls) -> AsyncGenerator[Portal, None]:
         return cls._db_to_portals(super().all_with_room())
 
     @classmethod
-    def find_private_chats_with(cls, other_user: int) -> AsyncGenerator['Portal', None]:
+    def find_private_chats_with(cls, other_user: int) -> AsyncGenerator[Portal, None]:
         return cls._db_to_portals(super().find_private_chats_with(other_user))
 
     @classmethod
-    async def _db_to_portals(cls, query: Awaitable[List['Portal']]
-                             ) -> AsyncGenerator['Portal', None]:
+    async def _db_to_portals(cls, query: Awaitable[list[Portal]]) -> AsyncGenerator[Portal, None]:
         portals = await query
         for index, portal in enumerate(portals):
             try:
@@ -1319,7 +1529,7 @@ class Portal(DBPortal, BasePortal):
 
     @classmethod
     @async_getter_lock
-    async def get_by_mxid(cls, mxid: RoomID) -> Optional['Portal']:
+    async def get_by_mxid(cls, mxid: RoomID) -> Portal | None:
         try:
             return cls.by_mxid[mxid]
         except KeyError:
@@ -1334,9 +1544,14 @@ class Portal(DBPortal, BasePortal):
 
     @classmethod
     @async_getter_lock
-    async def get_by_thread_id(cls, thread_id: str, *, receiver: int,
-                               is_group: Optional[bool] = None,
-                               other_user_pk: Optional[int] = None) -> Optional['Portal']:
+    async def get_by_thread_id(
+        cls,
+        thread_id: str,
+        *,
+        receiver: int,
+        is_group: bool | None = None,
+        other_user_pk: int | None = None,
+    ) -> Portal | None:
         if is_group and receiver != 0:
             receiver = 0
         try:
@@ -1349,8 +1564,12 @@ class Portal(DBPortal, BasePortal):
             except KeyError:
                 pass
 
-        portal = cast(cls, await super().get_by_thread_id(thread_id, receiver=receiver,
-                                                          rec_must_match=is_group is not None))
+        portal = cast(
+            cls,
+            await super().get_by_thread_id(
+                thread_id, receiver=receiver, rec_must_match=is_group is not None
+            ),
+        )
         if portal is not None:
             await portal.postinit()
             return portal
@@ -1364,7 +1583,7 @@ class Portal(DBPortal, BasePortal):
         return None
 
     @classmethod
-    async def get_by_thread(cls, thread: Thread, receiver: int) -> Optional['Portal']:
+    async def get_by_thread(cls, thread: Thread, receiver: int) -> Portal | None:
         if thread.is_group:
             receiver = 0
             other_user_pk = None
@@ -1373,6 +1592,11 @@ class Portal(DBPortal, BasePortal):
                 other_user_pk = receiver
             else:
                 other_user_pk = thread.users[0].pk
-        return await cls.get_by_thread_id(thread.thread_id, receiver=receiver,
-                                          is_group=thread.is_group, other_user_pk=other_user_pk)
+        return await cls.get_by_thread_id(
+            thread.thread_id,
+            receiver=receiver,
+            is_group=thread.is_group,
+            other_user_pk=other_user_pk,
+        )
+
     # endregion

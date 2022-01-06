@@ -13,7 +13,9 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import Any, Optional, Union, Dict
+from __future__ import annotations
+
+from typing import Any
 from enum import Enum
 from uuid import uuid4
 import json
@@ -21,11 +23,11 @@ import json
 
 class SkywalkerSubscription:
     @staticmethod
-    def direct_sub(user_id: Union[str, int]) -> str:
+    def direct_sub(user_id: str | int) -> str:
         return f"ig/u/v1/{user_id}"
 
     @staticmethod
-    def live_sub(user_id: Union[str, int]) -> str:
+    def live_sub(user_id: str | int) -> str:
         return f"ig/live_notification_subscribe/{user_id}"
 
 
@@ -64,154 +66,267 @@ everclear_subscriptions = {
 
 class GraphQLSubscription:
     @staticmethod
-    def _fmt(query_id: GraphQLQueryID, input_params: Any,
-             client_logged: Optional[bool] = None) -> str:
+    def _fmt(
+        query_id: GraphQLQueryID, input_params: Any, client_logged: bool | None = None
+    ) -> str:
         params = {
             "input_data": input_params,
-            **({"%options": {"client_logged": client_logged}}
-               if client_logged is not None else {}),
+            **(
+                {"%options": {"client_logged": client_logged}} if client_logged is not None else {}
+            ),
         }
         return f"1/graphqlsubscriptions/{query_id.value}/{json.dumps(params)}"
 
     @classmethod
-    def app_presence(cls, subscription_id: Optional[str] = None,
-                     client_logged: Optional[bool] = None) -> str:
-        return cls._fmt(GraphQLQueryID.APP_PRESENCE,
-                        input_params={"client_subscription_id": subscription_id or str(uuid4())},
-                        client_logged=client_logged)
+    def app_presence(
+        cls, subscription_id: str | None = None, client_logged: bool | None = None
+    ) -> str:
+        return cls._fmt(
+            GraphQLQueryID.APP_PRESENCE,
+            input_params={"client_subscription_id": subscription_id or str(uuid4())},
+            client_logged=client_logged,
+        )
 
     @classmethod
-    def async_ad(cls, user_id: str, subscription_id: Optional[str] = None,
-                 client_logged: Optional[bool] = None) -> str:
-        return cls._fmt(GraphQLQueryID.ASYNC_AD_SUB,
-                        input_params={"client_subscription_id": subscription_id or str(uuid4()),
-                                      "user_id": user_id},
-                        client_logged=client_logged)
+    def async_ad(
+        cls,
+        user_id: str,
+        subscription_id: str | None = None,
+        client_logged: bool | None = None,
+    ) -> str:
+        return cls._fmt(
+            GraphQLQueryID.ASYNC_AD_SUB,
+            input_params={
+                "client_subscription_id": subscription_id or str(uuid4()),
+                "user_id": user_id,
+            },
+            client_logged=client_logged,
+        )
 
     @classmethod
-    def client_config_update(cls, subscription_id: Optional[str] = None,
-                             client_logged: Optional[bool] = None) -> str:
-        return cls._fmt(GraphQLQueryID.CLIENT_CONFIG_UPDATE,
-                        input_params={"client_subscription_id": subscription_id or str(uuid4())},
-                        client_logged=client_logged)
+    def client_config_update(
+        cls, subscription_id: str | None = None, client_logged: bool | None = None
+    ) -> str:
+        return cls._fmt(
+            GraphQLQueryID.CLIENT_CONFIG_UPDATE,
+            input_params={"client_subscription_id": subscription_id or str(uuid4())},
+            client_logged=client_logged,
+        )
 
     @classmethod
-    def direct_status(cls, subscription_id: Optional[str] = None,
-                      client_logged: Optional[bool] = None) -> str:
-        return cls._fmt(GraphQLQueryID.DIRECT_STATUS,
-                        input_params={"client_subscription_id": subscription_id or str(uuid4())},
-                        client_logged=client_logged)
+    def direct_status(
+        cls, subscription_id: str | None = None, client_logged: bool | None = None
+    ) -> str:
+        return cls._fmt(
+            GraphQLQueryID.DIRECT_STATUS,
+            input_params={"client_subscription_id": subscription_id or str(uuid4())},
+            client_logged=client_logged,
+        )
 
     @classmethod
-    def direct_typing(cls, user_id: str, client_logged: Optional[bool] = None) -> str:
-        return cls._fmt(GraphQLQueryID.DIRECT_TYPING,
-                        input_params={"user_id": user_id},
-                        client_logged=client_logged)
+    def direct_typing(cls, user_id: str, client_logged: bool | None = None) -> str:
+        return cls._fmt(
+            GraphQLQueryID.DIRECT_TYPING,
+            input_params={"user_id": user_id},
+            client_logged=client_logged,
+        )
 
     @classmethod
-    def ig_live_wave(cls, broadcast_id: str, receiver_id: str,
-                     subscription_id: Optional[str] = None, client_logged: Optional[bool] = None
-                     ) -> str:
-        return cls._fmt(GraphQLQueryID.LIVE_WAVE,
-                        input_params={"client_subscription_id": subscription_id or str(uuid4()),
-                                      "broadcast_id": broadcast_id, "receiver_id": receiver_id},
-                        client_logged=client_logged)
+    def ig_live_wave(
+        cls,
+        broadcast_id: str,
+        receiver_id: str,
+        subscription_id: str | None = None,
+        client_logged: bool | None = None,
+    ) -> str:
+        return cls._fmt(
+            GraphQLQueryID.LIVE_WAVE,
+            input_params={
+                "client_subscription_id": subscription_id or str(uuid4()),
+                "broadcast_id": broadcast_id,
+                "receiver_id": receiver_id,
+            },
+            client_logged=client_logged,
+        )
 
     @classmethod
-    def interactivity_activate_question(cls, broadcast_id: str,
-                                        subscription_id: Optional[str] = None,
-                                        client_logged: Optional[bool] = None) -> str:
-        return cls._fmt(GraphQLQueryID.INTERACTIVITY_ACTIVATE_QUESTION,
-                        input_params={"client_subscription_id": subscription_id or str(uuid4()),
-                                      "broadcast_id": broadcast_id},
-                        client_logged=client_logged)
+    def interactivity_activate_question(
+        cls,
+        broadcast_id: str,
+        subscription_id: str | None = None,
+        client_logged: bool | None = None,
+    ) -> str:
+        return cls._fmt(
+            GraphQLQueryID.INTERACTIVITY_ACTIVATE_QUESTION,
+            input_params={
+                "client_subscription_id": subscription_id or str(uuid4()),
+                "broadcast_id": broadcast_id,
+            },
+            client_logged=client_logged,
+        )
 
     @classmethod
     def interactivity_realtime_question_submissions_status(
-        cls, broadcast_id: str, subscription_id: Optional[str] = None,
-        client_logged: Optional[bool] = None
+        cls,
+        broadcast_id: str,
+        subscription_id: str | None = None,
+        client_logged: bool | None = None,
     ) -> str:
-        return cls._fmt(GraphQLQueryID.INTERACTIVITY_REALTIME_QUESTION_SUBMISSION_STATUS,
-                        input_params={"client_subscription_id": subscription_id or str(uuid4()),
-                                      "broadcast_id": broadcast_id},
-                        client_logged=client_logged)
+        return cls._fmt(
+            GraphQLQueryID.INTERACTIVITY_REALTIME_QUESTION_SUBMISSION_STATUS,
+            input_params={
+                "client_subscription_id": subscription_id or str(uuid4()),
+                "broadcast_id": broadcast_id,
+            },
+            client_logged=client_logged,
+        )
 
     @classmethod
-    def interactivity(cls, broadcast_id: str, subscription_id: Optional[str] = None,
-                      client_logged: Optional[bool] = None) -> str:
-        return cls._fmt(GraphQLQueryID.INTERACTIVITY_SUB,
-                        input_params={"client_subscription_id": subscription_id or str(uuid4()),
-                                      "broadcast_id": broadcast_id},
-                        client_logged=client_logged)
+    def interactivity(
+        cls,
+        broadcast_id: str,
+        subscription_id: str | None = None,
+        client_logged: bool | None = None,
+    ) -> str:
+        return cls._fmt(
+            GraphQLQueryID.INTERACTIVITY_SUB,
+            input_params={
+                "client_subscription_id": subscription_id or str(uuid4()),
+                "broadcast_id": broadcast_id,
+            },
+            client_logged=client_logged,
+        )
 
     @classmethod
-    def live_realtime_comments(cls, broadcast_id: str, subscription_id: Optional[str] = None,
-                               client_logged: Optional[bool] = None) -> str:
-        return cls._fmt(GraphQLQueryID.LIVE_REALTIME_COMMENTS,
-                        input_params={"client_subscription_id": subscription_id or str(uuid4()),
-                                      "broadcast_id": broadcast_id},
-                        client_logged=client_logged)
+    def live_realtime_comments(
+        cls,
+        broadcast_id: str,
+        subscription_id: str | None = None,
+        client_logged: bool | None = None,
+    ) -> str:
+        return cls._fmt(
+            GraphQLQueryID.LIVE_REALTIME_COMMENTS,
+            input_params={
+                "client_subscription_id": subscription_id or str(uuid4()),
+                "broadcast_id": broadcast_id,
+            },
+            client_logged=client_logged,
+        )
 
     @classmethod
-    def live_realtime_typing_indicator(cls, broadcast_id: str,
-                                       subscription_id: Optional[str] = None,
-                                       client_logged: Optional[bool] = None) -> str:
-        return cls._fmt(GraphQLQueryID.LIVE_TYPING_INDICATOR,
-                        input_params={"client_subscription_id": subscription_id or str(uuid4()),
-                                      "broadcast_id": broadcast_id},
-                        client_logged=client_logged)
+    def live_realtime_typing_indicator(
+        cls,
+        broadcast_id: str,
+        subscription_id: str | None = None,
+        client_logged: bool | None = None,
+    ) -> str:
+        return cls._fmt(
+            GraphQLQueryID.LIVE_TYPING_INDICATOR,
+            input_params={
+                "client_subscription_id": subscription_id or str(uuid4()),
+                "broadcast_id": broadcast_id,
+            },
+            client_logged=client_logged,
+        )
 
     @classmethod
-    def media_feedback(cls, feedback_id: str, subscription_id: Optional[str] = None,
-                       client_logged: Optional[bool] = None) -> str:
-        return cls._fmt(GraphQLQueryID.MEDIA_FEEDBACK,
-                        input_params={"client_subscription_id": subscription_id or str(uuid4()),
-                                      "feedback_id": feedback_id},
-                        client_logged=client_logged)
+    def media_feedback(
+        cls,
+        feedback_id: str,
+        subscription_id: str | None = None,
+        client_logged: bool | None = None,
+    ) -> str:
+        return cls._fmt(
+            GraphQLQueryID.MEDIA_FEEDBACK,
+            input_params={
+                "client_subscription_id": subscription_id or str(uuid4()),
+                "feedback_id": feedback_id,
+            },
+            client_logged=client_logged,
+        )
 
     @classmethod
-    def react_native_ota_update(cls, build_number: str, subscription_id: Optional[str] = None,
-                                client_logged: Optional[bool] = None) -> str:
-        return cls._fmt(GraphQLQueryID.REACT_NATIVE_OTA,
-                        input_params={"client_subscription_id": subscription_id or str(uuid4()),
-                                      "build_number": build_number},
-                        client_logged=client_logged)
+    def react_native_ota_update(
+        cls,
+        build_number: str,
+        subscription_id: str | None = None,
+        client_logged: bool | None = None,
+    ) -> str:
+        return cls._fmt(
+            GraphQLQueryID.REACT_NATIVE_OTA,
+            input_params={
+                "client_subscription_id": subscription_id or str(uuid4()),
+                "build_number": build_number,
+            },
+            client_logged=client_logged,
+        )
 
     @classmethod
-    def video_call_co_watch_control(cls, video_call_id: str, subscription_id: Optional[str] = None,
-                                    client_logged: Optional[bool] = None) -> str:
-        return cls._fmt(GraphQLQueryID.VIDEO_CALL_CO_WATCH_CONTROL,
-                        input_params={"client_subscription_id": subscription_id or str(uuid4()),
-                                      "video_call_id": video_call_id},
-                        client_logged=client_logged)
+    def video_call_co_watch_control(
+        cls,
+        video_call_id: str,
+        subscription_id: str | None = None,
+        client_logged: bool | None = None,
+    ) -> str:
+        return cls._fmt(
+            GraphQLQueryID.VIDEO_CALL_CO_WATCH_CONTROL,
+            input_params={
+                "client_subscription_id": subscription_id or str(uuid4()),
+                "video_call_id": video_call_id,
+            },
+            client_logged=client_logged,
+        )
 
     @classmethod
-    def video_call_in_call_alert(cls, video_call_id: str, subscription_id: Optional[str] = None,
-                                 client_logged: Optional[bool] = None) -> str:
-        return cls._fmt(GraphQLQueryID.VIDEO_CALL_IN_ALERT,
-                        input_params={"client_subscription_id": subscription_id or str(uuid4()),
-                                      "video_call_id": video_call_id},
-                        client_logged=client_logged)
+    def video_call_in_call_alert(
+        cls,
+        video_call_id: str,
+        subscription_id: str | None = None,
+        client_logged: bool | None = None,
+    ) -> str:
+        return cls._fmt(
+            GraphQLQueryID.VIDEO_CALL_IN_ALERT,
+            input_params={
+                "client_subscription_id": subscription_id or str(uuid4()),
+                "video_call_id": video_call_id,
+            },
+            client_logged=client_logged,
+        )
 
     @classmethod
-    def video_call_prototype_publish(cls, video_call_id: str,
-                                     subscription_id: Optional[str] = None,
-                                     client_logged: Optional[bool] = None) -> str:
-        return cls._fmt(GraphQLQueryID.VIDEO_CALL_PROTOTYPE_PUBLISH,
-                        input_params={"client_subscription_id": subscription_id or str(uuid4()),
-                                      "video_call_id": video_call_id},
-                        client_logged=client_logged)
+    def video_call_prototype_publish(
+        cls,
+        video_call_id: str,
+        subscription_id: str | None = None,
+        client_logged: bool | None = None,
+    ) -> str:
+        return cls._fmt(
+            GraphQLQueryID.VIDEO_CALL_PROTOTYPE_PUBLISH,
+            input_params={
+                "client_subscription_id": subscription_id or str(uuid4()),
+                "video_call_id": video_call_id,
+            },
+            client_logged=client_logged,
+        )
 
     @classmethod
-    def zero_provision(cls, device_id: str, subscription_id: Optional[str] = None,
-                       client_logged: Optional[bool] = None) -> str:
-        return cls._fmt(GraphQLQueryID.ZERO_PROVISION,
-                        input_params={"client_subscription_id": subscription_id or str(uuid4()),
-                                      "device_id": device_id},
-                        client_logged=client_logged)
+    def zero_provision(
+        cls,
+        device_id: str,
+        subscription_id: str | None = None,
+        client_logged: bool | None = None,
+    ) -> str:
+        return cls._fmt(
+            GraphQLQueryID.ZERO_PROVISION,
+            input_params={
+                "client_subscription_id": subscription_id or str(uuid4()),
+                "device_id": device_id,
+            },
+            client_logged=client_logged,
+        )
 
 
-_topic_map: Dict[str, str] = {
+_topic_map: dict[str, str] = {
     "/pp": "34",  # unknown
     "/ig_sub_iris": "134",
     "/ig_sub_iris_response": "135",
@@ -227,7 +342,7 @@ _topic_map: Dict[str, str] = {
     "179": "179",  # also unknown
 }
 
-_reverse_topic_map: Dict[str, str] = {value: key for key, value in _topic_map.items()}
+_reverse_topic_map: dict[str, str] = {value: key for key, value in _topic_map.items()}
 
 
 class RealtimeTopic(Enum):
@@ -250,5 +365,5 @@ class RealtimeTopic(Enum):
         return _topic_map[self.value]
 
     @staticmethod
-    def decode(val: str) -> 'RealtimeTopic':
+    def decode(val: str) -> RealtimeTopic:
         return RealtimeTopic(_reverse_topic_map[val])

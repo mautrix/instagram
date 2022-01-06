@@ -17,10 +17,10 @@ from typing import Dict, List, Union
 
 from attr import dataclass
 
-from .type import TType
-from .autospec import field, autospec
-from .write import ThriftWriter
+from .autospec import autospec, field
 from .read import ThriftReader
+from .type import TType
+from .write import ThriftWriter
 
 
 @autospec
@@ -96,7 +96,7 @@ class IncomingMessage:
     payload: str
 
     @classmethod
-    def from_thrift(cls, data: bytes) -> 'IncomingMessage':
+    def from_thrift(cls, data: bytes) -> "IncomingMessage":
         buf = ThriftReader(data)
         topic_type = buf.read_field()
         if topic_type == TType.BINARY:

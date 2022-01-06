@@ -1,5 +1,5 @@
 # mautrix-instagram - A Matrix-Instagram puppeting bridge.
-# Copyright (C) 2020 Tulir Asokan
+# Copyright (C) 2022 Tulir Asokan
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as published by
@@ -13,24 +13,29 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import Optional
+from __future__ import annotations
+
 import base64
+import io
+import json
 import struct
 import time
-import json
-import io
 
+from Crypto.Cipher import AES, PKCS1_v1_5
 from Crypto.PublicKey import RSA
-from Crypto.Cipher import PKCS1_v1_5, AES
 from Crypto.Random import get_random_bytes
 
-from ..types import LoginResponse, LoginResponseUser, LogoutResponse
+from ..types import LoginResponse, LogoutResponse
 from .base import BaseAndroidAPI
 
 
 class LoginAPI(BaseAndroidAPI):
-    async def login(self, username: str, password: Optional[str] = None,
-                    encrypted_password: Optional[str] = None) -> LoginResponse:
+    async def login(
+        self,
+        username: str,
+        password: str | None = None,
+        encrypted_password: str | None = None,
+    ) -> LoginResponse:
         if password:
             if encrypted_password:
                 raise ValueError("Only one of password or encrypted_password must be provided")
@@ -50,8 +55,9 @@ class LoginAPI(BaseAndroidAPI):
             "country_codes": json.dumps([{"country_code": "1", "source": "default"}]),
             "jazoest": self._jazoest,
         }
-        return await self.std_http_post("/api/v1/accounts/login/", data=req,
-                                        response_type=LoginResponse)
+        return await self.std_http_post(
+            "/api/v1/accounts/login/", data=req, response_type=LoginResponse
+        )
 
     async def one_tap_app_login(self, user_id: str, nonce: str) -> LoginResponse:
         req = {
@@ -63,12 +69,18 @@ class LoginAPI(BaseAndroidAPI):
             "device_id": self.state.device.id,
             "login_nonce": nonce,
         }
-        return await self.std_http_post("/api/v1/accounts/one_tap_app_login/", data=req,
-                                        response_type=LoginResponse)
+        return await self.std_http_post(
+            "/api/v1/accounts/one_tap_app_login/", data=req, response_type=LoginResponse
+        )
 
-    async def two_factor_login(self, username: str, code: str, identifier: str,
-                               trust_device: bool = True, is_totp: bool = True,
-                               ) -> LoginResponse:
+    async def two_factor_login(
+        self,
+        username: str,
+        code: str,
+        identifier: str,
+        trust_device: bool = True,
+        is_totp: bool = True,
+    ) -> LoginResponse:
         req = {
             "verification_code": code,
             "_csrftoken": self.state.cookies.csrf_token,
@@ -79,10 +91,11 @@ class LoginAPI(BaseAndroidAPI):
             "device_id": self.state.device.id,
             "verification_method": "0" if is_totp else "1",
         }
-        return await self.std_http_post("/api/v1/accounts/two_factor_login/", data=req,
-                                        response_type=LoginResponse)
+        return await self.std_http_post(
+            "/api/v1/accounts/two_factor_login/", data=req, response_type=LoginResponse
+        )
 
-    async def logout(self, one_tap_app_login: Optional[bool] = None) -> LogoutResponse:
+    async def logout(self, one_tap_app_login: bool | None = None) -> LogoutResponse:
         req = {
             "guid": self.state.device.uuid,
             "phone_id": self.state.device.phone_id,
@@ -91,16 +104,20 @@ class LoginAPI(BaseAndroidAPI):
             "_uuid": self.state.device.uuid,
             "one_tap_app_login": one_tap_app_login,
         }
-        return await self.std_http_post("/api/v1/accounts/logout/", data=req,
-                                        response_type=LogoutResponse)
+        return await self.std_http_post(
+            "/api/v1/accounts/logout/", data=req, response_type=LogoutResponse
+        )
 
     async def change_password(self, old_password: str, new_password: str):
-        return self.change_password_encrypted(old_password=self._encrypt_password(old_password),
-                                              new_password1=self._encrypt_password(new_password),
-                                              new_password2=self._encrypt_password(new_password))
+        return self.change_password_encrypted(
+            old_password=self._encrypt_password(old_password),
+            new_password1=self._encrypt_password(new_password),
+            new_password2=self._encrypt_password(new_password),
+        )
 
-    async def change_password_encrypted(self, old_password: str, new_password1: str,
-                                        new_password2: str):
+    async def change_password_encrypted(
+        self, old_password: str, new_password1: str, new_password2: str
+    ):
         req = {
             "_csrftoken": self.state.cookies.csrf_token,
             "_uid": self.state.cookies.user_id,

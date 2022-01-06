@@ -1,5 +1,5 @@
 # mautrix-instagram - A Matrix-Instagram puppeting bridge.
-# Copyright (C) 2020 Tulir Asokan
+# Copyright (C) 2022 Tulir Asokan
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as published by
@@ -13,25 +13,45 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import Optional, Dict, Any, TypeVar, Type, Union
+from __future__ import annotations
+
+from typing import Any, Type, TypeVar
+import json
 import logging
 import random
 import time
-import json
 
-from aiohttp import ClientSession, ClientResponse
+from aiohttp import ClientResponse, ClientSession
 from yarl import URL
+
 from mautrix.types import JSON, Serializable
 from mautrix.util.logging import TraceLogger
 
+from ..errors import (
+    IGActionSpamError,
+    IGBad2FACodeError,
+    IGCheckpointError,
+    IGInactiveUserError,
+    IGLoginBadPasswordError,
+    IGLoginInvalidUserError,
+    IGLoginRequiredError,
+    IGLoginTwoFactorRequiredError,
+    IGNotFoundError,
+    IGPrivateUserError,
+    IGRateLimitError,
+    IGResponseError,
+    IGSentryBlockError,
+    IGUserHasLoggedOutError,
+)
 from ..state import AndroidState
-from ..errors import (IGActionSpamError, IGNotFoundError, IGRateLimitError, IGCheckpointError,
-                      IGUserHasLoggedOutError, IGLoginRequiredError, IGPrivateUserError,
-                      IGSentryBlockError, IGInactiveUserError, IGResponseError, IGBad2FACodeError,
-                      IGLoginBadPasswordError, IGLoginInvalidUserError,
-                      IGLoginTwoFactorRequiredError)
 
-T = TypeVar('T')
+T = TypeVar("T")
+
+
+def remove_nulls(d: dict) -> dict:
+    return {
+        k: remove_nulls(v) if isinstance(v, dict) else v for k, v in d.items() if v is not None
+    }
 
 
 class BaseAndroidAPI:
@@ -40,25 +60,21 @@ class BaseAndroidAPI:
     state: AndroidState
     log: TraceLogger
 
-    def __init__(self, state: AndroidState, log: Optional[TraceLogger] = None) -> None:
+    def __init__(self, state: AndroidState, log: TraceLogger | None = None) -> None:
         self.http = ClientSession(cookie_jar=state.cookies.jar)
         self.state = state
         self.log = log or logging.getLogger("mauigpapi.http")
 
     @staticmethod
-    def sign(req: Any, filter_nulls: bool = False) -> Dict[str, str]:
+    def sign(req: Any, filter_nulls: bool = False) -> dict[str, str]:
         if isinstance(req, Serializable):
             req = req.serialize()
         if isinstance(req, dict):
-            def remove_nulls(d: dict) -> dict:
-                return {k: remove_nulls(v) if isinstance(v, dict) else v
-                        for k, v in d.items() if v is not None}
-
             req = json.dumps(remove_nulls(req) if filter_nulls else req)
         return {"signed_body": f"SIGNATURE.{req}"}
 
     @property
-    def _headers(self) -> Dict[str, str]:
+    def _headers(self) -> dict[str, str]:
         headers = {
             "x-ads-opt-out": str(int(self.state.session.ads_opt_out)),
             "x-device-id": self.state.device.uuid,
@@ -70,8 +86,11 @@ class BaseAndroidAPI:
             "x-ig-bandwidth-speed-kbps": "-1.000",
             "x-ig-bandwidth-totalbytes-b": "0",
             "x-ig-bandwidth-totaltime-ms": "0",
-            "x-ig-eu-dc-enabled": (str(self.state.session.eu_dc_enabled).lower()
-                                   if self.state.session.eu_dc_enabled is not None else None),
+            "x-ig-eu-dc-enabled": (
+                str(self.state.session.eu_dc_enabled).lower()
+                if self.state.session.eu_dc_enabled is not None
+                else None
+            ),
             "x-ig-app-startup-country": self.state.device.language.split("_")[1],
             "x-bloks-version-id": self.state.application.BLOKS_VERSION_ID,
             "x-ig-www-claim": self.state.session.ig_www_claim or "0",
@@ -97,18 +116,27 @@ class BaseAndroidAPI:
         }
         return {k: v for k, v in headers.items() if v is not None}
 
-    def raw_http_get(self, url: Union[URL, str]):
+    def raw_http_get(self, url: URL | str):
         if isinstance(url, str):
             url = URL(url, encoded=True)
-        return self.http.get(url, headers={
-            "user-agent": self.state.user_agent,
-            "accept-language": self.state.device.language.replace("_", "-"),
-        })
+        return self.http.get(
+            url,
+            headers={
+                "user-agent": self.state.user_agent,
+                "accept-language": self.state.device.language.replace("_", "-"),
+            },
+        )
 
-    async def std_http_post(self, path: str, data: Optional[JSON] = None, raw: bool = False,
-                            filter_nulls: bool = False, headers: Optional[Dict[str, str]] = None,
-                            query: Optional[Dict[str, str]] = None,
-                            response_type: Optional[Type[T]] = JSON) -> T:
+    async def std_http_post(
+        self,
+        path: str,
+        data: JSON = None,
+        raw: bool = False,
+        filter_nulls: bool = False,
+        headers: dict[str, str] | None = None,
+        query: dict[str, str] | None = None,
+        response_type: Type[T] | None = JSON,
+    ) -> T:
         headers = {**self._headers, **headers} if headers else self._headers
         if not raw:
             data = self.sign(data, filter_nulls=filter_nulls)
@@ -125,9 +153,13 @@ class BaseAndroidAPI:
             return response_type.deserialize(json_data)
         return json_data
 
-    async def std_http_get(self, path: str, query: Optional[Dict[str, str]] = None,
-                           headers: Optional[Dict[str, str]] = None,
-                           response_type: Optional[Type[T]] = JSON) -> T:
+    async def std_http_get(
+        self,
+        path: str,
+        query: dict[str, str] | None = None,
+        headers: dict[str, str] | None = None,
+        response_type: Type[T] | None = JSON,
+    ) -> T:
         headers = {**self._headers, **headers} if headers else self._headers
         query = {k: v for k, v in (query or {}).items() if v is not None}
         resp = await self.http.get(url=self.url.with_path(path).with_query(query), headers=headers)

@@ -1,5 +1,5 @@
 # mautrix-instagram - A Matrix-Instagram puppeting bridge.
-# Copyright (C) 2020 Tulir Asokan
+# Copyright (C) 2022 Tulir Asokan
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as published by
@@ -13,49 +13,63 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import (Union, Set, Optional, Any, Dict, Awaitable, Type, List, TypeVar, Callable,
-                    Iterable)
-from collections import defaultdict
-from socket import socket, error as SocketError
-from uuid import uuid4
-import urllib.request
-import logging
-import asyncio
-import random
-import zlib
-import time
-import json
-import re
+from __future__ import annotations
 
-import paho.mqtt.client
+from typing import Any, Awaitable, Callable, Iterable, Type, TypeVar
+from collections import defaultdict
+from socket import error as SocketError, socket
+import asyncio
+import json
+import logging
+import re
+import time
+import urllib.request
+import zlib
+
 from paho.mqtt.client import MQTTMessage, WebsocketConnectionError
 from yarl import URL
+import paho.mqtt.client
+
 from mautrix.util.logging import TraceLogger
 
-from ..errors import MQTTNotLoggedIn, MQTTNotConnected, IrisSubscribeError
+from ..errors import IrisSubscribeError, MQTTNotConnected, MQTTNotLoggedIn
 from ..state import AndroidState
-from ..types import (CommandResponse, ThreadItemType, ThreadAction, ReactionStatus, TypingStatus,
-                     IrisPayload, PubsubPayload, AppPresenceEventPayload, RealtimeDirectEvent,
-                     RealtimeZeroProvisionPayload, ClientConfigUpdatePayload, MessageSyncEvent,
-                     MessageSyncMessage, LiveVideoCommentPayload, PubsubEvent, IrisPayloadData,
-                     ThreadSyncEvent)
-from .thrift import RealtimeConfig, RealtimeClientInfo, ForegroundStateConfig, IncomingMessage
-from .otclient import MQTToTClient
-from .subscription import everclear_subscriptions, RealtimeTopic, GraphQLQueryID
+from ..types import (
+    AppPresenceEventPayload,
+    ClientConfigUpdatePayload,
+    CommandResponse,
+    IrisPayload,
+    IrisPayloadData,
+    LiveVideoCommentPayload,
+    MessageSyncEvent,
+    MessageSyncMessage,
+    PubsubEvent,
+    PubsubPayload,
+    ReactionStatus,
+    RealtimeDirectEvent,
+    RealtimeZeroProvisionPayload,
+    ThreadAction,
+    ThreadItemType,
+    ThreadSyncEvent,
+    TypingStatus,
+)
 from .events import Connect, Disconnect
+from .otclient import MQTToTClient
+from .subscription import GraphQLQueryID, RealtimeTopic, everclear_subscriptions
+from .thrift import ForegroundStateConfig, IncomingMessage, RealtimeClientInfo, RealtimeConfig
 
 try:
     import socks
 except ImportError:
     socks = None
 
-T = TypeVar('T')
+T = TypeVar("T")
 
 ACTIVITY_INDICATOR_REGEX = re.compile(
-    r"/direct_v2/threads/([\w_]+)/activity_indicator_id/([\w_]+)")
+    r"/direct_v2/threads/([\w_]+)/activity_indicator_id/([\w_]+)"
+)
 
-INBOX_THREAD_REGEX = re.compile(
-    r"/direct_v2/inbox/threads/([\w_]+)")
+INBOX_THREAD_REGEX = re.compile(r"/direct_v2/inbox/threads/([\w_]+)")
 
 
 class AndroidMQTT:
@@ -63,21 +77,25 @@ class AndroidMQTT:
     _client: MQTToTClient
     log: TraceLogger
     state: AndroidState
-    _graphql_subs: Set[str]
-    _skywalker_subs: Set[str]
-    _iris_seq_id: Optional[int]
-    _iris_snapshot_at_ms: Optional[int]
-    _publish_waiters: Dict[int, asyncio.Future]
-    _response_waiters: Dict[RealtimeTopic, asyncio.Future]
-    _response_waiter_locks: Dict[RealtimeTopic, asyncio.Lock]
-    _message_response_waiters: Dict[str, asyncio.Future]
-    _disconnect_error: Optional[Exception]
-    _event_handlers: Dict[Type[T], List[Callable[[T], Awaitable[None]]]]
+    _graphql_subs: set[str]
+    _skywalker_subs: set[str]
+    _iris_seq_id: int | None
+    _iris_snapshot_at_ms: int | None
+    _publish_waiters: dict[int, asyncio.Future]
+    _response_waiters: dict[RealtimeTopic, asyncio.Future]
+    _response_waiter_locks: dict[RealtimeTopic, asyncio.Lock]
+    _message_response_waiters: dict[str, asyncio.Future]
+    _disconnect_error: Exception | None
+    _event_handlers: dict[Type[T], list[Callable[[T], Awaitable[None]]]]
 
     # region Initialization
 
-    def __init__(self, state: AndroidState, loop: Optional[asyncio.AbstractEventLoop] = None,
-                 log: Optional[TraceLogger] = None) -> None:
+    def __init__(
+        self,
+        state: AndroidState,
+        loop: asyncio.AbstractEventLoop | None = None,
+        log: TraceLogger | None = None,
+    ) -> None:
         self._graphql_subs = set()
         self._skywalker_subs = set()
         self._iris_seq_id = None
@@ -110,9 +128,13 @@ class AndroidMQTT:
                 "socks5": socks.SOCKS5,
                 "socks4": socks.SOCKS4,
             }[proxy_url.scheme]
-            self._client.proxy_set(proxy_type=proxy_type, proxy_addr=proxy_url.host,
-                                   proxy_port=proxy_url.port, proxy_username=proxy_url.user,
-                                   proxy_password=proxy_url.password)
+            self._client.proxy_set(
+                proxy_type=proxy_type,
+                proxy_addr=proxy_url.host,
+                proxy_port=proxy_url.port,
+                proxy_username=proxy_url.user,
+                proxy_password=proxy_url.password,
+            )
         self._client.enable_logger()
         self._client.tls_set()
         # mqtt.max_inflight_messages_set(20)  # The rest will get queued
@@ -130,10 +152,16 @@ class AndroidMQTT:
         self._client.on_socket_unregister_write = self._on_socket_unregister_write
 
     def _form_client_id(self) -> bytes:
-        subscribe_topics = [RealtimeTopic.PUBSUB, RealtimeTopic.SUB_IRIS_RESPONSE,
-                            RealtimeTopic.REALTIME_SUB, RealtimeTopic.REGION_HINT,
-                            RealtimeTopic.SEND_MESSAGE_RESPONSE, RealtimeTopic.MESSAGE_SYNC,
-                            RealtimeTopic.UNKNOWN_179, RealtimeTopic.UNKNOWN_PP]
+        subscribe_topics = [
+            RealtimeTopic.PUBSUB,
+            RealtimeTopic.SUB_IRIS_RESPONSE,
+            RealtimeTopic.REALTIME_SUB,
+            RealtimeTopic.REGION_HINT,
+            RealtimeTopic.SEND_MESSAGE_RESPONSE,
+            RealtimeTopic.MESSAGE_SYNC,
+            RealtimeTopic.UNKNOWN_179,
+            RealtimeTopic.UNKNOWN_PP,
+        ]
         subscribe_topic_ids = [int(topic.encoded) for topic in subscribe_topics]
         password = f"sessionid={self.state.cookies['sessionid']}"
         cfg = RealtimeConfig(
@@ -150,7 +178,7 @@ class AndroidMQTT:
                 is_initially_foreground=True,
                 network_type=1,
                 network_subtype=0,
-                client_mqtt_session_id=int(time.time() * 1000) & 0xffffffff,
+                client_mqtt_session_id=int(time.time() * 1000) & 0xFFFFFFFF,
                 subscribe_topics=subscribe_topic_ids,
                 client_type="cookie_auth",
                 app_id=567067343352427,
@@ -187,8 +215,9 @@ class AndroidMQTT:
     def _on_socket_unregister_write(self, client: MQTToTClient, _: Any, sock: socket) -> None:
         self._loop.remove_writer(sock)
 
-    def _on_connect_handler(self, client: MQTToTClient, _: Any, flags: Dict[str, Any], rc: int
-                            ) -> None:
+    def _on_connect_handler(
+        self, client: MQTToTClient, _: Any, flags: dict[str, Any], rc: int
+    ) -> None:
         if rc != 0:
             err = paho.mqtt.client.connack_string(rc)
             self.log.error("MQTT Connection Error: %s (%d)", err, rc)
@@ -241,9 +270,7 @@ class AndroidMQTT:
         if (blank, direct_v2, threads) != ("", "direct_v2", "threads"):
             self.log.debug(f"Got unexpected first parts in direct thread path {path}")
             raise ValueError("unexpected first three parts in _parse_direct_thread_path")
-        additional = {
-            "thread_id": thread_id
-        }
+        additional = {"thread_id": thread_id}
         if rest:
             subitem_key = rest[0]
             if subitem_key == "approval_required_for_new_members":
@@ -312,16 +339,19 @@ class AndroidMQTT:
         for data in message.data:
             match = ACTIVITY_INDICATOR_REGEX.match(data.path)
             if match:
-                evt = PubsubEvent(data=data, base=message, thread_id=match.group(1),
-                                  activity_indicator_id=match.group(2))
+                evt = PubsubEvent(
+                    data=data,
+                    base=message,
+                    thread_id=match.group(1),
+                    activity_indicator_id=match.group(2),
+                )
                 self._loop.create_task(self._dispatch(evt))
             elif not data.double_publish:
                 self.log.debug("Pubsub: no activity indicator on data: %s", data)
             else:
                 self.log.debug("Pubsub: double publish: %s", data.path)
 
-    def _parse_realtime_sub_item(self, topic: Union[str, GraphQLQueryID], raw: dict
-                                 ) -> Iterable[Any]:
+    def _parse_realtime_sub_item(self, topic: str | GraphQLQueryID, raw: dict) -> Iterable[Any]:
         if topic == GraphQLQueryID.APP_PRESENCE:
             yield AppPresenceEventPayload.deserialize(raw).presence_event
         elif topic == GraphQLQueryID.ZERO_PROVISION:
@@ -333,11 +363,13 @@ class AndroidMQTT:
         elif topic == "direct":
             event = raw["event"]
             for item in raw["data"]:
-                yield RealtimeDirectEvent.deserialize({
-                    "event": event,
-                    **self._parse_direct_thread_path(item["path"]),
-                    **item,
-                })
+                yield RealtimeDirectEvent.deserialize(
+                    {
+                        "event": event,
+                        **self._parse_direct_thread_path(item["path"]),
+                        **item,
+                    }
+                )
 
     def _on_realtime_sub(self, payload: bytes) -> None:
         parsed_thrift = IncomingMessage.from_thrift(payload)
@@ -346,8 +378,13 @@ class AndroidMQTT:
         except ValueError:
             topic = parsed_thrift.topic
         self.log.trace(f"Got realtime sub event {topic} / {parsed_thrift.payload}")
-        allowed = ("direct", GraphQLQueryID.APP_PRESENCE, GraphQLQueryID.ZERO_PROVISION,
-                   GraphQLQueryID.CLIENT_CONFIG_UPDATE, GraphQLQueryID.LIVE_REALTIME_COMMENTS)
+        allowed = (
+            "direct",
+            GraphQLQueryID.APP_PRESENCE,
+            GraphQLQueryID.ZERO_PROVISION,
+            GraphQLQueryID.CLIENT_CONFIG_UPDATE,
+            GraphQLQueryID.LIVE_REALTIME_COMMENTS,
+        )
         if topic not in allowed:
             return
         parsed_json = json.loads(parsed_thrift.payload)
@@ -371,8 +408,9 @@ class AndroidMQTT:
                     ccid = data["payload"]["client_context"]
                     waiter = self._message_response_waiters.pop(ccid)
                 except KeyError as e:
-                    self.log.debug("No handler (%s) for send message response: %s",
-                                   e, message.payload)
+                    self.log.debug(
+                        "No handler (%s) for send message response: %s", e, message.payload
+                    )
                 else:
                     self.log.trace("Got response to %s: %s", ccid, message.payload)
                     waiter.set_result(message)
@@ -380,8 +418,9 @@ class AndroidMQTT:
                 try:
                     waiter = self._response_waiters.pop(topic)
                 except KeyError:
-                    self.log.debug("No handler for MQTT message in %s: %s",
-                                   topic.value, message.payload)
+                    self.log.debug(
+                        "No handler for MQTT message in %s: %s", topic.value, message.payload
+                    )
                 else:
                     self.log.trace("Got response %s: %s", topic.value, message.payload)
                     waiter.set_result(message)
@@ -399,8 +438,9 @@ class AndroidMQTT:
             # TODO custom class
             raise MQTTNotLoggedIn("MQTT reconnection failed") from e
 
-    def add_event_handler(self, evt_type: Type[T], handler: Callable[[T], Awaitable[None]]
-                          ) -> None:
+    def add_event_handler(
+        self, evt_type: Type[T], handler: Callable[[T], Awaitable[None]]
+    ) -> None:
         self._event_handlers[evt_type].append(handler)
 
     async def _dispatch(self, evt: T) -> None:
@@ -413,8 +453,14 @@ class AndroidMQTT:
     def disconnect(self) -> None:
         self._client.disconnect()
 
-    async def listen(self, graphql_subs: Set[str] = None, skywalker_subs: Set[str] = None,
-                     seq_id: int = None, snapshot_at_ms: int = None, retry_limit: int = 5) -> None:
+    async def listen(
+        self,
+        graphql_subs: set[str] | None = None,
+        skywalker_subs: set[str] | None = None,
+        seq_id: int = None,
+        snapshot_at_ms: int = None,
+        retry_limit: int = 5,
+    ) -> None:
         self._graphql_subs = graphql_subs or set()
         self._skywalker_subs = skywalker_subs or set()
         self._iris_seq_id = seq_id
@@ -453,8 +499,12 @@ class AndroidMQTT:
                     if connection_retries > retry_limit:
                         raise MQTTNotConnected(f"Connection failed {connection_retries} times")
                     sleep = connection_retries * 2
-                    await self._dispatch(Disconnect(reason="MQTT Error: no connection, retrying "
-                                                           f"in {connection_retries} seconds"))
+                    await self._dispatch(
+                        Disconnect(
+                            reason="MQTT Error: no connection, retrying "
+                            f"in {connection_retries} seconds"
+                        )
+                    )
                     await asyncio.sleep(sleep)
                 else:
                     err = paho.mqtt.client.error_string(rc)
@@ -473,8 +523,7 @@ class AndroidMQTT:
 
     # region Basic outgoing MQTT
 
-    def publish(self, topic: RealtimeTopic, payload: Union[str, bytes, dict]
-                ) -> asyncio.Future:
+    def publish(self, topic: RealtimeTopic, payload: str | bytes | dict) -> asyncio.Future:
         if isinstance(payload, dict):
             payload = json.dumps(payload)
         if isinstance(payload, str):
@@ -487,40 +536,48 @@ class AndroidMQTT:
         self._publish_waiters[info.mid] = fut
         return fut
 
-    async def request(self, topic: RealtimeTopic, response: RealtimeTopic,
-                      payload: Union[str, bytes, dict], timeout: Optional[int] = None
-                      ) -> MQTTMessage:
+    async def request(
+        self,
+        topic: RealtimeTopic,
+        response: RealtimeTopic,
+        payload: str | bytes | dict,
+        timeout: int | None = None,
+    ) -> MQTTMessage:
         async with self._response_waiter_locks[response]:
             fut = asyncio.Future()
             self._response_waiters[response] = fut
             await self.publish(topic, payload)
-            self.log.trace(f"Request published to {topic.value}, "
-                           f"waiting for response {response.name}")
+            self.log.trace(
+                f"Request published to {topic.value}, waiting for response {response.name}"
+            )
             return await asyncio.wait_for(fut, timeout)
 
     async def iris_subscribe(self, seq_id: int, snapshot_at_ms: int) -> None:
         self.log.debug(f"Requesting iris subscribe {seq_id}/{snapshot_at_ms}")
-        resp = await self.request(RealtimeTopic.SUB_IRIS, RealtimeTopic.SUB_IRIS_RESPONSE,
-                                  {"seq_id": seq_id, "snapshot_at_ms": snapshot_at_ms},
-                                  timeout=20 * 1000)
+        resp = await self.request(
+            RealtimeTopic.SUB_IRIS,
+            RealtimeTopic.SUB_IRIS_RESPONSE,
+            {"seq_id": seq_id, "snapshot_at_ms": snapshot_at_ms},
+            timeout=20 * 1000,
+        )
         self.log.debug("Iris subscribe response: %s", resp.payload.decode("utf-8"))
         resp_dict = json.loads(resp.payload.decode("utf-8"))
         if resp_dict["error_type"] and resp_dict["error_message"]:
             raise IrisSubscribeError(resp_dict["error_type"], resp_dict["error_message"])
 
-    def graphql_subscribe(self, subs: Set[str]) -> asyncio.Future:
+    def graphql_subscribe(self, subs: set[str]) -> asyncio.Future:
         self._graphql_subs |= subs
         return self.publish(RealtimeTopic.REALTIME_SUB, {"sub": list(subs)})
 
-    def graphql_unsubscribe(self, subs: Set[str]) -> asyncio.Future:
+    def graphql_unsubscribe(self, subs: set[str]) -> asyncio.Future:
         self._graphql_subs -= subs
         return self.publish(RealtimeTopic.REALTIME_SUB, {"unsub": list(subs)})
 
-    def skywalker_subscribe(self, subs: Set[str]) -> asyncio.Future:
+    def skywalker_subscribe(self, subs: set[str]) -> asyncio.Future:
         self._skywalker_subs |= subs
         return self.publish(RealtimeTopic.PUBSUB, {"sub": list(subs)})
 
-    def skywalker_unsubscribe(self, subs: Set[str]) -> asyncio.Future:
+    def skywalker_unsubscribe(self, subs: set[str]) -> asyncio.Future:
         self._skywalker_subs -= subs
         return self.publish(RealtimeTopic.PUBSUB, {"unsub": list(subs)})
 
@@ -529,14 +586,19 @@ class AndroidMQTT:
 
     async def send_foreground_state(self, state: ForegroundStateConfig) -> None:
         self.log.debug("Updating foreground state: %s", state)
-        await self.publish(RealtimeTopic.FOREGROUND_STATE,
-                           zlib.compress(state.to_thrift(), level=9))
+        await self.publish(
+            RealtimeTopic.FOREGROUND_STATE, zlib.compress(state.to_thrift(), level=9)
+        )
         if state.keep_alive_timeout:
             self._client._keepalive = state.keep_alive_timeout
 
-    async def send_command(self, thread_id: str, action: ThreadAction,
-                           client_context: Optional[str] = None, **kwargs: Any
-                           ) -> Optional[CommandResponse]:
+    async def send_command(
+        self,
+        thread_id: str,
+        action: ThreadAction,
+        client_context: str | None = None,
+        **kwargs: Any,
+    ) -> CommandResponse | None:
         client_context = client_context or self.state.gen_client_context()
         req = {
             "thread_id": thread_id,
@@ -555,81 +617,195 @@ class AndroidMQTT:
             fut = asyncio.Future()
             self._message_response_waiters[client_context] = fut
             await self.publish(RealtimeTopic.SEND_MESSAGE, req)
-            self.log.trace(f"Request published to {RealtimeTopic.SEND_MESSAGE}, "
-                           f"waiting for response {RealtimeTopic.SEND_MESSAGE_RESPONSE}")
+            self.log.trace(
+                f"Request published to {RealtimeTopic.SEND_MESSAGE}, "
+                f"waiting for response {RealtimeTopic.SEND_MESSAGE_RESPONSE}"
+            )
             resp = await fut
             return CommandResponse.parse_json(resp.payload.decode("utf-8"))
 
-    def send_item(self, thread_id: str, item_type: ThreadItemType, shh_mode: bool = False,
-                  client_context: Optional[str] = None, **kwargs: Any
-                  ) -> Awaitable[CommandResponse]:
-        return self.send_command(thread_id, item_type=item_type.value,
-                                 is_shh_mode=str(int(shh_mode)), action=ThreadAction.SEND_ITEM,
-                                 client_context=client_context, **kwargs)
+    def send_item(
+        self,
+        thread_id: str,
+        item_type: ThreadItemType,
+        shh_mode: bool = False,
+        client_context: str | None = None,
+        **kwargs: Any,
+    ) -> Awaitable[CommandResponse]:
+        return self.send_command(
+            thread_id,
+            item_type=item_type.value,
+            is_shh_mode=str(int(shh_mode)),
+            action=ThreadAction.SEND_ITEM,
+            client_context=client_context,
+            **kwargs,
+        )
 
-    def send_hashtag(self, thread_id: str, hashtag: str, text: str = "", shh_mode: bool = False,
-                     client_context: Optional[str] = None) -> Awaitable[CommandResponse]:
-        return self.send_item(thread_id, text=text, item_id=hashtag, shh_mode=shh_mode,
-                              item_type=ThreadItemType.HASHTAG, client_context=client_context)
+    def send_hashtag(
+        self,
+        thread_id: str,
+        hashtag: str,
+        text: str = "",
+        shh_mode: bool = False,
+        client_context: str | None = None,
+    ) -> Awaitable[CommandResponse]:
+        return self.send_item(
+            thread_id,
+            text=text,
+            item_id=hashtag,
+            shh_mode=shh_mode,
+            item_type=ThreadItemType.HASHTAG,
+            client_context=client_context,
+        )
 
-    def send_like(self, thread_id: str, shh_mode: bool = False,
-                  client_context: Optional[str] = None) -> Awaitable[CommandResponse]:
-        return self.send_item(thread_id, shh_mode=shh_mode, item_type=ThreadItemType.LIKE,
-                              client_context=client_context)
+    def send_like(
+        self, thread_id: str, shh_mode: bool = False, client_context: str | None = None
+    ) -> Awaitable[CommandResponse]:
+        return self.send_item(
+            thread_id,
+            shh_mode=shh_mode,
+            item_type=ThreadItemType.LIKE,
+            client_context=client_context,
+        )
 
-    def send_location(self, thread_id: str, venue_id: str, text: str = "",
-                      shh_mode: bool = False, client_context: Optional[str] = None
-                      ) -> Awaitable[CommandResponse]:
-        return self.send_item(thread_id, text=text, item_id=venue_id, shh_mode=shh_mode,
-                              item_type=ThreadItemType.LOCATION, client_context=client_context)
+    def send_location(
+        self,
+        thread_id: str,
+        venue_id: str,
+        text: str = "",
+        shh_mode: bool = False,
+        client_context: str | None = None,
+    ) -> Awaitable[CommandResponse]:
+        return self.send_item(
+            thread_id,
+            text=text,
+            item_id=venue_id,
+            shh_mode=shh_mode,
+            item_type=ThreadItemType.LOCATION,
+            client_context=client_context,
+        )
 
-    def send_media(self, thread_id: str, media_id: str, text: str = "", shh_mode: bool = False,
-                   client_context: Optional[str] = None) -> Awaitable[CommandResponse]:
-        return self.send_item(thread_id, text=text, media_id=media_id, shh_mode=shh_mode,
-                              item_type=ThreadItemType.MEDIA_SHARE, client_context=client_context)
+    def send_media(
+        self,
+        thread_id: str,
+        media_id: str,
+        text: str = "",
+        shh_mode: bool = False,
+        client_context: str | None = None,
+    ) -> Awaitable[CommandResponse]:
+        return self.send_item(
+            thread_id,
+            text=text,
+            media_id=media_id,
+            shh_mode=shh_mode,
+            item_type=ThreadItemType.MEDIA_SHARE,
+            client_context=client_context,
+        )
 
-    def send_profile(self, thread_id: str, user_id: str, text: str = "", shh_mode: bool = False,
-                     client_context: Optional[str] = None) -> Awaitable[CommandResponse]:
-        return self.send_item(thread_id, text=text, item_id=user_id, shh_mode=shh_mode,
-                              item_type=ThreadItemType.PROFILE, client_context=client_context)
+    def send_profile(
+        self,
+        thread_id: str,
+        user_id: str,
+        text: str = "",
+        shh_mode: bool = False,
+        client_context: str | None = None,
+    ) -> Awaitable[CommandResponse]:
+        return self.send_item(
+            thread_id,
+            text=text,
+            item_id=user_id,
+            shh_mode=shh_mode,
+            item_type=ThreadItemType.PROFILE,
+            client_context=client_context,
+        )
 
-    def send_reaction(self, thread_id: str, emoji: str, item_id: str,
-                      reaction_status: ReactionStatus = ReactionStatus.CREATED,
-                      target_item_type: ThreadItemType = ThreadItemType.TEXT,
-                      shh_mode: bool = False, client_context: Optional[str] = None
-                      ) -> Awaitable[CommandResponse]:
-        return self.send_item(thread_id, reaction_status=reaction_status.value, node_type="item",
-                              reaction_type="like", target_item_type=target_item_type.value,
-                              emoji=emoji, item_id=item_id, reaction_action_source="double_tap",
-                              shh_mode=shh_mode, item_type=ThreadItemType.REACTION,
-                              client_context=client_context)
+    def send_reaction(
+        self,
+        thread_id: str,
+        emoji: str,
+        item_id: str,
+        reaction_status: ReactionStatus = ReactionStatus.CREATED,
+        target_item_type: ThreadItemType = ThreadItemType.TEXT,
+        shh_mode: bool = False,
+        client_context: str | None = None,
+    ) -> Awaitable[CommandResponse]:
+        return self.send_item(
+            thread_id,
+            reaction_status=reaction_status.value,
+            node_type="item",
+            reaction_type="like",
+            target_item_type=target_item_type.value,
+            emoji=emoji,
+            item_id=item_id,
+            reaction_action_source="double_tap",
+            shh_mode=shh_mode,
+            item_type=ThreadItemType.REACTION,
+            client_context=client_context,
+        )
 
-    def send_user_story(self, thread_id: str, media_id: str, text: str = "",
-                        shh_mode: bool = False, client_context: Optional[str] = None
-                        ) -> Awaitable[CommandResponse]:
-        return self.send_item(thread_id, text=text, item_id=media_id, shh_mode=shh_mode,
-                              item_type=ThreadItemType.REEL_SHARE, client_context=client_context)
+    def send_user_story(
+        self,
+        thread_id: str,
+        media_id: str,
+        text: str = "",
+        shh_mode: bool = False,
+        client_context: str | None = None,
+    ) -> Awaitable[CommandResponse]:
+        return self.send_item(
+            thread_id,
+            text=text,
+            item_id=media_id,
+            shh_mode=shh_mode,
+            item_type=ThreadItemType.REEL_SHARE,
+            client_context=client_context,
+        )
 
-    def send_text(self, thread_id: str, text: str = "", shh_mode: bool = False,
-                  client_context: Optional[str] = None) -> Awaitable[CommandResponse]:
-        return self.send_item(thread_id, text=text, shh_mode=shh_mode,
-                              item_type=ThreadItemType.TEXT, client_context=client_context)
+    def send_text(
+        self,
+        thread_id: str,
+        text: str = "",
+        shh_mode: bool = False,
+        client_context: str | None = None,
+    ) -> Awaitable[CommandResponse]:
+        return self.send_item(
+            thread_id,
+            text=text,
+            shh_mode=shh_mode,
+            item_type=ThreadItemType.TEXT,
+            client_context=client_context,
+        )
 
-    def mark_seen(self, thread_id: str, item_id: str, client_context: Optional[str] = None
-                  ) -> Awaitable[None]:
-        return self.send_command(thread_id, item_id=item_id, action=ThreadAction.MARK_SEEN,
-                                 client_context=client_context)
+    def mark_seen(
+        self, thread_id: str, item_id: str, client_context: str | None = None
+    ) -> Awaitable[None]:
+        return self.send_command(
+            thread_id,
+            item_id=item_id,
+            action=ThreadAction.MARK_SEEN,
+            client_context=client_context,
+        )
 
-    def mark_visual_item_seen(self, thread_id: str, item_id: str,
-                              client_context: Optional[str] = None) -> Awaitable[CommandResponse]:
-        return self.send_command(thread_id, item_id=item_id,
-                                 action=ThreadAction.MARK_VISUAL_ITEM_SEEN,
-                                 client_context=client_context)
+    def mark_visual_item_seen(
+        self, thread_id: str, item_id: str, client_context: str | None = None
+    ) -> Awaitable[CommandResponse]:
+        return self.send_command(
+            thread_id,
+            item_id=item_id,
+            action=ThreadAction.MARK_VISUAL_ITEM_SEEN,
+            client_context=client_context,
+        )
 
-    def indicate_activity(self, thread_id: str, activity_status: TypingStatus = TypingStatus.TEXT,
-                          client_context: Optional[str] = None) -> Awaitable[CommandResponse]:
-        return self.send_command(thread_id, activity_status=activity_status.value,
-                                 action=ThreadAction.INDICATE_ACTIVITY,
-                                 client_context=client_context)
+    def indicate_activity(
+        self,
+        thread_id: str,
+        activity_status: TypingStatus = TypingStatus.TEXT,
+        client_context: str | None = None,
+    ) -> Awaitable[CommandResponse]:
+        return self.send_command(
+            thread_id,
+            activity_status=activity_status.value,
+            action=ThreadAction.INDICATE_ACTIVITY,
+            client_context=client_context,
+        )
 
     # endregion

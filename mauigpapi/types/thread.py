@@ -13,10 +13,11 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import List, Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
-import attr
 from attr import dataclass
+import attr
+
 from mautrix.types import SerializableAttrs
 
 from .account import BaseResponseUser

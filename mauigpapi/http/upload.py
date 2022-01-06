@@ -16,12 +16,12 @@
 from __future__ import annotations
 
 from uuid import uuid4
+import json
 import random
 import time
-import json
 
+from ..types import FinishUploadResponse, MediaType, UploadPhotoResponse, UploadVideoResponse
 from .base import BaseAndroidAPI
-from ..types import UploadPhotoResponse, UploadVideoResponse, FinishUploadResponse, MediaType
 
 
 class UploadAPI(BaseAndroidAPI):
@@ -36,21 +36,21 @@ class UploadAPI(BaseAndroidAPI):
         upload_id = upload_id or str(int(time.time() * 1000))
         name = f"{upload_id}_0_{random.randint(1000000000, 9999999999)}"
         params = {
-            "retry_context": json.dumps({
-                "num_step_auto_retry": 0,
-                "num_reupload": 0,
-                "num_step_manual_retry": 0,
-            }),
+            "retry_context": json.dumps(
+                {
+                    "num_step_auto_retry": 0,
+                    "num_reupload": 0,
+                    "num_step_manual_retry": 0,
+                }
+            ),
             "media_type": str(MediaType.IMAGE.value),
             "upload_id": upload_id,
             "xsharing_user_ids": json.dumps([]),
         }
         if mime == "image/jpeg":
-            params["image_compression"] = json.dumps({
-                "lib_name": "moz",
-                "lib_version": "3.1.m",
-                "quality": 80
-            })
+            params["image_compression"] = json.dumps(
+                {"lib_name": "moz", "lib_version": "3.1.m", "quality": 80}
+            )
         if width and height:
             params["original_width"] = str(width)
             params["original_height"] = str(height)
@@ -64,8 +64,13 @@ class UploadAPI(BaseAndroidAPI):
             "Content-Type": "application/octet-stream",
             "priority": "u=6, i",
         }
-        return await self.std_http_post(f"/rupload_igphoto/{name}", headers=headers, data=data,
-                                        raw=True, response_type=UploadPhotoResponse)
+        return await self.std_http_post(
+            f"/rupload_igphoto/{name}",
+            headers=headers,
+            data=data,
+            raw=True,
+            response_type=UploadPhotoResponse,
+        )
 
     async def upload_mp4(
         self,
@@ -80,11 +85,13 @@ class UploadAPI(BaseAndroidAPI):
         name = f"{upload_id}_0_{random.randint(1000000000, 9999999999)}"
         media_type = MediaType.AUDIO if audio else MediaType.VIDEO
         params: dict[str, str] = {
-            "retry_context": json.dumps({
-                "num_step_auto_retry": 0,
-                "num_reupload": 0,
-                "num_step_manual_retry": 0,
-            }),
+            "retry_context": json.dumps(
+                {
+                    "num_step_auto_retry": 0,
+                    "num_reupload": 0,
+                    "num_step_manual_retry": 0,
+                }
+            ),
             "media_type": str(media_type.value),
             "upload_id": upload_id,
             "xsharing_user_ids": json.dumps([]),
@@ -114,18 +121,28 @@ class UploadAPI(BaseAndroidAPI):
         if not audio:
             headers["segment-type"] = "3"
             headers["segment-start-offset"] = "0"
-        return await self.std_http_post(f"/rupload_igvideo/{name}", headers=headers, data=data,
-                                        raw=True, response_type=UploadVideoResponse), upload_id
+        return (
+            await self.std_http_post(
+                f"/rupload_igvideo/{name}",
+                headers=headers,
+                data=data,
+                raw=True,
+                response_type=UploadVideoResponse,
+            ),
+            upload_id,
+        )
 
     async def finish_upload(
         self, upload_id: str, source_type: str, video: bool = False
     ) -> FinishUploadResponse:
         headers = {
-            "retry_context": json.dumps({
-                "num_step_auto_retry": 0,
-                "num_reupload": 0,
-                "num_step_manual_retry": 0,
-            }),
+            "retry_context": json.dumps(
+                {
+                    "num_step_auto_retry": 0,
+                    "num_reupload": 0,
+                    "num_step_manual_retry": 0,
+                }
+            ),
         }
         req = {
             "timezone_offset": self.state.device.timezone_offset,
@@ -140,5 +157,10 @@ class UploadAPI(BaseAndroidAPI):
         query = {}
         if video:
             query["video"] = "1"
-        return await self.std_http_post("/api/v1/media/upload_finish/", headers=headers, data=req,
-                                        query=query, response_type=FinishUploadResponse)
+        return await self.std_http_post(
+            "/api/v1/media/upload_finish/",
+            headers=headers,
+            data=req,
+            query=query,
+            response_type=FinishUploadResponse,
+        )

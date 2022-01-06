@@ -22,13 +22,13 @@ from attr import dataclass
 
 from mautrix.types import SerializableAttrs, field
 
-from ..errors import IGNoCheckpointError, IGCookieNotFoundError, IGUserIDNotFoundError
+from ..errors import IGCookieNotFoundError, IGNoCheckpointError, IGUserIDNotFoundError
 from ..types import ChallengeStateResponse
-from .device import AndroidDevice
-from .session import AndroidSession
 from .application import AndroidApplication
-from .experiments import AndroidExperiments
 from .cookies import Cookies
+from .device import AndroidDevice
+from .experiments import AndroidExperiments
+from .session import AndroidSession
 
 
 @dataclass
@@ -57,8 +57,10 @@ class AndroidState(SerializableAttrs):
 
     @property
     def user_agent(self) -> str:
-        return (f"Instagram {self.application.APP_VERSION} Android ({self.device.descriptor}; "
-                f"{self.device.language}; {self.application.APP_VERSION_CODE})")
+        return (
+            f"Instagram {self.application.APP_VERSION} Android ({self.device.descriptor}; "
+            f"{self.device.language}; {self.application.APP_VERSION_CODE})"
+        )
 
     @property
     def user_id(self) -> str:

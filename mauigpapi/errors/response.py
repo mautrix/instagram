@@ -16,10 +16,11 @@
 from typing import Optional, get_type_hints
 
 from aiohttp import ClientResponse
+
 from mautrix.types import JSON, Serializable
 
+from ..types import CheckpointResponse, LoginErrorResponse, LoginRequiredResponse, SpamResponse
 from .base import IGError
-from ..types import SpamResponse, CheckpointResponse, LoginRequiredResponse, LoginErrorResponse
 
 
 class IGChallengeWrongCodeError(IGError):

@@ -1,5 +1,5 @@
 # mautrix-instagram - A Matrix-Instagram puppeting bridge.
-# Copyright (C) 2020 Tulir Asokan
+# Copyright (C) 2022 Tulir Asokan
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as published by
@@ -13,28 +13,42 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import (Dict, Optional, AsyncIterable, Awaitable, AsyncGenerator, List, TYPE_CHECKING,
-                    cast)
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, AsyncGenerator, AsyncIterable, Awaitable, cast
 import asyncio
 import logging
 import time
 
-from mauigpapi import AndroidAPI, AndroidState, AndroidMQTT
+from mauigpapi import AndroidAPI, AndroidMQTT, AndroidState
+from mauigpapi.errors import (
+    IGNotLoggedInError,
+    IGUserIDNotFoundError,
+    IrisSubscribeError,
+    MQTTNotConnected,
+    MQTTNotLoggedIn,
+)
 from mauigpapi.mqtt import Connect, Disconnect, GraphQLSubscription, SkywalkerSubscription
-from mauigpapi.types import (CurrentUser, MessageSyncEvent, Operation, RealtimeDirectEvent,
-                             ActivityIndicatorData, TypingStatus, ThreadSyncEvent, Thread)
-from mauigpapi.errors import (IGNotLoggedInError, MQTTNotLoggedIn, MQTTNotConnected,
-                              IrisSubscribeError, IGUserIDNotFoundError)
-from mautrix.bridge import BaseUser, async_getter_lock
-from mautrix.types import UserID, RoomID, EventID, TextMessageEventContent, MessageType
+from mauigpapi.types import (
+    ActivityIndicatorData,
+    CurrentUser,
+    MessageSyncEvent,
+    Operation,
+    RealtimeDirectEvent,
+    Thread,
+    ThreadSyncEvent,
+    TypingStatus,
+)
 from mautrix.appservice import AppService
+from mautrix.bridge import BaseUser, async_getter_lock
+from mautrix.types import EventID, MessageType, RoomID, TextMessageEventContent, UserID
 from mautrix.util.bridge_state import BridgeState, BridgeStateEvent
 from mautrix.util.logging import TraceLogger
-from mautrix.util.opt_prometheus import Summary, Gauge, async_time
+from mautrix.util.opt_prometheus import Gauge, Summary, async_time
 
-from .db import User as DBUser, Portal as DBPortal
+from . import portal as po, puppet as pu
 from .config import Config
-from . import puppet as pu, portal as po
+from .db import Portal as DBPortal, User as DBUser
 
 if TYPE_CHECKING:
     from .__main__ import InstagramBridge
@@ -45,41 +59,47 @@ METRIC_RTD = Summary("bridge_on_rtd", "calls to handle_rtd")
 METRIC_LOGGED_IN = Gauge("bridge_logged_in", "Users logged into the bridge")
 METRIC_CONNECTED = Gauge("bridge_connected", "Bridged users connected to Instagram")
 
-BridgeState.human_readable_errors.update({
-    "ig-connection-error": "Instagram disconnected unexpectedly",
-    "ig-auth-error": "Authentication error from Instagram: {message}",
-    "ig-disconnected": None,
-    "ig-no-mqtt": "You're not connected to Instagram",
-    "logged-out": "You're not logged into Instagram",
-})
+BridgeState.human_readable_errors.update(
+    {
+        "ig-connection-error": "Instagram disconnected unexpectedly",
+        "ig-auth-error": "Authentication error from Instagram: {message}",
+        "ig-disconnected": None,
+        "ig-no-mqtt": "You're not connected to Instagram",
+        "logged-out": "You're not logged into Instagram",
+    }
+)
 
 
 class User(DBUser, BaseUser):
     ig_base_log: TraceLogger = logging.getLogger("mau.instagram")
-    _activity_indicator_ids: Dict[str, int] = {}
-    by_mxid: Dict[UserID, 'User'] = {}
-    by_igpk: Dict[int, 'User'] = {}
+    _activity_indicator_ids: dict[str, int] = {}
+    by_mxid: dict[UserID, User] = {}
+    by_igpk: dict[int, User] = {}
     config: Config
     az: AppService
     loop: asyncio.AbstractEventLoop
 
-    client: Optional[AndroidAPI]
-    mqtt: Optional[AndroidMQTT]
-    _listen_task: Optional[asyncio.Task] = None
+    client: AndroidAPI | None
+    mqtt: AndroidMQTT | None
+    _listen_task: asyncio.Task | None = None
 
     permission_level: str
-    username: Optional[str]
+    username: str | None
 
     _notice_room_lock: asyncio.Lock
     _notice_send_lock: asyncio.Lock
     _is_logged_in: bool
     _is_connected: bool
     shutdown: bool
-    remote_typing_status: Optional[TypingStatus]
+    remote_typing_status: TypingStatus | None
 
-    def __init__(self, mxid: UserID, igpk: Optional[int] = None,
-                 state: Optional[AndroidState] = None, notice_room: Optional[RoomID] = None
-                 ) -> None:
+    def __init__(
+        self,
+        mxid: UserID,
+        igpk: int | None = None,
+        state: AndroidState | None = None,
+        notice_room: RoomID | None = None,
+    ) -> None:
         super().__init__(mxid=mxid, igpk=igpk, state=state, notice_room=notice_room)
         BaseUser.__init__(self)
         self._notice_room_lock = asyncio.Lock()
@@ -97,7 +117,7 @@ class User(DBUser, BaseUser):
         self.remote_typing_status = None
 
     @classmethod
-    def init_cls(cls, bridge: 'InstagramBridge') -> AsyncIterable[Awaitable[None]]:
+    def init_cls(cls, bridge: "InstagramBridge") -> AsyncIterable[Awaitable[None]]:
         cls.bridge = bridge
         cls.config = bridge.config
         cls.az = bridge.az
@@ -109,7 +129,7 @@ class User(DBUser, BaseUser):
     async def is_logged_in(self) -> bool:
         return bool(self.client) and self._is_logged_in
 
-    async def get_puppet(self) -> Optional[pu.Puppet]:
+    async def get_puppet(self) -> pu.Puppet | None:
         if not self.igpk:
             return None
         return await pu.Puppet.get_by_pk(self.igpk)
@@ -135,9 +155,12 @@ class User(DBUser, BaseUser):
             resp = await client.current_user()
         except IGNotLoggedInError as e:
             self.log.warning(f"Failed to connect to Instagram: {e}, logging out")
-            await self.send_bridge_notice(f"You have been logged out of Instagram: {e!s}",
-                                          important=True, error_code="ig-auth-error",
-                                          error_message=str(e))
+            await self.send_bridge_notice(
+                f"You have been logged out of Instagram: {e!s}",
+                important=True,
+                error_code="ig-auth-error",
+                error_message=str(e),
+            )
             await self.logout(from_error=True)
             return
         self.client = client
@@ -147,8 +170,9 @@ class User(DBUser, BaseUser):
         self._track_metric(METRIC_LOGGED_IN, True)
         self.by_igpk[self.igpk] = self
 
-        self.mqtt = AndroidMQTT(self.state, loop=self.loop,
-                                log=self.ig_base_log.getChild("mqtt").getChild(self.mxid))
+        self.mqtt = AndroidMQTT(
+            self.state, loop=self.loop, log=self.ig_base_log.getChild("mqtt").getChild(self.mxid)
+        )
         self.mqtt.add_event_handler(Connect, self.on_connect)
         self.mqtt.add_event_handler(Disconnect, self.on_disconnect)
         self.mqtt.add_event_handler(MessageSyncEvent, self.handle_message)
@@ -205,7 +229,7 @@ class User(DBUser, BaseUser):
         if self.username:
             state.remote_name = f"@{self.username}"
 
-    async def get_bridge_states(self) -> List[BridgeState]:
+    async def get_bridge_states(self) -> list[BridgeState]:
         if not self.state:
             return []
         state = BridgeState(state_event=BridgeStateEvent.UNKNOWN_ERROR)
@@ -215,13 +239,19 @@ class User(DBUser, BaseUser):
             state.state_event = BridgeStateEvent.TRANSIENT_DISCONNECT
         return [state]
 
-    async def send_bridge_notice(self, text: str, edit: Optional[EventID] = None,
-                                 state_event: Optional[BridgeStateEvent] = None,
-                                 important: bool = False, error_code: Optional[str] = None,
-                                 error_message: Optional[str] = None) -> Optional[EventID]:
+    async def send_bridge_notice(
+        self,
+        text: str,
+        edit: EventID | None = None,
+        state_event: BridgeStateEvent | None = None,
+        important: bool = False,
+        error_code: str | None = None,
+        error_message: str | None = None,
+    ) -> EventID | None:
         if state_event:
-            await self.push_bridge_state(state_event, error=error_code,
-                                         message=error_message if error_code else text)
+            await self.push_bridge_state(
+                state_event, error=error_code, message=error_message if error_code else text
+            )
         if self.config["bridge.disable_bridge_notices"]:
             return None
         if not important and not self.config["bridge.unimportant_bridge_notices"]:
@@ -230,8 +260,9 @@ class User(DBUser, BaseUser):
         event_id = None
         try:
             self.log.debug("Sending bridge notice: %s", text)
-            content = TextMessageEventContent(body=text, msgtype=(MessageType.TEXT if important
-                                                                  else MessageType.NOTICE))
+            content = TextMessageEventContent(
+                body=text, msgtype=(MessageType.TEXT if important else MessageType.NOTICE)
+            )
             if edit:
                 content.set_edit(edit)
             # This is locked to prevent notices going out in the wrong order
@@ -261,7 +292,7 @@ class User(DBUser, BaseUser):
             self.log.exception("Exception while syncing")
             await self.push_bridge_state(BridgeStateEvent.UNKNOWN_ERROR)
 
-    async def get_direct_chats(self) -> Dict[UserID, List[RoomID]]:
+    async def get_direct_chats(self) -> dict[UserID, list[RoomID]]:
         return {
             pu.Puppet.get_mxid_from_id(portal.other_user_pk): [portal.mxid]
             for portal in await DBPortal.find_private_chats_of(self.igpk)
@@ -324,8 +355,9 @@ class User(DBUser, BaseUser):
         if not self._listen_task:
             await self.start_listen(resp.seq_id, resp.snapshot_at_ms)
 
-    async def start_listen(self, seq_id: Optional[int] = None, snapshot_at_ms: Optional[int] = None
-                           ) -> None:
+    async def start_listen(
+        self, seq_id: int | None = None, snapshot_at_ms: int | None = None
+    ) -> None:
         self.shutdown = False
         if not seq_id:
             resp = await self.client.get_inbox(limit=1)
@@ -336,31 +368,45 @@ class User(DBUser, BaseUser):
     async def listen(self, seq_id: int, snapshot_at_ms: int) -> None:
         try:
             await self.mqtt.listen(
-                graphql_subs={GraphQLSubscription.app_presence(),
-                              GraphQLSubscription.direct_typing(self.state.user_id),
-                              GraphQLSubscription.direct_status()},
-                skywalker_subs={SkywalkerSubscription.direct_sub(self.state.user_id),
-                                SkywalkerSubscription.live_sub(self.state.user_id)},
-                seq_id=seq_id, snapshot_at_ms=snapshot_at_ms)
+                graphql_subs={
+                    GraphQLSubscription.app_presence(),
+                    GraphQLSubscription.direct_typing(self.state.user_id),
+                    GraphQLSubscription.direct_status(),
+                },
+                skywalker_subs={
+                    SkywalkerSubscription.direct_sub(self.state.user_id),
+                    SkywalkerSubscription.live_sub(self.state.user_id),
+                },
+                seq_id=seq_id,
+                snapshot_at_ms=snapshot_at_ms,
+            )
         except IrisSubscribeError as e:
             self.log.warning(f"Got IrisSubscribeError {e}, refreshing...")
             await self.refresh()
         except (MQTTNotConnected, MQTTNotLoggedIn) as e:
-            await self.send_bridge_notice(f"Error in listener: {e}", important=True,
-                                          state_event=BridgeStateEvent.UNKNOWN_ERROR,
-                                          error_code="ig-connection-error")
+            await self.send_bridge_notice(
+                f"Error in listener: {e}",
+                important=True,
+                state_event=BridgeStateEvent.UNKNOWN_ERROR,
+                error_code="ig-connection-error",
+            )
             self.mqtt.disconnect()
         except Exception:
             self.log.exception("Fatal error in listener")
-            await self.send_bridge_notice("Fatal error in listener (see logs for more info)",
-                                          state_event=BridgeStateEvent.UNKNOWN_ERROR,
-                                          important=True, error_code="ig-connection-error")
+            await self.send_bridge_notice(
+                "Fatal error in listener (see logs for more info)",
+                state_event=BridgeStateEvent.UNKNOWN_ERROR,
+                important=True,
+                error_code="ig-connection-error",
+            )
             self.mqtt.disconnect()
         else:
             if not self.shutdown:
-                await self.send_bridge_notice("Instagram connection closed without error",
-                                              state_event=BridgeStateEvent.UNKNOWN_ERROR,
-                                              error_code="ig-disconnected")
+                await self.send_bridge_notice(
+                    "Instagram connection closed without error",
+                    state_event=BridgeStateEvent.UNKNOWN_ERROR,
+                    error_code="ig-disconnected",
+                )
         finally:
             self._listen_task = None
             self._is_connected = False
@@ -418,8 +464,10 @@ class User(DBUser, BaseUser):
             self.log.debug("Got info for unknown portal, creating room")
             await portal.create_matrix_room(self, resp.thread)
             if not portal.mxid:
-                self.log.warning("Room creation appears to have failed, "
-                                 f"dropping message in {evt.message.thread_id}")
+                self.log.warning(
+                    "Room creation appears to have failed, "
+                    f"dropping message in {evt.message.thread_id}"
+                )
                 return
         self.log.trace(f"Received message sync event {evt.message}")
         sender = await pu.Puppet.get_by_pk(evt.message.user_id) if evt.message.user_id else None
@@ -464,8 +512,9 @@ class User(DBUser, BaseUser):
         is_typing = evt.value.activity_status != TypingStatus.OFF
         if puppet.pk == self.igpk:
             self.remote_typing_status = TypingStatus.TEXT if is_typing else TypingStatus.OFF
-        await puppet.intent_for(portal).set_typing(portal.mxid, is_typing=is_typing,
-                                                   timeout=evt.value.ttl)
+        await puppet.intent_for(portal).set_typing(
+            portal.mxid, is_typing=is_typing, timeout=evt.value.ttl
+        )
 
     # endregion
     # region Database getters
@@ -477,7 +526,7 @@ class User(DBUser, BaseUser):
 
     @classmethod
     @async_getter_lock
-    async def get_by_mxid(cls, mxid: UserID, *, create: bool = True) -> Optional['User']:
+    async def get_by_mxid(cls, mxid: UserID, *, create: bool = True) -> User | None:
         # Never allow ghosts to be users
         if pu.Puppet.get_id_from_mxid(mxid):
             return None
@@ -501,7 +550,7 @@ class User(DBUser, BaseUser):
 
     @classmethod
     @async_getter_lock
-    async def get_by_igpk(cls, igpk: int) -> Optional['User']:
+    async def get_by_igpk(cls, igpk: int) -> User | None:
         try:
             return cls.by_igpk[igpk]
         except KeyError:
@@ -515,7 +564,7 @@ class User(DBUser, BaseUser):
         return None
 
     @classmethod
-    async def all_logged_in(cls) -> AsyncGenerator['User', None]:
+    async def all_logged_in(cls) -> AsyncGenerator[User, None]:
         users = await super().all_logged_in()
         user: cls
         for index, user in enumerate(users):

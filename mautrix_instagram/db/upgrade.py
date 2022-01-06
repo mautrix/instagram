@@ -22,7 +22,8 @@ upgrade_table = UpgradeTable()
 
 @upgrade_table.register(description="Initial revision")
 async def upgrade_v1(conn: Connection) -> None:
-    await conn.execute("""CREATE TABLE portal (
+    await conn.execute(
+        """CREATE TABLE portal (
         thread_id     TEXT,
         receiver      BIGINT,
         other_user_pk BIGINT,
@@ -30,14 +31,18 @@ async def upgrade_v1(conn: Connection) -> None:
         name          TEXT,
         encrypted     BOOLEAN NOT NULL DEFAULT false,
         PRIMARY KEY (thread_id, receiver)
-    )""")
-    await conn.execute("""CREATE TABLE "user" (
+    )"""
+    )
+    await conn.execute(
+        """CREATE TABLE "user" (
         mxid        TEXT PRIMARY KEY,
         igpk        BIGINT,
         state       jsonb,
         notice_room TEXT
-    )""")
-    await conn.execute("""CREATE TABLE puppet (
+    )"""
+    )
+    await conn.execute(
+        """CREATE TABLE puppet (
         pk            BIGINT PRIMARY KEY,
         name          TEXT,
         username      TEXT,
@@ -50,16 +55,20 @@ async def upgrade_v1(conn: Connection) -> None:
         access_token  TEXT,
         next_batch    TEXT,
         base_url      TEXT
-    )""")
-    await conn.execute("""CREATE TABLE user_portal (
+    )"""
+    )
+    await conn.execute(
+        """CREATE TABLE user_portal (
         "user"          BIGINT,
         portal          TEXT,
         portal_receiver BIGINT,
         in_community    BOOLEAN NOT NULL DEFAULT false,
         FOREIGN KEY (portal, portal_receiver) REFERENCES portal(thread_id, receiver)
             ON UPDATE CASCADE ON DELETE CASCADE
-    )""")
-    await conn.execute("""CREATE TABLE message (
+    )"""
+    )
+    await conn.execute(
+        """CREATE TABLE message (
         mxid     TEXT NOT NULL,
         mx_room  TEXT NOT NULL,
         item_id  TEXT,
@@ -67,8 +76,10 @@ async def upgrade_v1(conn: Connection) -> None:
         sender   BIGINT NOT NULL,
         PRIMARY KEY (item_id, receiver),
         UNIQUE (mxid, mx_room)
-    )""")
-    await conn.execute("""CREATE TABLE reaction (
+    )"""
+    )
+    await conn.execute(
+        """CREATE TABLE reaction (
         mxid        TEXT NOT NULL,
         mx_room     TEXT NOT NULL,
         ig_item_id  TEXT,
@@ -79,7 +90,8 @@ async def upgrade_v1(conn: Connection) -> None:
         FOREIGN KEY (ig_item_id, ig_receiver) REFERENCES message(item_id, receiver)
             ON DELETE CASCADE ON UPDATE CASCADE,
         UNIQUE (mxid, mx_room)
-    )""")
+    )"""
+    )
 
 
 @upgrade_table.register(description="Add name_set and avatar_set to portal table")

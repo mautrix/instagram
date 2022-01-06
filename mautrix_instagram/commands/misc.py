@@ -1,5 +1,5 @@
-# mautrix-twitter - A Matrix-Twitter DM puppeting bridge
-# Copyright (C) 2020 Tulir Asokan
+# mautrix-instagram - A Matrix-Instagram puppeting bridge.
+# Copyright (C) 2022 Tulir Asokan
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as published by
@@ -21,8 +21,13 @@ from .typehint import CommandEvent
 SECTION_MISC = HelpSection("Miscellaneous", 40, "")
 
 
-@command_handler(needs_auth=True, management_only=False, help_section=SECTION_MISC,
-                 help_text="Search for Instagram users", help_args="<_query_>")
+@command_handler(
+    needs_auth=True,
+    management_only=False,
+    help_section=SECTION_MISC,
+    help_text="Search for Instagram users",
+    help_args="<_query_>",
+)
 async def search(evt: CommandEvent) -> None:
     if len(evt.args) < 1:
         await evt.reply("**Usage:** `$cmdprefix+sp search <query>`")
@@ -35,6 +40,8 @@ async def search(evt: CommandEvent) -> None:
     for user in resp.users[:10]:
         puppet = await pu.Puppet.get_by_pk(user.pk, create=True)
         await puppet.update_info(user, evt.sender)
-        response_list.append(f"* [{puppet.name}](https://matrix.to/#/{puppet.mxid})"
-                             f" ([@{user.username}](https://instagram.com/{user.username}))")
+        response_list.append(
+            f"* [{puppet.name}](https://matrix.to/#/{puppet.mxid})"
+            f" ([@{user.username}](https://instagram.com/{user.username}))"
+        )
     await evt.reply("\n".join(response_list))

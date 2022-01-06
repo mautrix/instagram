@@ -16,9 +16,10 @@
 from typing import List, Optional, Union
 import logging
 
-import attr
 from attr import dataclass
-from mautrix.types import SerializableAttrs, SerializableEnum, JSON, SerializerError, Obj
+import attr
+
+from mautrix.types import JSON, Obj, SerializableAttrs, SerializableEnum, SerializerError
 from mautrix.types.util.serializable_attrs import _dict_to_attrs
 
 from .account import BaseResponseUser, UserIdentifier
@@ -297,7 +298,7 @@ class VisualMedia(ReplayableMediaItem, SerializableAttrs):
     media: Union[RegularMediaItem, ExpiredMediaItem]
 
     @classmethod
-    def deserialize(cls, data: JSON) -> 'VisualMedia':
+    def deserialize(cls, data: JSON) -> "VisualMedia":
         data = {**data}
         if "id" not in data["media"]:
             data["media"] = ExpiredMediaItem.deserialize(data["media"])
@@ -412,7 +413,7 @@ class ReelShareItem(SerializableAttrs):
     mentioned_user_id: Optional[int] = None
 
     @classmethod
-    def deserialize(cls, data: JSON) -> 'ReelShareItem':
+    def deserialize(cls, data: JSON) -> "ReelShareItem":
         data = {**data}
         if "id" not in data["media"]:
             data["media"] = ExpiredMediaItem.deserialize(data["media"])
@@ -440,7 +441,7 @@ class StoryShareItem(SerializableAttrs):
     reason: Optional[int] = None  # 3 = expired?
 
     @classmethod
-    def deserialize(cls, data: JSON) -> 'StoryShareItem':
+    def deserialize(cls, data: JSON) -> "StoryShareItem":
         data = {**data}
         if "media" not in data:
             data["media"] = ExpiredMediaItem()
@@ -479,7 +480,7 @@ class ThreadItem(SerializableAttrs):
     show_forward_attribution: Optional[bool] = None
     action_log: Optional[ThreadItemActionLog] = None
 
-    replied_to_message: Optional['ThreadItem'] = None
+    replied_to_message: Optional["ThreadItem"] = None
 
     media: Optional[RegularMediaItem] = None
     voice_media: Optional[VoiceMediaItem] = None
@@ -497,7 +498,7 @@ class ThreadItem(SerializableAttrs):
     profile: Optional[ProfileItem] = None
 
     @classmethod
-    def deserialize(cls, data: JSON, catch_errors: bool = True) -> Union['ThreadItem', Obj]:
+    def deserialize(cls, data: JSON, catch_errors: bool = True) -> Union["ThreadItem", Obj]:
         if not catch_errors:
             return _dict_to_attrs(cls, data)
         try:

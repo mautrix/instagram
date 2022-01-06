@@ -13,14 +13,16 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import Optional, ClassVar, TYPE_CHECKING
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, ClassVar
 
 from attr import dataclass
 
-from mautrix.types import RoomID, EventID
+from mautrix.types import EventID, RoomID
 from mautrix.util.async_db import Database
 
-fake_db = Database("") if TYPE_CHECKING else None
+fake_db = Database.create("") if TYPE_CHECKING else None
 
 
 @dataclass
@@ -34,8 +36,10 @@ class Message:
     sender: int
 
     async def insert(self) -> None:
-        q = ("INSERT INTO message (mxid, mx_room, item_id, receiver, sender) "
-             "VALUES ($1, $2, $3, $4, $5)")
+        q = (
+            "INSERT INTO message (mxid, mx_room, item_id, receiver, sender) "
+            "VALUES ($1, $2, $3, $4, $5)"
+        )
         await self.db.execute(q, self.mxid, self.mx_room, self.item_id, self.receiver, self.sender)
 
     async def delete(self) -> None:
@@ -47,18 +51,23 @@ class Message:
         await cls.db.execute("DELETE FROM message WHERE mx_room=$1", room_id)
 
     @classmethod
-    async def get_by_mxid(cls, mxid: EventID, mx_room: RoomID) -> Optional['Message']:
-        row = await cls.db.fetchrow("SELECT mxid, mx_room, item_id, receiver, sender "
-                                    "FROM message WHERE mxid=$1 AND mx_room=$2", mxid, mx_room)
+    async def get_by_mxid(cls, mxid: EventID, mx_room: RoomID) -> Message | None:
+        q = (
+            "SELECT mxid, mx_room, item_id, receiver, sender "
+            "FROM message WHERE mxid=$1 AND mx_room=$2"
+        )
+        row = await cls.db.fetchrow(q, mxid, mx_room)
         if not row:
             return None
         return cls(**row)
 
     @classmethod
-    async def get_by_item_id(cls, item_id: str, receiver: int) -> Optional['Message']:
-        row = await cls.db.fetchrow("SELECT mxid, mx_room, item_id, receiver, sender "
-                                    "FROM message WHERE item_id=$1 AND receiver=$2",
-                                    item_id, receiver)
+    async def get_by_item_id(cls, item_id: str, receiver: int) -> Message | None:
+        q = (
+            "SELECT mxid, mx_room, item_id, receiver, sender "
+            "FROM message WHERE item_id=$1 AND receiver=$2"
+        )
+        row = await cls.db.fetchrow(q, item_id, receiver)
         if not row:
             return None
         return cls(**row)

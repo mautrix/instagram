@@ -13,17 +13,33 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import Optional, AsyncIterable, Type, Union
+from __future__ import annotations
 
+from typing import AsyncIterable, Type
+
+from ..types import (
+    CommandResponse,
+    DMInboxResponse,
+    DMThreadResponse,
+    ShareVoiceResponse,
+    Thread,
+    ThreadAction,
+    ThreadItem,
+    ThreadItemType,
+)
 from .base import BaseAndroidAPI, T
-from ..types import (DMInboxResponse, DMThreadResponse, Thread, ThreadItem, ThreadAction,
-                     ThreadItemType, CommandResponse, ShareVoiceResponse)
 
 
 class ThreadAPI(BaseAndroidAPI):
-    async def get_inbox(self, cursor: Optional[str] = None, seq_id: Optional[str] = None,
-                        message_limit: int = 10, limit: int = 20, pending: bool = False,
-                        direction: str = "older") -> DMInboxResponse:
+    async def get_inbox(
+        self,
+        cursor: str | None = None,
+        seq_id: str | None = None,
+        message_limit: int = 10,
+        limit: int = 20,
+        pending: bool = False,
+        direction: str = "older",
+    ) -> DMInboxResponse:
         query = {
             "visual_message_return_type": "unseen",
             "cursor": cursor,
@@ -34,11 +50,13 @@ class ThreadAPI(BaseAndroidAPI):
             "limit": limit,
         }
         inbox_type = "pending_inbox" if pending else "inbox"
-        return await self.std_http_get(f"/api/v1/direct_v2/{inbox_type}/", query=query,
-                                       response_type=DMInboxResponse)
+        return await self.std_http_get(
+            f"/api/v1/direct_v2/{inbox_type}/", query=query, response_type=DMInboxResponse
+        )
 
-    async def iter_inbox(self, start_at: Optional[DMInboxResponse] = None,
-                         message_limit: int = 10) -> AsyncIterable[Thread]:
+    async def iter_inbox(
+        self, start_at: DMInboxResponse | None = None, message_limit: int = 10
+    ) -> AsyncIterable[Thread]:
         if start_at:
             cursor = start_at.inbox.oldest_cursor
             seq_id = start_at.seq_id
@@ -57,9 +75,14 @@ class ThreadAPI(BaseAndroidAPI):
             for thread in resp.inbox.threads:
                 yield thread
 
-    async def get_thread(self, thread_id: str, cursor: Optional[str] = None, limit: int = 10,
-                         direction: str = "older", seq_id: Optional[int] = None
-                         ) -> DMThreadResponse:
+    async def get_thread(
+        self,
+        thread_id: str,
+        cursor: str | None = None,
+        limit: int = 10,
+        direction: str = "older",
+        seq_id: int | None = None,
+    ) -> DMThreadResponse:
         query = {
             "visual_message_return_type": "unseen",
             "cursor": cursor,
@@ -67,11 +90,13 @@ class ThreadAPI(BaseAndroidAPI):
             "seq_id": seq_id,
             "limit": limit,
         }
-        return await self.std_http_get(f"/api/v1/direct_v2/threads/{thread_id}/", query=query,
-                                       response_type=DMThreadResponse)
+        return await self.std_http_get(
+            f"/api/v1/direct_v2/threads/{thread_id}/", query=query, response_type=DMThreadResponse
+        )
 
-    async def iter_thread(self, thread_id: str, seq_id: Optional[int] = None,
-                          cursor: Optional[str] = None) -> AsyncIterable[ThreadItem]:
+    async def iter_thread(
+        self, thread_id: str, seq_id: int | None = None, cursor: str | None = None
+    ) -> AsyncIterable[ThreadItem]:
         has_more = True
         while has_more:
             resp = await self.get_thread(thread_id, seq_id=seq_id, cursor=cursor)
@@ -81,13 +106,20 @@ class ThreadAPI(BaseAndroidAPI):
                 yield item
 
     async def delete_item(self, thread_id: str, item_id: str) -> None:
-        await self.std_http_post(f"/api/v1/direct_v2/threads/{thread_id}/items/{item_id}/delete/",
-                                 data={"_csrftoken": self.state.cookies.csrf_token,
-                                       "_uuid": self.state.device.uuid})
+        await self.std_http_post(
+            f"/api/v1/direct_v2/threads/{thread_id}/items/{item_id}/delete/",
+            data={"_csrftoken": self.state.cookies.csrf_token, "_uuid": self.state.device.uuid},
+        )
 
-    async def _broadcast(self, thread_id: str, item_type: str, response_type: Type[T],
-                         signed: bool = False, client_context: Optional[str] = None, **kwargs
-                         ) -> T:
+    async def _broadcast(
+        self,
+        thread_id: str,
+        item_type: str,
+        response_type: Type[T],
+        signed: bool = False,
+        client_context: str | None = None,
+        **kwargs,
+    ) -> T:
         client_context = client_context or self.state.gen_client_context()
         form = {
             "action": ThreadAction.SEND_ITEM.value,
@@ -102,17 +134,29 @@ class ThreadAPI(BaseAndroidAPI):
             **kwargs,
             "offline_threading_id": client_context,
         }
-        return await self.std_http_post(f"/api/v1/direct_v2/threads/broadcast/{item_type}/",
-                                        data=form, raw=not signed, response_type=response_type)
+        return await self.std_http_post(
+            f"/api/v1/direct_v2/threads/broadcast/{item_type}/",
+            data=form,
+            raw=not signed,
+            response_type=response_type,
+        )
 
-    async def broadcast(self, thread_id: str, item_type: ThreadItemType, signed: bool = False,
-                        client_context: Optional[str] = None, **kwargs) -> CommandResponse:
-        return await self._broadcast(thread_id, item_type.value, CommandResponse, signed,
-                                     client_context, **kwargs)
+    async def broadcast(
+        self,
+        thread_id: str,
+        item_type: ThreadItemType,
+        signed: bool = False,
+        client_context: str | None = None,
+        **kwargs,
+    ) -> CommandResponse:
+        return await self._broadcast(
+            thread_id, item_type.value, CommandResponse, signed, client_context, **kwargs
+        )
 
-    async def broadcast_audio(self, thread_id: str, is_direct: bool,
-                              client_context: Optional[str] = None, **kwargs
-                              ) -> Union[ShareVoiceResponse, CommandResponse]:
+    async def broadcast_audio(
+        self, thread_id: str, is_direct: bool, client_context: str | None = None, **kwargs
+    ) -> ShareVoiceResponse | CommandResponse:
         response_type = ShareVoiceResponse if is_direct else CommandResponse
-        return await self._broadcast(thread_id, "share_voice", response_type, False,
-                                     client_context, **kwargs)
+        return await self._broadcast(
+            thread_id, "share_voice", response_type, False, client_context, **kwargs
+        )

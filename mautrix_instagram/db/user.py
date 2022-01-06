@@ -13,16 +13,18 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import Optional, ClassVar, List, TYPE_CHECKING
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, ClassVar
 
 from attr import dataclass
 import asyncpg
 
 from mauigpapi.state import AndroidState
-from mautrix.types import UserID, RoomID
+from mautrix.types import RoomID, UserID
 from mautrix.util.async_db import Database
 
-fake_db = Database("") if TYPE_CHECKING else None
+fake_db = Database.create("") if TYPE_CHECKING else None
 
 
 @dataclass
@@ -30,29 +32,30 @@ class User:
     db: ClassVar[Database] = fake_db
 
     mxid: UserID
-    igpk: Optional[int]
-    state: Optional[AndroidState]
-    notice_room: Optional[RoomID]
+    igpk: int | None
+    state: AndroidState | None
+    notice_room: RoomID | None
 
     async def insert(self) -> None:
-        q = ('INSERT INTO "user" (mxid, igpk, state, notice_room) '
-             'VALUES ($1, $2, $3, $4)')
-        await self.db.execute(q, self.mxid, self.igpk,
-                              self.state.json() if self.state else None, self.notice_room)
+        q = 'INSERT INTO "user" (mxid, igpk, state, notice_room) VALUES ($1, $2, $3, $4)'
+        await self.db.execute(
+            q, self.mxid, self.igpk, self.state.json() if self.state else None, self.notice_room
+        )
 
     async def update(self) -> None:
-        await self.db.execute('UPDATE "user" SET igpk=$2, state=$3, notice_room=$4 '
-                              'WHERE mxid=$1', self.mxid, self.igpk,
-                              self.state.json() if self.state else None, self.notice_room)
+        q = 'UPDATE "user" SET igpk=$2, state=$3, notice_room=$4 WHERE mxid=$1'
+        await self.db.execute(
+            q, self.mxid, self.igpk, self.state.json() if self.state else None, self.notice_room
+        )
 
     @classmethod
-    def _from_row(cls, row: asyncpg.Record) -> 'User':
+    def _from_row(cls, row: asyncpg.Record) -> User:
         data = {**row}
         state_str = data.pop("state")
         return cls(state=AndroidState.parse_json(state_str) if state_str else None, **data)
 
     @classmethod
-    async def get_by_mxid(cls, mxid: UserID) -> Optional['User']:
+    async def get_by_mxid(cls, mxid: UserID) -> User | None:
         q = 'SELECT mxid, igpk, state, notice_room FROM "user" WHERE mxid=$1'
         row = await cls.db.fetchrow(q, mxid)
         if not row:
@@ -60,7 +63,7 @@ class User:
         return cls._from_row(row)
 
     @classmethod
-    async def get_by_igpk(cls, igpk: int) -> Optional['User']:
+    async def get_by_igpk(cls, igpk: int) -> User | None:
         q = 'SELECT mxid, igpk, state, notice_room FROM "user" WHERE igpk=$1'
         row = await cls.db.fetchrow(q, igpk)
         if not row:
@@ -68,8 +71,10 @@ class User:
         return cls._from_row(row)
 
     @classmethod
-    async def all_logged_in(cls) -> List['User']:
-        q = ("SELECT mxid, igpk, state, notice_room "
-             'FROM "user" WHERE igpk IS NOT NULL AND state IS NOT NULL')
+    async def all_logged_in(cls) -> list[User]:
+        q = (
+            "SELECT mxid, igpk, state, notice_room "
+            'FROM "user" WHERE igpk IS NOT NULL AND state IS NOT NULL'
+        )
         rows = await cls.db.fetch(q)
         return [cls._from_row(row) for row in rows]

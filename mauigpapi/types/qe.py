@@ -13,10 +13,10 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import List, Optional, Any, Dict
+from typing import Any, Dict, List, Optional
 import json
 
-from attr import dataclass, attrib
+from attr import attrib, dataclass
 
 from mautrix.types import SerializableAttrs
 
@@ -51,10 +51,12 @@ class QeSyncExperiment(SerializableAttrs):
     logging_id: Optional[str] = None
 
     def parse(self) -> AndroidExperiment:
-        return AndroidExperiment(group=self.group, additional=self.additional_params,
-                                 logging_id=self.logging_id,
-                                 params={param.name: _try_parse(param.value)
-                                         for param in self.params})
+        return AndroidExperiment(
+            group=self.group,
+            additional=self.additional_params,
+            logging_id=self.logging_id,
+            params={param.name: _try_parse(param.value) for param in self.params},
+        )
 
 
 @dataclass

@@ -13,8 +13,9 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-import paho.mqtt.client
 import struct
+
+import paho.mqtt.client
 
 
 class MQTToTClient(paho.mqtt.client.Client):
@@ -26,8 +27,7 @@ class MQTToTClient(paho.mqtt.client.Client):
         proto_ver = self._protocol
         protocol = b"MQTToT"
 
-        remaining_length = (2 + len(protocol) + 1 +
-                            1 + 2 + len(self._client_id))
+        remaining_length = 2 + len(protocol) + 1 + 1 + 2 + len(self._client_id)
 
         # Username, password, clean session
         connect_flags = 0x80 + 0x40 + 0x02
@@ -37,8 +37,16 @@ class MQTToTClient(paho.mqtt.client.Client):
         packet.append(command)
 
         self._pack_remaining_length(packet, remaining_length)
-        packet.extend(struct.pack(f"!H{len(protocol)}sBBH",
-                                  len(protocol), protocol, proto_ver, connect_flags, keepalive))
+        packet.extend(
+            struct.pack(
+                f"!H{len(protocol)}sBBH",
+                len(protocol),
+                protocol,
+                proto_ver,
+                connect_flags,
+                keepalive,
+            )
+        )
         packet.extend(self._client_id)
 
         self._keepalive = keepalive

@@ -15,11 +15,11 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from typing import Optional, Union
 from uuid import UUID
+import json
 import pkgutil
 import random
 import string
 import time
-import json
 
 from attr import dataclass
 import attr
