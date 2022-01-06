@@ -20,7 +20,12 @@ from attr import dataclass
 import attr
 
 from mautrix.types import (
-    JSON, Obj, SerializableAttrs, SerializableEnum, ExtensibleEnum, SerializerError
+    JSON,
+    ExtensibleEnum,
+    Obj,
+    SerializableAttrs,
+    SerializableEnum,
+    SerializerError,
 )
 from mautrix.types.util.serializable_attrs import _dict_to_attrs
 
