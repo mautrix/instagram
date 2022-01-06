@@ -455,6 +455,12 @@ class ClipItem(SerializableAttrs):
     clip: MediaShareItem
 
 
+@dataclass
+class FelixShareItem(SerializableAttrs):
+    video: MediaShareItem
+    text: Optional[str] = None
+
+
 @dataclass(kw_only=True)
 class ThreadItem(SerializableAttrs):
     item_id: Optional[str] = None
@@ -482,6 +488,7 @@ class ThreadItem(SerializableAttrs):
     like: Optional[str] = None
     link: Optional[LinkItem] = None
     clip: Optional[ClipItem] = None
+    felix_share: Optional[FelixShareItem] = None
 
     @classmethod
     def deserialize(cls, data: JSON, catch_errors: bool = True) -> Union['ThreadItem', Obj]:

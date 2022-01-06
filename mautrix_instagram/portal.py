@@ -643,6 +643,8 @@ class Portal(DBPortal, BasePortal):
             media_data = item.story_share.media
         elif item.clip:
             media_data = item.clip.clip
+        elif item.felix_share and item.felix_share.video:
+            media_data = item.felix_share.video
         elif item.media_share:
             media_data = item.media_share
         else:
@@ -679,11 +681,14 @@ class Portal(DBPortal, BasePortal):
         elif item.clip:
             share_item = item.clip.clip
             item_type_name = "clip"
+        elif item.felix_share and item.felix_share.video:
+            share_item = item.felix_share.video
+            item_type_name = share_item.media_type.human_name
         elif item.story_share:
             share_item = item.story_share.media
             item_type_name = "story"
         else:
-            raise ValueError("no media to share")
+            return None
         user_text = f"@{share_item.user.username}"
         user_link = (f'<a href="https://www.instagram.com/{share_item.user.username}/">'
                      f'{user_text}</a>')
@@ -865,7 +870,7 @@ class Portal(DBPortal, BasePortal):
                 event_id = await self._handle_instagram_location(intent, item)
             elif item.reel_share:
                 event_id = await self._handle_instagram_reel_share(source, intent, item)
-            elif item.media_share or item.story_share or item.clip:
+            elif item.media_share or item.story_share or item.clip or item.felix_share:
                 event_id = await self._handle_instagram_media_share(source, intent, item)
             elif item.action_log:
                 # These probably don't need to be bridged
