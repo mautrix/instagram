@@ -69,6 +69,7 @@ class ThreadItemType(SerializableEnum):
     SELFIE_STICKER = "selfie_sticker"
     REACTION = "reaction"
     CLIP = "clip"
+    GUIDE_SHARE = "guide_share"
 
 
 @dataclass(kw_only=True)
