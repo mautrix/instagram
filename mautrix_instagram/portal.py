@@ -797,6 +797,17 @@ class Portal(DBPortal, BasePortal):
 
         return await self._send_message(intent, content, timestamp=item.timestamp // 1000)
 
+    async def _handle_instagram_profile(self, intent: IntentAPI, item: ThreadItem
+                                        ) -> Optional[EventID]:
+        username = item.profile.username
+        user_link = f'<a href="https://www.instagram.com/{username}/">@{username}</a>'
+        text = f"Shared @{username}'s profile"
+        html = f"Shared {user_link}'s profile"
+        content = TextMessageEventContent(msgtype=MessageType.TEXT, format=Format.HTML,
+                                          body=text, formatted_body=html)
+        await self._add_instagram_reply(content, item.replied_to_message)
+        return await self._send_message(intent, content, timestamp=item.timestamp // 1000)
+
     async def handle_instagram_item(self, source: 'u.User', sender: 'p.Puppet', item: ThreadItem,
                                     is_backfill: bool = False) -> None:
         try:
@@ -868,6 +879,8 @@ class Portal(DBPortal, BasePortal):
                 event_id = await self._handle_instagram_media(source, intent, item)
             elif item.location:
                 event_id = await self._handle_instagram_location(intent, item)
+            elif item.profile:
+                event_id = await self._handle_instagram_profile(intent, item)
             elif item.reel_share:
                 event_id = await self._handle_instagram_reel_share(source, intent, item)
             elif item.media_share or item.story_share or item.clip or item.felix_share:

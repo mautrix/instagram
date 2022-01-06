@@ -24,7 +24,9 @@
       * [x] Gifs
       * [x] Voice messages
       * [x] Locations
-      * [x] Story/reel share
+      * [x] Story/reel/clip share
+      * [x] Profile share
+      * [ ] Product share
     * [x] Replies
   * [x] Message unsend
   * [x] Message reactions

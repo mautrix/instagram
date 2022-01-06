@@ -55,6 +55,8 @@ class BaseResponseUser(UserIdentifier, SerializableAttrs):
     friendship_status: Optional[FriendshipStatus] = None
     # Not exactly sure when this is present
     latest_reel_media: Optional[int] = None
+    has_highlight_reels: bool = False
+    follow_friction_type: Optional[int] = None
 
 
 @dataclass(kw_only=True)

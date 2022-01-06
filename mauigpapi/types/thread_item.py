@@ -461,6 +461,11 @@ class FelixShareItem(SerializableAttrs):
     text: Optional[str] = None
 
 
+@dataclass
+class ProfileItem(BaseResponseUser, SerializableAttrs):
+    pass
+
+
 @dataclass(kw_only=True)
 class ThreadItem(SerializableAttrs):
     item_id: Optional[str] = None
@@ -489,6 +494,7 @@ class ThreadItem(SerializableAttrs):
     link: Optional[LinkItem] = None
     clip: Optional[ClipItem] = None
     felix_share: Optional[FelixShareItem] = None
+    profile: Optional[ProfileItem] = None
 
     @classmethod
     def deserialize(cls, data: JSON, catch_errors: bool = True) -> Union['ThreadItem', Obj]:
