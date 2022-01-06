@@ -19,7 +19,9 @@ import logging
 from attr import dataclass
 import attr
 
-from mautrix.types import JSON, Obj, SerializableAttrs, SerializableEnum, SerializerError
+from mautrix.types import (
+    JSON, Obj, SerializableAttrs, SerializableEnum, ExtensibleEnum, SerializerError
+)
 from mautrix.types.util.serializable_attrs import _dict_to_attrs
 
 from .account import BaseResponseUser, UserIdentifier
@@ -27,7 +29,7 @@ from .account import BaseResponseUser, UserIdentifier
 log = logging.getLogger("mauigpapi.types")
 
 
-class ThreadItemType(SerializableEnum):
+class ThreadItemType(ExtensibleEnum):
     DELETION = "deletion"
     MEDIA = "media"
     TEXT = "text"
