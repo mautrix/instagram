@@ -13,8 +13,9 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import Awaitable, Dict, Tuple
-import asyncio
+from __future__ import annotations
+
+from typing import Awaitable
 import json
 import logging
 
@@ -57,7 +58,7 @@ class ProvisioningAPI:
         self.app.router.add_post("/api/logout", self.logout)
 
     @property
-    def _acao_headers(self) -> Dict[str, str]:
+    def _acao_headers(self) -> dict[str, str]:
         return {
             "Access-Control-Allow-Origin": "*",
             "Access-Control-Allow-Headers": "Authorization, Content-Type",
@@ -65,7 +66,7 @@ class ProvisioningAPI:
         }
 
     @property
-    def _headers(self) -> Dict[str, str]:
+    def _headers(self) -> dict[str, str]:
         return {
             **self._acao_headers,
             "Content-Type": "application/json",
@@ -79,7 +80,7 @@ class ProvisioningAPI:
     async def login_options(self, _: web.Request) -> web.Response:
         return web.Response(status=200, headers=self._headers)
 
-    def check_token(self, request: web.Request) -> Awaitable["u.User"]:
+    def check_token(self, request: web.Request) -> Awaitable[u.User]:
         try:
             token = request.headers["Authorization"]
             token = token[len("Bearer ") :]
@@ -191,7 +192,7 @@ class ProvisioningAPI:
 
     async def _get_user(
         self, request: web.Request, check_state: bool = False
-    ) -> Tuple["u.User", JSON]:
+    ) -> tuple[u.User, JSON]:
         user = await self.check_token(request)
         if check_state and (not user.command_status or user.command_status["action"] != "Login"):
             raise web.HTTPNotFound(
@@ -276,7 +277,7 @@ class ProvisioningAPI:
         return await self._finish_login(user, state, resp.logged_in_user)
 
     async def _finish_login(
-        self, user: "u.User", state: AndroidState, resp_user: BaseResponseUser
+        self, user: u.User, state: AndroidState, resp_user: BaseResponseUser
     ) -> web.Response:
         user.state = state
         pl = state.device.payload
