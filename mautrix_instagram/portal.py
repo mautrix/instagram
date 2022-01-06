@@ -382,7 +382,7 @@ class Portal(DBPortal, BasePortal):
             f"Handling Matrix message {event_id} from {sender.mxid}/{sender.igpk} "
             f"with request ID {request_id}"
         )
-        if message.msgtype in (MessageType.EMOTE, MessageType.TEXT):
+        if message.msgtype in (MessageType.EMOTE, MessageType.TEXT, MessageType.NOTICE):
             text = message.body
             if message.msgtype == MessageType.EMOTE:
                 text = f"/me {text}"
