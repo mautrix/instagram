@@ -238,8 +238,8 @@ class CarouselMediaItem(RegularMediaItem, SerializableAttrs):
 class UserTag(SerializableAttrs):
     user: BaseResponseUser
     position: List[float]
-    #start_time_in_video_in_sec
-    #duration_in_video_in_sec
+    # start_time_in_video_in_sec
+    # duration_in_video_in_sec
 
 
 @dataclass
