@@ -273,6 +273,7 @@ class MediaShareItem(RegularMediaItem, SerializableAttrs):
     caption: Optional[Caption] = None
     can_viewer_save: bool = True
     location: Optional[Location] = None
+    carousel_media_count: Optional[int] = None
     carousel_media: Optional[List[CarouselMediaItem]] = None
 
 

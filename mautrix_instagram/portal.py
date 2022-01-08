@@ -661,8 +661,15 @@ class Portal(DBPortal, BasePortal):
             url = video.url
             msgtype = MessageType.VIDEO
             info = VideoInfo(height=video.height, width=video.width)
+        elif media.media_type == MediaType.CAROUSEL:
+            raise ValueError(
+                "Carousel media is not currently supported, "
+                "please view the post on Instagram via the link below"
+            )
         else:
-            raise ValueError("Attachment not available: unsupported media type")
+            raise ValueError(
+                f"Attachment not available: unsupported media type {media.media_type.human_name}"
+            )
         return await self._reupload_instagram_file(source, url, msgtype, info, intent)
 
     async def _reupload_instagram_animated(
@@ -855,25 +862,31 @@ class Portal(DBPortal, BasePortal):
 
         await self._send_message(intent, prefix, timestamp=item.timestamp // 1000)
         event_id = await self._handle_instagram_media(source, intent, item)
+
+        external_url = f"https://www.instagram.com/p/{share_item.code}/"
         if share_item.caption:
-            external_url = f"https://www.instagram.com/p/{share_item.code}/"
-            body = (
+            caption_body = (
                 f"> {share_item.caption.user.username}: {share_item.caption.text}\n\n"
                 f"{external_url}"
             )
-            formatted_body = (
+            caption_formatted_body = (
                 f"<blockquote><strong>{share_item.caption.user.username}</strong>"
                 f" {share_item.caption.text}</blockquote>"
                 f'<a href="{external_url}">instagram.com/p/{share_item.code}</a>'
             )
-            caption = TextMessageEventContent(
-                msgtype=MessageType.TEXT,
-                body=body,
-                formatted_body=formatted_body,
-                format=Format.HTML,
-                external_url=external_url,
+        else:
+            caption_body = external_url
+            caption_formatted_body = (
+                f'<a href="{external_url}">instagram.com/p/{share_item.code}</a>'
             )
-            await self._send_message(intent, caption, timestamp=item.timestamp // 1000)
+        caption = TextMessageEventContent(
+            msgtype=MessageType.TEXT,
+            body=caption_body,
+            formatted_body=caption_formatted_body,
+            format=Format.HTML,
+            external_url=external_url,
+        )
+        await self._send_message(intent, caption, timestamp=item.timestamp // 1000)
         return event_id
 
     async def _handle_instagram_reel_share(
