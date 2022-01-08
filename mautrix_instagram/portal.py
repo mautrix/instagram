@@ -787,6 +787,8 @@ class Portal(DBPortal, BasePortal):
             media_data = item.felix_share.video
         elif item.media_share:
             media_data = item.media_share
+        elif item.direct_media_share:
+            media_data = item.direct_media_share.media
         else:
             self.log.debug(f"Unknown media type in {item}")
             raise ValueError("Attachment not available: unsupported media type")
@@ -818,23 +820,25 @@ class Portal(DBPortal, BasePortal):
     async def _handle_instagram_media_share(
         self, source: u.User, intent: IntentAPI, item: ThreadItem
     ) -> EventID | None:
+        item_type_name = None
         if item.media_share:
             share_item = item.media_share
-            item_type_name = share_item.media_type.human_name
         elif item.clip:
             share_item = item.clip.clip
             item_type_name = "clip"
         elif item.felix_share and item.felix_share.video:
             share_item = item.felix_share.video
-            item_type_name = share_item.media_type.human_name
         elif item.story_share:
             share_item = item.story_share.media
             item_type_name = "story"
+        elif item.direct_media_share:
+            share_item = item.direct_media_share.media
         else:
             return None
+        item_type_name = item_type_name or share_item.media_type.human_name
         user_text = f"@{share_item.user.username}"
         user_link = (
-            f'<a href="https://www.instagram.com/{share_item.user.username}/">' f"{user_text}</a>"
+            f'<a href="https://www.instagram.com/{share_item.user.username}/">{user_text}</a>'
         )
         prefix = TextMessageEventContent(
             msgtype=MessageType.NOTICE,
@@ -842,6 +846,13 @@ class Portal(DBPortal, BasePortal):
             body=f"Sent {user_text}'s {item_type_name}",
             formatted_body=f"Sent {user_link}'s {item_type_name}",
         )
+        if item.direct_media_share and item.direct_media_share.media_share_type == "tag":
+            tagged_user_id = item.direct_media_share.tagged_user_id
+            if tagged_user_id == source.igpk and share_item.user.pk == self.other_user_pk:
+                prefix.body = prefix.formatted_body = "Tagged you in their post"
+            elif share_item.user.pk == source.igpk and tagged_user_id == self.other_user_pk:
+                prefix.body = prefix.formatted_body = "Tagged them in your post"
+
         await self._send_message(intent, prefix, timestamp=item.timestamp // 1000)
         event_id = await self._handle_instagram_media(source, intent, item)
         if share_item.caption:
@@ -1065,7 +1076,13 @@ class Portal(DBPortal, BasePortal):
                 event_id = await self._handle_instagram_profile(intent, item)
             elif item.reel_share:
                 event_id = await self._handle_instagram_reel_share(source, intent, item)
-            elif item.media_share or item.story_share or item.clip or item.felix_share:
+            elif (
+                item.media_share
+                or item.direct_media_share
+                or item.story_share
+                or item.clip
+                or item.felix_share
+            ):
                 event_id = await self._handle_instagram_media_share(source, intent, item)
             elif item.action_log:
                 # These probably don't need to be bridged

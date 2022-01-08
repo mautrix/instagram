@@ -234,6 +234,19 @@ class CarouselMediaItem(RegularMediaItem, SerializableAttrs):
     pk: int
 
 
+@dataclass
+class UserTag(SerializableAttrs):
+    user: BaseResponseUser
+    position: List[float]
+    #start_time_in_video_in_sec
+    #duration_in_video_in_sec
+
+
+@dataclass
+class UserTags(SerializableAttrs):
+    in_: List[UserTag] = attr.ib(metadata={"json": "in"}, factory=lambda: [])
+
+
 @dataclass(kw_only=True)
 class MediaShareItem(RegularMediaItem, SerializableAttrs):
     taken_at: int
@@ -256,6 +269,7 @@ class MediaShareItem(RegularMediaItem, SerializableAttrs):
     like_count: int = 0
     has_liked: bool = False
     photo_of_you: bool = False
+    usertags: Optional[UserTags] = None
     caption: Optional[Caption] = None
     can_viewer_save: bool = True
     location: Optional[Location] = None
@@ -459,6 +473,15 @@ class StoryShareItem(SerializableAttrs):
 
 
 @dataclass
+class DirectMediaShareItem(SerializableAttrs):
+    text: str
+    # TODO enum?
+    media_share_type: str  # tag
+    tagged_user_id: int
+    media: MediaShareItem
+
+
+@dataclass
 class ClipItem(SerializableAttrs):
     # TODO there are some additional fields in clips
     clip: MediaShareItem
@@ -495,6 +518,7 @@ class ThreadItem(SerializableAttrs):
     animated_media: Optional[AnimatedMediaItem] = None
     visual_media: Optional[VisualMedia] = None
     media_share: Optional[MediaShareItem] = None
+    direct_media_share: Optional[DirectMediaShareItem] = None
     reel_share: Optional[ReelShareItem] = None
     story_share: Optional[StoryShareItem] = None
     location: Optional[Location] = None
