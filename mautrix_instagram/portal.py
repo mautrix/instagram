@@ -687,7 +687,7 @@ class Portal(DBPortal, BasePortal):
     ) -> MediaMessageEventContent:
         async def convert_to_ogg(data, mimetype):
             converted = await ffmpeg.convert_bytes(
-                data, ".ogg", output_args=("-c:a", "libvorbis"), input_mime=mimetype
+                data, ".ogg", output_args=("-c:a", "libopus"), input_mime=mimetype
             )
             return converted, "audio/ogg"
 
