@@ -57,7 +57,7 @@ class Reaction:
             "WHERE ig_item_id=$4 AND ig_receiver=$5 AND ig_sender=$6"
         )
         await self.db.execute(
-            mxid, mx_room, reaction, self.ig_item_id, self.ig_receiver, self.ig_sender
+            q, mxid, mx_room, reaction, self.ig_item_id, self.ig_receiver, self.ig_sender
         )
 
     async def delete(self) -> None:
@@ -77,10 +77,7 @@ class Reaction:
 
     @classmethod
     async def get_by_item_id(
-        cls,
-        ig_item_id: str,
-        ig_receiver: int,
-        ig_sender: int,
+        cls, ig_item_id: str, ig_receiver: int, ig_sender: int
     ) -> Reaction | None:
         q = (
             "SELECT mxid, mx_room, ig_item_id, ig_receiver, ig_sender, reaction "

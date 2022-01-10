@@ -47,11 +47,7 @@ class Puppet:
     base_url: URL | None
 
     @property
-    def _base_url_str(self) -> str | None:
-        return str(self.base_url) if self.base_url else None
-
-    @property
-    def _fields(self):
+    def _values(self):
         return (
             self.pk,
             self.name,
@@ -64,7 +60,7 @@ class Puppet:
             self.custom_mxid,
             self.access_token,
             self.next_batch,
-            self._base_url_str,
+            str(self.base_url) if self.base_url else None,
         )
 
     async def insert(self) -> None:
@@ -73,7 +69,7 @@ class Puppet:
             "                    is_registered, custom_mxid, access_token, next_batch, base_url) "
             "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)"
         )
-        await self.db.execute(q, *self._fields)
+        await self.db.execute(q, *self._values)
 
     async def update(self) -> None:
         q = (
@@ -82,7 +78,7 @@ class Puppet:
             "                  next_batch=$11, base_url=$12 "
             "WHERE pk=$1"
         )
-        await self.db.execute(q, *self._fields)
+        await self.db.execute(q, *self._values)
 
     @classmethod
     def _from_row(cls, row: asyncpg.Record) -> Puppet:

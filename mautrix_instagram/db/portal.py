@@ -41,14 +41,9 @@ class Portal:
     avatar_set: bool
     relay_user_id: UserID | None
 
-    async def insert(self) -> None:
-        q = (
-            "INSERT INTO portal (thread_id, receiver, other_user_pk, mxid, name, avatar_url, "
-            "                    encrypted, name_set, avatar_set, relay_user_id) "
-            "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)"
-        )
-        await self.db.execute(
-            q,
+    @property
+    def _values(self):
+        return (
             self.thread_id,
             self.receiver,
             self.other_user_pk,
@@ -61,25 +56,21 @@ class Portal:
             self.relay_user_id,
         )
 
+    async def insert(self) -> None:
+        q = (
+            "INSERT INTO portal (thread_id, receiver, other_user_pk, mxid, name, avatar_url, "
+            "                    encrypted, name_set, avatar_set, relay_user_id) "
+            "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)"
+        )
+        await self.db.execute(q, *self._values)
+
     async def update(self) -> None:
         q = (
             "UPDATE portal SET other_user_pk=$3, mxid=$4, name=$5, avatar_url=$6, encrypted=$7,"
             "                  name_set=$8, avatar_set=$9, relay_user_id=$10 "
             "WHERE thread_id=$1 AND receiver=$2"
         )
-        await self.db.execute(
-            q,
-            self.thread_id,
-            self.receiver,
-            self.other_user_pk,
-            self.mxid,
-            self.name,
-            self.avatar_url,
-            self.encrypted,
-            self.name_set,
-            self.avatar_set,
-            self.relay_user_id,
-        )
+        await self.db.execute(q, *self._values)
 
     @classmethod
     def _from_row(cls, row: asyncpg.Record) -> Portal:
