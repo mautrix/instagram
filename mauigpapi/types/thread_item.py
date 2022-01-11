@@ -408,7 +408,7 @@ class LinkItem(SerializableAttrs):
     text: str
     link_context: LinkContext
     client_context: str
-    mutation_token: str
+    mutation_token: Optional[str]
 
 
 class ReelShareType(SerializableEnum):
