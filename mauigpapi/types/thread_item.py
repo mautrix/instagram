@@ -505,6 +505,7 @@ class ThreadItem(SerializableAttrs):
     user_id: Optional[int] = None
     timestamp: Optional[int] = None
     item_type: Optional[ThreadItemType] = None
+    is_sent_by_viewer: Optional[bool] = False
     is_shh_mode: bool = False
 
     text: Optional[str] = None
