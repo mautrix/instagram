@@ -105,11 +105,19 @@ class CreateModeAttribution(SerializableAttrs):
 
 
 @dataclass(kw_only=True)
+class FallbackMedia(SerializableAttrs):
+    url: str
+
+
+@dataclass(kw_only=True)
 class ImageVersion(SerializableAttrs):
     width: int
     height: int
     url: str
     estimated_scan_sizes: Optional[List[int]] = None
+    fallback: Optional[FallbackMedia] = None
+    url_expiration_timestamp_us: Optional[int] = None
+    scans_profile: Optional[str] = None
 
 
 @dataclass(kw_only=True)
@@ -123,7 +131,9 @@ class VideoVersion(SerializableAttrs):
     width: int
     height: int
     url: str
-    id: str
+    id: Optional[str] = None
+    url_expiration_timestamp_us: Optional[int] = None
+    fallback: Optional[FallbackMedia] = None
 
 
 class MediaType(SerializableEnum):
