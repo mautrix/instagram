@@ -28,6 +28,8 @@ from ..types import (
     ThreadItemType,
 )
 from .base import BaseAndroidAPI, T
+from ..errors import IGRateLimitError
+from asyncio import sleep
 
 
 class ThreadAPI(BaseAndroidAPI):
@@ -90,9 +92,13 @@ class ThreadAPI(BaseAndroidAPI):
             "seq_id": seq_id,
             "limit": limit,
         }
-        return await self.std_http_get(
-            f"/api/v1/direct_v2/threads/{thread_id}/", query=query, response_type=DMThreadResponse
-        )
+        for _ in range(15):
+            try:
+                return await self.std_http_get(
+                    f"/api/v1/direct_v2/threads/{thread_id}/", query=query, response_type=DMThreadResponse
+                )
+            except IGRateLimitError as e:
+                await sleep(300)
 
     async def iter_thread(
         self, thread_id: str, seq_id: int | None = None, cursor: str | None = None
