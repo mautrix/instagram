@@ -287,12 +287,12 @@ class Portal(DBPortal, BasePortal):
         width: int | None = None,
         height: int | None = None,
     ) -> CommandResponse:
-        if mime_type not in ("image/jpeg", "image/webp"):
+        if mime_type != "image/jpeg":
             with BytesIO(data) as inp, BytesIO() as out:
                 img = Image.open(inp)
-                img.convert("RGBA").save(out, format="WEBP")
+                img.convert("RGB").save(out, format="JPEG", quality=80)
                 data = out.getvalue()
-                mime_type = "image/webp"
+                mime_type = "image/jpeg"
 
         self.log.trace(f"Uploading photo from {event_id} (mime: {mime_type})")
         upload_resp = await sender.client.upload_photo(
@@ -304,7 +304,7 @@ class Portal(DBPortal, BasePortal):
             ThreadItemType.CONFIGURE_PHOTO,
             client_context=request_id,
             upload_id=upload_resp.upload_id,
-            allow_full_aspect_ratio="1",
+            allow_full_aspect_ratio="true",
         )
 
     async def _handle_matrix_video(
