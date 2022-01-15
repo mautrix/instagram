@@ -3,6 +3,8 @@
 [![License](https://img.shields.io/github/license/mautrix/instagram.svg)](LICENSE)
 [![Release](https://img.shields.io/github/release/mautrix/instagram/all.svg)](https://github.com/mautrix/instagram/releases)
 [![GitLab CI](https://mau.dev/mautrix/instagram/badges/master/pipeline.svg)](https://mau.dev/mautrix/instagram/container_registry)
+[![Code style](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
+[![Imports](https://img.shields.io/badge/%20imports-isort-%231674b1?style=flat&labelColor=ef8336)](https://pycqa.github.io/isort/)
 
 A Matrix-Instagram DM puppeting bridge.
 
