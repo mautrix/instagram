@@ -488,6 +488,10 @@ class Portal(DBPortal, BasePortal):
             await self._handle_matrix_reaction(sender, event_id, reacting_to, emoji)
         except Exception as e:
             self.log.exception(f"Fatal error handling Matrix event {event_id}: {e}")
+            message = "Fatal error handling reaction (see logs for more details)"
+            if isinstance(e, NotImplementedError):
+                message = None
+
             await self._send_bridge_error(
                 sender,
                 e,
@@ -495,7 +499,7 @@ class Portal(DBPortal, BasePortal):
                 EventType.REACTION,
                 status=self._status_from_exception(e),
                 confirmed=True,
-                msg="Fatal error handling reaction (see logs for more details)",
+                msg=message,
             )
 
     async def _handle_matrix_reaction(
@@ -528,6 +532,13 @@ class Portal(DBPortal, BasePortal):
                     self.thread_id, item_id=message.item_id, emoji=emoji
                 )
                 if resp.status != "ok":
+                    if resp.payload.message == "invalid unicode emoji":
+                        # Instagram doesn't support this reaction. Notify the user, and redact it
+                        # so that it doesn't get confusing.
+                        await self.main_intent.redact(
+                            self.mxid, event_id, reason="Unsupported emoji"
+                        )
+                        raise NotImplementedError(f"Instagram does not support the {emoji} emoji.")
                     raise Exception(f"Failed to react to {event_id}: {resp}")
             except Exception as e:
                 self.log.exception(f"Failed to handle {event_id}: {e}")
