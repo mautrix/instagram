@@ -101,7 +101,9 @@ MediaUploadFunc = Callable[["u.User", MediaData, IntentAPI], Awaitable[MediaMess
 # This doesn't need to capture all valid URLs, it's enough to catch most of them.
 # False negatives simply mean the link won't be linkified on Instagram,
 # but false positives will cause the message to fail to send.
-SIMPLE_URL_REGEX = re.compile(r"(?P<url>https?://[\da-z.-]+\.[a-z]{2,}(?:/[^\s]*)?)", flags=re.IGNORECASE)
+SIMPLE_URL_REGEX = re.compile(
+    r"(?P<url>https?://[\da-z.-]+\.[a-z]{2,}(?:/[^\s]*)?)", flags=re.IGNORECASE
+)
 
 
 class Portal(DBPortal, BasePortal):
