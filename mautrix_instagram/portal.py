@@ -21,6 +21,7 @@ from io import BytesIO
 import asyncio
 import json
 import mimetypes
+import re
 
 import asyncpg
 import magic
@@ -96,6 +97,11 @@ MediaData = Union[
     VoiceMediaItem,
 ]
 MediaUploadFunc = Callable[["u.User", MediaData, IntentAPI], Awaitable[MediaMessageEventContent]]
+
+# This doesn't need to capture all valid URLs, it's enough to catch most of them.
+# False negatives simply mean the link won't be linkified on Instagram,
+# but false positives will cause the message to fail to send.
+SIMPLE_URL_REGEX = re.compile(r"(?P<url>https?://[\da-z.-]+\.[a-z]{2,}(?:/[^\s]*)?)", flags=re.IGNORECASE)
 
 
 class Portal(DBPortal, BasePortal):
@@ -396,8 +402,9 @@ class Portal(DBPortal, BasePortal):
             if message.msgtype == MessageType.EMOTE:
                 text = f"/me {text}"
             self.log.trace(f"Sending Matrix text from {event_id} with request ID {request_id}")
+            urls = SIMPLE_URL_REGEX.findall(text) or None
             resp = await sender.mqtt.send_text(
-                self.thread_id, text=text, client_context=request_id, **reply_to
+                self.thread_id, text=text, urls=urls, client_context=request_id, **reply_to
             )
         elif message.msgtype.is_media:
             if message.file and decrypt_attachment:
@@ -1069,6 +1076,8 @@ class Portal(DBPortal, BasePortal):
     async def _handle_instagram_item(
         self, source: u.User, sender: p.Puppet, item: ThreadItem, is_backfill: bool = False
     ) -> None:
+        if not item.client_context and item.link and item.link.client_context:
+            item.client_context = item.link.client_context
         if not isinstance(item, ThreadItem):
             # Parsing these items failed, they should have been logged already
             return

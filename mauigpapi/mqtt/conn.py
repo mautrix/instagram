@@ -764,16 +764,27 @@ class AndroidMQTT:
         self,
         thread_id: str,
         text: str = "",
+        urls: list[str] | None = None,
         shh_mode: bool = False,
         client_context: str | None = None,
         replied_to_item_id: str | None = None,
         replied_to_client_context: str | None = None,
     ) -> Awaitable[CommandResponse]:
+        args = {
+            "text": text,
+        }
+        item_type = ThreadItemType.TEXT
+        if urls is not None:
+            args = {
+                "link_text": text,
+                "link_urls": json.dumps(urls or []),
+            }
+            item_type = ThreadItemType.LINK
         return self.send_item(
             thread_id,
-            text=text,
+            **args,
             shh_mode=shh_mode,
-            item_type=ThreadItemType.TEXT,
+            item_type=item_type,
             client_context=client_context,
             replied_to_item_id=replied_to_item_id,
             replied_to_client_context=replied_to_client_context,
