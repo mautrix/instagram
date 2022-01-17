@@ -766,6 +766,8 @@ class AndroidMQTT:
         text: str = "",
         shh_mode: bool = False,
         client_context: str | None = None,
+        replied_to_item_id: str | None = None,
+        replied_to_client_context: str | None = None,
     ) -> Awaitable[CommandResponse]:
         return self.send_item(
             thread_id,
@@ -773,6 +775,8 @@ class AndroidMQTT:
             shh_mode=shh_mode,
             item_type=ThreadItemType.TEXT,
             client_context=client_context,
+            replied_to_item_id=replied_to_item_id,
+            replied_to_client_context=replied_to_client_context,
         )
 
     def mark_seen(

@@ -376,6 +376,15 @@ class Portal(DBPortal, BasePortal):
         if is_relay:
             await self.apply_relay_message_format(orig_sender, message)
 
+        reply_to = {}
+        if message.get_reply_to():
+            msg = await DBMessage.get_by_mxid(message.get_reply_to(), self.mxid)
+            if msg and msg.client_context:
+                reply_to = {
+                    "replied_to_item_id": msg.item_id,
+                    "replied_to_client_context": msg.client_context,
+                }
+
         request_id = sender.state.gen_client_context()
         self._reqid_dedup.add(request_id)
         self.log.debug(
@@ -388,7 +397,7 @@ class Portal(DBPortal, BasePortal):
                 text = f"/me {text}"
             self.log.trace(f"Sending Matrix text from {event_id} with request ID {request_id}")
             resp = await sender.mqtt.send_text(
-                self.thread_id, text=text, client_context=request_id
+                self.thread_id, text=text, client_context=request_id, **reply_to
             )
         elif message.msgtype.is_media:
             if message.file and decrypt_attachment:
@@ -457,6 +466,7 @@ class Portal(DBPortal, BasePortal):
                     mxid=event_id,
                     mx_room=self.mxid,
                     item_id=resp.payload.item_id,
+                    client_context=resp.payload.client_context,
                     receiver=self.receiver,
                     sender=sender.igpk,
                 ).insert()
@@ -938,6 +948,7 @@ class Portal(DBPortal, BasePortal):
                     mxid=media_event_id,
                     mx_room=self.mxid,
                     item_id=fake_item_id,
+                    client_context=None,
                     receiver=self.receiver,
                     sender=media.user.pk,
                 ).insert()
@@ -1118,6 +1129,7 @@ class Portal(DBPortal, BasePortal):
                 mxid=event_id,
                 mx_room=self.mxid,
                 item_id=item.item_id,
+                client_context=item.client_context,
                 receiver=self.receiver,
                 sender=sender.pk,
             )

@@ -9,7 +9,7 @@
       * [x] Voice messages
       * [ ] Locations
       * [ ] †Files
-    * [ ] Replies
+    * [x] Replies
   * [x] Message redactions
   * [x] Message reactions
   * [ ] Presence

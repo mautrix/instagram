@@ -105,3 +105,8 @@ async def upgrade_v2(conn: Connection) -> None:
 @upgrade_table.register(description="Add relay user field to portal table")
 async def upgrade_v3(conn: Connection) -> None:
     await conn.execute("ALTER TABLE portal ADD COLUMN relay_user_id TEXT")
+
+
+@upgrade_table.register(description="Add client context field to message table")
+async def upgrade_v4(conn: Connection) -> None:
+    await conn.execute("ALTER TABLE message ADD COLUMN client_context TEXT")

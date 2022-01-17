@@ -32,15 +32,24 @@ class Message:
     mxid: EventID
     mx_room: RoomID
     item_id: str
+    client_context: str | None
     receiver: int
     sender: int
 
     async def insert(self) -> None:
         q = (
-            "INSERT INTO message (mxid, mx_room, item_id, receiver, sender) "
-            "VALUES ($1, $2, $3, $4, $5)"
+            "INSERT INTO message (mxid, mx_room, item_id, client_context, receiver, sender) "
+            "VALUES ($1, $2, $3, $4, $5, $6)"
         )
-        await self.db.execute(q, self.mxid, self.mx_room, self.item_id, self.receiver, self.sender)
+        await self.db.execute(
+            q,
+            self.mxid,
+            self.mx_room,
+            self.item_id,
+            self.client_context,
+            self.receiver,
+            self.sender,
+        )
 
     async def delete(self) -> None:
         q = "DELETE FROM message WHERE item_id=$1 AND receiver=$2"
@@ -53,7 +62,7 @@ class Message:
     @classmethod
     async def get_by_mxid(cls, mxid: EventID, mx_room: RoomID) -> Message | None:
         q = (
-            "SELECT mxid, mx_room, item_id, receiver, sender "
+            "SELECT mxid, mx_room, item_id, client_context, receiver, sender "
             "FROM message WHERE mxid=$1 AND mx_room=$2"
         )
         row = await cls.db.fetchrow(q, mxid, mx_room)
@@ -64,7 +73,7 @@ class Message:
     @classmethod
     async def get_by_item_id(cls, item_id: str, receiver: int) -> Message | None:
         q = (
-            "SELECT mxid, mx_room, item_id, receiver, sender "
+            "SELECT mxid, mx_room, item_id, client_context, receiver, sender "
             "FROM message WHERE item_id=$1 AND receiver=$2"
         )
         row = await cls.db.fetchrow(q, item_id, receiver)
