@@ -296,6 +296,11 @@ class Portal(DBPortal, BasePortal):
         height: int | None = None,
     ) -> CommandResponse:
         if mime_type != "image/jpeg":
+            if Image is None:
+                raise NotImplementedError(
+                    "Instagram does not allow non-JPEG images, and Pillow is not installed, "
+                    "so the bridge couldn't convert the image automatically"
+                )
             with BytesIO(data) as inp, BytesIO() as out:
                 img = Image.open(inp)
                 img.convert("RGB").save(out, format="JPEG", quality=80)
