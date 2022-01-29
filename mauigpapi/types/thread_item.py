@@ -123,7 +123,7 @@ class VideoVersion(SerializableAttrs):
     width: int
     height: int
     url: str
-    id: str
+    id: Optional[str] = None
 
 
 class MediaType(SerializableEnum):
