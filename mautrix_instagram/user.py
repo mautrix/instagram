@@ -167,6 +167,7 @@ class User(DBUser, BaseUser):
         self._is_logged_in = True
         self.igpk = resp.user.pk
         self.username = resp.user.username
+        await self.push_bridge_state(BridgeStateEvent.CONNECTING)
         self._track_metric(METRIC_LOGGED_IN, True)
         self.by_igpk[self.igpk] = self
 
