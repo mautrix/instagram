@@ -72,9 +72,9 @@ class AndroidDevice(SerializableAttrs):
 
     def generate(self, seed: Union[str, bytes]) -> None:
         rand = random.Random(seed)
+        self.phone_id = str(UUID(int=rand.getrandbits(128), version=4))
+        self.adid = str(UUID(int=rand.getrandbits(128), version=4))
         self.id = f"android-{''.join(rand.choices(string.hexdigits, k=16))}"
         self.descriptor = rand.choice(descriptors)
         self.uuid = str(UUID(int=rand.getrandbits(128), version=4))
-        self.phone_id = str(UUID(int=rand.getrandbits(128), version=4))
-        self.adid = str(UUID(int=rand.getrandbits(128), version=4))
         self.build = rand.choice(builds)

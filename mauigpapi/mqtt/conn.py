@@ -175,7 +175,7 @@ class AndroidMQTT:
                 no_automatic_foreground=True,
                 make_user_available_in_foreground=False,
                 device_id=self.state.device.phone_id,
-                is_initially_foreground=True,
+                is_initially_foreground=False,
                 network_type=1,
                 network_subtype=0,
                 client_mqtt_session_id=int(time.time() * 1000) & 0xFFFFFFFF,
