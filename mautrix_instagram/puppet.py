@@ -217,8 +217,8 @@ class Puppet(DBPuppet, BasePuppet):
         return cls.mxid_template.parse(mxid)
 
     @classmethod
-    def get_mxid_from_id(cls, twid: int) -> UserID:
-        return UserID(cls.mxid_template.format_full(twid))
+    def get_mxid_from_id(cls, igid: int) -> UserID:
+        return UserID(cls.mxid_template.format_full(igid))
 
     @classmethod
     @async_getter_lock
