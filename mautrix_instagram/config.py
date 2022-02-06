@@ -47,8 +47,6 @@ class Config(BaseBridgeConfig):
 
         copy("homeserver.asmux")
 
-        copy("appservice.community_id")
-
         copy("metrics.enabled")
         copy("metrics.listen_port")
 

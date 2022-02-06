@@ -1497,13 +1497,6 @@ class Portal(DBPortal, BasePortal):
                 invites.append(self.az.bot_mxid)
         if self.encrypted or self.private_chat_portal_meta or not self.is_direct:
             name = self.name
-        if self.config["appservice.community_id"]:
-            initial_state.append(
-                {
-                    "type": "m.room.related_groups",
-                    "content": {"groups": [self.config["appservice.community_id"]]},
-                }
-            )
 
         # We lock backfill lock here so any messages that come between the room being created
         # and the initial backfill finishing wouldn't be bridged before the backfill messages.
