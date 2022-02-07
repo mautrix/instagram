@@ -1088,89 +1088,100 @@ class Portal(DBPortal, BasePortal):
         if not isinstance(item, ThreadItem):
             # Parsing these items failed, they should have been logged already
             return
-        elif item.client_context in self._reqid_dedup:
+
+        if item.client_context in self._reqid_dedup:
             self.log.debug(
                 f"Ignoring message {item.item_id} ({item.client_context}) by "
                 f"{item.user_id} as it was sent by us (client_context in dedup queue)"
             )
-        elif item.item_id in self._msgid_dedup:
+            return
+
+        if item.item_id in self._msgid_dedup:
             self.log.debug(
                 f"Ignoring message {item.item_id} ({item.client_context}) by "
                 f"{item.user_id} as it was already handled (message.id in dedup queue)"
             )
-        elif await DBMessage.get_by_item_id(item.item_id, self.receiver) is not None:
+            return
+        self._msgid_dedup.appendleft(item.item_id)
+
+        if await DBMessage.get_by_item_id(item.item_id, self.receiver) is not None:
             self.log.debug(
                 f"Ignoring message {item.item_id} ({item.client_context}) by "
                 f"{item.user_id} as it was already handled (message.id in database)"
             )
+            return
+
+        await self._handle_deduplicated_instagram_item(source, sender, item, is_backfill)
+
+    async def _handle_deduplicated_instagram_item(
+        self, source: u.User, sender: p.Puppet, item: ThreadItem, is_backfill: bool = False
+    ) -> None:
+        self.log.debug(
+            f"Starting handling of message {item.item_id} ({item.client_context}) "
+            f"by {item.user_id}"
+        )
+        if self.backfill_lock.locked and sender.need_backfill_invite(self):
+            self.log.debug("Adding %s's default puppet to room for backfilling", sender.mxid)
+            if self.is_direct:
+                await self.main_intent.invite_user(self.mxid, sender.default_mxid)
+            intent = sender.default_mxid_intent
+            await intent.ensure_joined(self.mxid)
+            self._backfill_leave.add(intent)
+        else:
+            intent = sender.intent_for(self)
+        event_id = None
+        if item.media or item.animated_media or item.voice_media or item.visual_media:
+            event_id = await self._handle_instagram_media(source, intent, item)
+        elif item.location:
+            event_id = await self._handle_instagram_location(intent, item)
+        elif item.profile:
+            event_id = await self._handle_instagram_profile(intent, item)
+        elif item.reel_share:
+            event_id = await self._handle_instagram_reel_share(source, intent, item)
+        elif (
+            item.media_share
+            or item.direct_media_share
+            or item.story_share
+            or item.clip
+            or item.felix_share
+        ):
+            event_id = await self._handle_instagram_media_share(source, intent, item)
+        elif item.action_log:
+            # These probably don't need to be bridged
+            self.log.debug(f"Ignoring action log message {item.item_id}")
+            return
+        # TODO handle item.clip?
+        if item.text:
+            event_id = await self._handle_instagram_text(intent, item, item.text)
+        elif item.like:
+            # We handle likes as text because Matrix clients do big emoji on their own.
+            event_id = await self._handle_instagram_text(intent, item, item.like)
+        elif item.link:
+            event_id = await self._handle_instagram_text(intent, item, item.link.text)
+        handled = bool(event_id)
+        if not event_id:
+            self.log.debug(f"Unhandled Instagram message {item.item_id}")
+            event_id = await self._send_instagram_unhandled(intent, item)
+
+        msg = DBMessage(
+            mxid=event_id,
+            mx_room=self.mxid,
+            item_id=item.item_id,
+            client_context=item.client_context,
+            receiver=self.receiver,
+            sender=sender.pk,
+        )
+        await msg.insert()
+        await self._send_delivery_receipt(event_id)
+        if handled:
+            self.log.debug(f"Handled Instagram message {item.item_id} -> {event_id}")
         else:
             self.log.debug(
-                f"Starting handling of message {item.item_id} ({item.client_context}) "
-                f"by {item.user_id}"
+                f"Unhandled Instagram message {item.item_id} "
+                f"(type {item.item_type} -> fallback error {event_id})"
             )
-            self._msgid_dedup.appendleft(item.item_id)
-            if self.backfill_lock.locked and sender.need_backfill_invite(self):
-                self.log.debug("Adding %s's default puppet to room for backfilling", sender.mxid)
-                if self.is_direct:
-                    await self.main_intent.invite_user(self.mxid, sender.default_mxid)
-                intent = sender.default_mxid_intent
-                await intent.ensure_joined(self.mxid)
-                self._backfill_leave.add(intent)
-            else:
-                intent = sender.intent_for(self)
-            event_id = None
-            if item.media or item.animated_media or item.voice_media or item.visual_media:
-                event_id = await self._handle_instagram_media(source, intent, item)
-            elif item.location:
-                event_id = await self._handle_instagram_location(intent, item)
-            elif item.profile:
-                event_id = await self._handle_instagram_profile(intent, item)
-            elif item.reel_share:
-                event_id = await self._handle_instagram_reel_share(source, intent, item)
-            elif (
-                item.media_share
-                or item.direct_media_share
-                or item.story_share
-                or item.clip
-                or item.felix_share
-            ):
-                event_id = await self._handle_instagram_media_share(source, intent, item)
-            elif item.action_log:
-                # These probably don't need to be bridged
-                self.log.debug(f"Ignoring action log message {item.item_id}")
-                return
-            # TODO handle item.clip?
-            if item.text:
-                event_id = await self._handle_instagram_text(intent, item, item.text)
-            elif item.like:
-                # We handle likes as text because Matrix clients do big emoji on their own.
-                event_id = await self._handle_instagram_text(intent, item, item.like)
-            elif item.link:
-                event_id = await self._handle_instagram_text(intent, item, item.link.text)
-            handled = bool(event_id)
-            if not event_id:
-                self.log.debug(f"Unhandled Instagram message {item.item_id}")
-                event_id = await self._send_instagram_unhandled(intent, item)
-
-            msg = DBMessage(
-                mxid=event_id,
-                mx_room=self.mxid,
-                item_id=item.item_id,
-                client_context=item.client_context,
-                receiver=self.receiver,
-                sender=sender.pk,
-            )
-            await msg.insert()
-            await self._send_delivery_receipt(event_id)
-            if handled:
-                self.log.debug(f"Handled Instagram message {item.item_id} -> {event_id}")
-            else:
-                self.log.debug(
-                    f"Unhandled Instagram message {item.item_id} "
-                    f"(type {item.item_type} -> fallback error {event_id})"
-                )
-            if is_backfill and item.reactions:
-                await self._handle_instagram_reactions(msg, item.reactions.emojis)
+        if is_backfill and item.reactions:
+            await self._handle_instagram_reactions(msg, item.reactions.emojis)
 
     async def handle_instagram_remove(self, item_id: str) -> None:
         message = await DBMessage.get_by_item_id(item_id, self.receiver)
