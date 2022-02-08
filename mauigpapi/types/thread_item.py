@@ -411,10 +411,11 @@ class LinkItem(SerializableAttrs):
     mutation_token: Optional[str] = None
 
 
-class ReelShareType(SerializableEnum):
+class ReelShareType(ExtensibleEnum):
     REPLY = "reply"
     REACTION = "reaction"
     MENTION = "mention"
+    REPLY_GIF = "reply_gif"
 
 
 @dataclass
