@@ -144,10 +144,12 @@ class ProvisioningAPI:
         except KeyError as e:
             raise self._missing_key_error(e)
 
+        self.log.debug("%s is attempting to log in as %s", user.mxid, username)
         api, state = await get_login_state(user, username, self.device_seed)
         try:
             resp = await api.login(username, password)
         except IGLoginTwoFactorRequiredError as e:
+            self.log.debug("%s logged in as %s, but needs 2-factor auth", user.mxid, username)
             return web.json_response(
                 data={
                     "status": "two-factor",
@@ -157,6 +159,7 @@ class ProvisioningAPI:
                 headers=self._acao_headers,
             )
         except IGCheckpointError as e:
+            self.log.debug("%s logged in as %s, but got a checkpoint", user.mxid, username)
             try:
                 await api.challenge_auto(reset=True)
             except Exception as e:
@@ -177,17 +180,20 @@ class ProvisioningAPI:
                 headers=self._acao_headers,
             )
         except IGLoginInvalidUserError:
+            self.log.debug("%s tried to log in as non-existent user %s", user.mxid, username)
             return web.json_response(
                 data={"error": "Invalid username", "status": "invalid-username"},
                 status=404,
                 headers=self._acao_headers,
             )
         except IGLoginBadPasswordError:
+            self.log.debug("%s tried to log in as %s with the wrong password", user.mxid, username)
             return web.json_response(
                 data={"error": "Incorrect password", "status": "incorrect-password"},
                 status=403,
                 headers=self._acao_headers,
             )
+        self.log.debug("%s finished login after password, trying to connect", user.mxid)
         return await self._finish_login(user, state, resp.logged_in_user)
 
     async def _get_user(
@@ -223,6 +229,7 @@ class ProvisioningAPI:
                 username, code=code, identifier=identifier, is_totp=is_totp
             )
         except IGBad2FACodeError:
+            self.log.debug("%s submitted an incorrect 2-factor auth code", user.mxid)
             return web.json_response(
                 data={
                     "error": "Incorrect 2-factor authentication code",
@@ -232,6 +239,7 @@ class ProvisioningAPI:
                 headers=self._acao_headers,
             )
         except IGCheckpointError as e:
+            self.log.debug("%s submitted a 2-factor auth code, but got a checkpoint", user.mxid)
             try:
                 await api.challenge_auto(reset=True)
             except Exception as e:
@@ -251,6 +259,7 @@ class ProvisioningAPI:
                 status=202,
                 headers=self._acao_headers,
             )
+        self.log.debug("%s finished login after 2-factor auth, trying to connect", user.mxid)
         return await self._finish_login(user, state, resp.logged_in_user)
 
     async def login_checkpoint(self, request: web.Request) -> web.Response:
@@ -266,6 +275,7 @@ class ProvisioningAPI:
         try:
             resp = await api.challenge_send_security_code(code=code)
         except IGChallengeWrongCodeError:
+            self.log.debug("%s submitted an incorrect checkpoint challenge code", user.mxid)
             return web.json_response(
                 data={
                     "error": "Incorrect challenge code",
@@ -274,6 +284,7 @@ class ProvisioningAPI:
                 status=403,
                 headers=self._acao_headers,
             )
+        self.log.debug("%s finished login after checkpoint, trying to connect", user.mxid)
         return await self._finish_login(user, state, resp.logged_in_user)
 
     async def _finish_login(
