@@ -35,11 +35,12 @@ class Message:
     client_context: str | None
     receiver: int
     sender: int
+    ig_timestamp: int
 
     async def insert(self) -> None:
         q = (
-            "INSERT INTO message (mxid, mx_room, item_id, client_context, receiver, sender) "
-            "VALUES ($1, $2, $3, $4, $5, $6)"
+            "INSERT INTO message (mxid, mx_room, item_id, client_context, receiver, sender, ig_timestamp) "
+            "VALUES ($1, $2, $3, $4, $5, $6, $7)"
         )
         await self.db.execute(
             q,
@@ -49,6 +50,7 @@ class Message:
             self.client_context,
             self.receiver,
             self.sender,
+            self.ig_timestamp,
         )
 
     async def delete(self) -> None:
@@ -62,7 +64,7 @@ class Message:
     @classmethod
     async def get_by_mxid(cls, mxid: EventID, mx_room: RoomID) -> Message | None:
         q = (
-            "SELECT mxid, mx_room, item_id, client_context, receiver, sender "
+            "SELECT mxid, mx_room, item_id, client_context, receiver, sender, ig_timestamp "
             "FROM message WHERE mxid=$1 AND mx_room=$2"
         )
         row = await cls.db.fetchrow(q, mxid, mx_room)
@@ -71,9 +73,21 @@ class Message:
         return cls(**row)
 
     @classmethod
+    async def get_last(cls, mx_room: RoomID) -> Message | None:
+        q = (
+            "SELECT mxid, mx_room, item_id, client_context, receiver, sender, ig_timestamp "
+            "FROM message WHERE mx_room=$1 AND item_id NOT LIKE 'fi.mau.instagram.%' "
+            "AND ig_timestamp IS NOT NULL ORDER BY ig_timestamp DESC LIMIT 1"
+        )
+        row = await cls.db.fetchrow(q, mx_room)
+        if not row:
+            return None
+        return cls(**row)
+
+    @classmethod
     async def get_by_item_id(cls, item_id: str, receiver: int) -> Message | None:
         q = (
-            "SELECT mxid, mx_room, item_id, client_context, receiver, sender "
+            "SELECT mxid, mx_room, item_id, client_context, receiver, sender, ig_timestamp "
             "FROM message WHERE item_id=$1 AND receiver=$2"
         )
         row = await cls.db.fetchrow(q, item_id, receiver)

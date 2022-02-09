@@ -123,6 +123,9 @@ class MatrixHandler(BaseMatrixHandler):
     ) -> None:
         message = await DBMessage.get_by_mxid(event_id, portal.mxid)
         if not message or message.is_internal:
+            # Message might actually be reaction - mark all as read
+            message = await DBMessage.get_last(portal.mxid)
+        if not message:
             return
         user.log.debug(f"Marking {message.item_id} in {portal.thread_id} as read")
         await user.mqtt.mark_seen(portal.thread_id, message.item_id)

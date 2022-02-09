@@ -483,6 +483,7 @@ class Portal(DBPortal, BasePortal):
                     client_context=resp.payload.client_context,
                     receiver=self.receiver,
                     sender=sender.igpk,
+                    ig_timestamp=int(resp.payload.timestamp),
                 ).insert()
             except asyncpg.UniqueViolationError as e:
                 self.log.warning(
@@ -976,6 +977,7 @@ class Portal(DBPortal, BasePortal):
                     client_context=None,
                     receiver=self.receiver,
                     sender=media.user.pk,
+                    ig_timestamp=None,
                 ).insert()
         return await self._send_message(intent, content, timestamp=item.timestamp // 1000)
 
@@ -1170,6 +1172,7 @@ class Portal(DBPortal, BasePortal):
             client_context=item.client_context,
             receiver=self.receiver,
             sender=sender.pk,
+            ig_timestamp=item.timestamp,
         )
         await msg.insert()
         await self._send_delivery_receipt(event_id)
