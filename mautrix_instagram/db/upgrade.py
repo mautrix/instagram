@@ -110,3 +110,8 @@ async def upgrade_v3(conn: Connection) -> None:
 @upgrade_table.register(description="Add client context field to message table")
 async def upgrade_v4(conn: Connection) -> None:
     await conn.execute("ALTER TABLE message ADD COLUMN client_context TEXT")
+
+
+@upgrade_table.register(description="Add ig_timestamp field to message table")
+async def upgrade_v5(conn: Connection) -> None:
+    await conn.execute("ALTER TABLE message ADD COLUMN ig_timestamp BIGINT")
