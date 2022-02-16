@@ -115,3 +115,8 @@ async def upgrade_v4(conn: Connection) -> None:
 @upgrade_table.register(description="Add ig_timestamp field to message table")
 async def upgrade_v5(conn: Connection) -> None:
     await conn.execute("ALTER TABLE message ADD COLUMN ig_timestamp BIGINT")
+
+
+@upgrade_table.register(description="Allow hidden events in message table")
+async def upgrade_v6(conn: Connection) -> None:
+    await conn.execute("ALTER TABLE message ALTER COLUMN mxid DROP NOT NULL")

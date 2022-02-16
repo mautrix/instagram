@@ -1132,6 +1132,7 @@ class Portal(DBPortal, BasePortal):
         else:
             intent = sender.intent_for(self)
         event_id = None
+        needs_handling = True
         if item.media or item.animated_media or item.voice_media or item.visual_media:
             event_id = await self._handle_instagram_media(source, intent, item)
         elif item.location:
@@ -1150,8 +1151,8 @@ class Portal(DBPortal, BasePortal):
             event_id = await self._handle_instagram_media_share(source, intent, item)
         elif item.action_log:
             # These probably don't need to be bridged
+            needs_handling = False
             self.log.debug(f"Ignoring action log message {item.item_id}")
-            return
         # TODO handle item.clip?
         if item.text:
             event_id = await self._handle_instagram_text(intent, item, item.text)
@@ -1161,7 +1162,7 @@ class Portal(DBPortal, BasePortal):
         elif item.link:
             event_id = await self._handle_instagram_text(intent, item, item.link.text)
         handled = bool(event_id)
-        if not event_id:
+        if not event_id and needs_handling:
             self.log.debug(f"Unhandled Instagram message {item.item_id}")
             event_id = await self._send_instagram_unhandled(intent, item)
 
@@ -1178,7 +1179,7 @@ class Portal(DBPortal, BasePortal):
         await self._send_delivery_receipt(event_id)
         if handled:
             self.log.debug(f"Handled Instagram message {item.item_id} -> {event_id}")
-        else:
+        elif needs_handling:
             self.log.debug(
                 f"Unhandled Instagram message {item.item_id} "
                 f"(type {item.item_type} -> fallback error {event_id})"
