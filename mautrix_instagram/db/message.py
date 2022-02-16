@@ -35,13 +35,14 @@ class Message:
     client_context: str | None
     receiver: int
     sender: int
-    ig_timestamp: int
+    ig_timestamp: int | None
 
     async def insert(self) -> None:
-        q = (
-            "INSERT INTO message (mxid, mx_room, item_id, client_context, receiver, sender, ig_timestamp) "
-            "VALUES ($1, $2, $3, $4, $5, $6, $7)"
-        )
+        q = """
+            INSERT INTO message (mxid, mx_room, item_id, client_context, receiver, sender,
+                                 ig_timestamp)
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
+        """
         await self.db.execute(
             q,
             self.mxid,
