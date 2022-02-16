@@ -30,6 +30,7 @@ from mauigpapi.types import (
     AnimatedMediaItem,
     CommandResponse,
     ExpiredMediaItem,
+    LinkContext,
     MediaShareItem,
     MediaType,
     MessageSyncMessage,
@@ -744,7 +745,7 @@ class Portal(DBPortal, BasePortal):
         self,
         source: u.User,
         url: str,
-        msgtype: MessageType,
+        msgtype: MessageType | None,
         info: ImageInfo | VideoInfo | AudioInfo,
         intent: IntentAPI,
         convert_fn: Callable[[bytes, str], Awaitable[tuple[bytes, str]]] | None = None,
@@ -780,7 +781,7 @@ class Portal(DBPortal, BasePortal):
             "audio/ogg": ".ogg",
         }.get(info.mimetype)
         extension = extension or mimetypes.guess_extension(info.mimetype) or ""
-        file_name = f"{msgtype.value[2:]}{extension}"
+        file_name = f"{msgtype.value[2:]}{extension}" if msgtype else None
 
         upload_mime_type = info.mimetype
         upload_file_name = file_name
@@ -981,6 +982,34 @@ class Portal(DBPortal, BasePortal):
                 ).insert()
         return await self._send_message(intent, content, timestamp=item.timestamp // 1000)
 
+    async def _handle_instagram_link(
+        self,
+        source: u.User,
+        intent: IntentAPI,
+        item: ThreadItem,
+    ) -> EventID:
+        content = TextMessageEventContent(msgtype=MessageType.TEXT, body=item.link.text)
+        link = item.link.link_context
+        preview = {
+            "og:url": link.link_url,
+            "og:title": link.link_title,
+            "og:description": link.link_summary,
+        }
+        if link.link_image_url:
+            reuploaded = await self._reupload_instagram_file(
+                source, link.link_image_url, msgtype=None, info=ImageInfo(), intent=intent
+            )
+            preview["og:image"] = reuploaded.url
+            preview["og:image:type"] = reuploaded.info.mimetype
+            preview["og:image:width"] = reuploaded.info.width
+            preview["og:image:height"] = reuploaded.info.height
+            preview["matrix:image:size"] = reuploaded.info.size
+            if reuploaded.file:
+                preview["beeper:image:encryption"] = reuploaded.file.serialize()
+        content["com.beeper.linkpreviews"] = [{k: v for k, v in preview.items() if v is not None}]
+        await self._add_instagram_reply(content, item.replied_to_message)
+        return await self._send_message(intent, content, timestamp=item.timestamp // 1000)
+
     async def _handle_instagram_text(
         self, intent: IntentAPI, item: ThreadItem, text: str
     ) -> EventID:
@@ -1160,7 +1189,7 @@ class Portal(DBPortal, BasePortal):
             # We handle likes as text because Matrix clients do big emoji on their own.
             event_id = await self._handle_instagram_text(intent, item, item.like)
         elif item.link:
-            event_id = await self._handle_instagram_text(intent, item, item.link.text)
+            event_id = await self._handle_instagram_link(source, intent, item)
         handled = bool(event_id)
         if not event_id and needs_handling:
             self.log.debug(f"Unhandled Instagram message {item.item_id}")
