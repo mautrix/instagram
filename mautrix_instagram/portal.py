@@ -474,8 +474,8 @@ class Portal(DBPortal, BasePortal):
                 event_type=EventType.ROOM_MESSAGE,
                 message_type=message.msgtype,
             )
-            await self._send_delivery_receipt(event_id)
             self._msgid_dedup.appendleft(resp.payload.item_id)
+            await self._send_delivery_receipt(event_id)
             try:
                 await DBMessage(
                     mxid=event_id,
@@ -1114,43 +1114,52 @@ class Portal(DBPortal, BasePortal):
     async def _handle_instagram_item(
         self, source: u.User, sender: p.Puppet, item: ThreadItem, is_backfill: bool = False
     ) -> None:
-        if not item.client_context and item.link and item.link.client_context:
-            item.client_context = item.link.client_context
         if not isinstance(item, ThreadItem):
             # Parsing these items failed, they should have been logged already
             return
 
-        if item.client_context in self._reqid_dedup:
+        client_context = item.client_context
+        link_client_context = item.link.client_context if item.link else None
+        cc = client_context
+        if link_client_context:
+            if not client_context:
+                cc = f"link:{link_client_context}"
+            elif client_context != link_client_context:
+                cc = f"{client_context}/link:{link_client_context}"
+        if client_context and client_context in self._reqid_dedup:
             self.log.debug(
-                f"Ignoring message {item.item_id} ({item.client_context}) by "
-                f"{item.user_id} as it was sent by us (client_context in dedup queue)"
+                f"Ignoring message {item.item_id} ({cc}) by {item.user_id}"
+                " as it was sent by us (client_context in dedup queue)"
+            )
+            return
+        elif link_client_context and link_client_context in self._reqid_dedup:
+            self.log.debug(
+                f"Ignoring message {item.item_id} ({cc}) by {item.user_id}"
+                " as it was sent by us (link.client_context in dedup queue)"
             )
             return
 
         if item.item_id in self._msgid_dedup:
             self.log.debug(
-                f"Ignoring message {item.item_id} ({item.client_context}) by "
-                f"{item.user_id} as it was already handled (message.id in dedup queue)"
+                f"Ignoring message {item.item_id} ({cc}) by {item.user_id}"
+                " as it was already handled (message.id in dedup queue)"
             )
             return
         self._msgid_dedup.appendleft(item.item_id)
 
         if await DBMessage.get_by_item_id(item.item_id, self.receiver) is not None:
             self.log.debug(
-                f"Ignoring message {item.item_id} ({item.client_context}) by "
-                f"{item.user_id} as it was already handled (message.id in database)"
+                f"Ignoring message {item.item_id} ({cc}) by {item.user_id}"
+                " as it was already handled (message.id in database)"
             )
             return
 
+        self.log.debug(f"Starting handling of message {item.item_id} ({cc}) by {item.user_id}")
         await self._handle_deduplicated_instagram_item(source, sender, item, is_backfill)
 
     async def _handle_deduplicated_instagram_item(
         self, source: u.User, sender: p.Puppet, item: ThreadItem, is_backfill: bool = False
     ) -> None:
-        self.log.debug(
-            f"Starting handling of message {item.item_id} ({item.client_context}) "
-            f"by {item.user_id}"
-        )
         if self.backfill_lock.locked and sender.need_backfill_invite(self):
             self.log.debug("Adding %s's default puppet to room for backfilling", sender.mxid)
             if self.is_direct:
@@ -1195,11 +1204,14 @@ class Portal(DBPortal, BasePortal):
             self.log.debug(f"Unhandled Instagram message {item.item_id}")
             event_id = await self._send_instagram_unhandled(intent, item)
 
+        cc = item.client_context
+        if not cc and item.link.client_context:
+            cc = item.link.client_context
         msg = DBMessage(
             mxid=event_id,
             mx_room=self.mxid,
             item_id=item.item_id,
-            client_context=item.client_context,
+            client_context=cc,
             receiver=self.receiver,
             sender=sender.pk,
             ig_timestamp=item.timestamp,
