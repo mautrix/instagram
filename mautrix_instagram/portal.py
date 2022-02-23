@@ -411,6 +411,10 @@ class Portal(DBPortal, BasePortal):
                 text = f"/me {text}"
             self.log.trace(f"Sending Matrix text from {event_id} with request ID {request_id}")
             urls = SIMPLE_URL_REGEX.findall(text) or None
+            if not self.is_direct:
+                # Instagram groups don't seem to support sending link previews,
+                # and the client_context-based deduplication breaks when trying to send them.
+                urls = None
             resp = await sender.mqtt.send_text(
                 self.thread_id, text=text, urls=urls, client_context=request_id, **reply_to
             )
@@ -1006,7 +1010,9 @@ class Portal(DBPortal, BasePortal):
             preview["matrix:image:size"] = reuploaded.info.size
             if reuploaded.file:
                 preview["beeper:image:encryption"] = reuploaded.file.serialize()
-        content["com.beeper.linkpreviews"] = [{k: v for k, v in preview.items() if v is not None}]
+        preview = {k: v for k, v in preview.items() if v}
+        if "og:title" in preview:
+            content["com.beeper.linkpreviews"] = []
         await self._add_instagram_reply(content, item.replied_to_message)
         return await self._send_message(intent, content, timestamp=item.timestamp // 1000)
 
