@@ -1211,7 +1211,7 @@ class Portal(DBPortal, BasePortal):
             event_id = await self._send_instagram_unhandled(intent, item)
 
         cc = item.client_context
-        if not cc and item.link.client_context:
+        if not cc and item.link and item.link.client_context:
             cc = item.link.client_context
         msg = DBMessage(
             mxid=event_id,
