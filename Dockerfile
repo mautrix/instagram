@@ -39,6 +39,7 @@ RUN apk add git && pip3 install .[all] && apk del git \
   # This doesn't make the image smaller, but it's needed so that the `version` command works properly
   && cp mautrix_instagram/example-config.yaml . && rm -rf mautrix_instagram
 
+ENV UID=1337 GID=1337
 VOLUME /data
 
 CMD ["/opt/mautrix-instagram/docker-run.sh"]

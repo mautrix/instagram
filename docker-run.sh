@@ -1,4 +1,10 @@
 #!/bin/sh
+
+# Define functions.
+function fixperms {
+	chown -R $UID:$GID /data
+}
+
 cd /opt/mautrix-instagram
 
 if [ ! -f /data/config.yaml ]; then
@@ -7,12 +13,15 @@ if [ ! -f /data/config.yaml ]; then
 	echo "Copied default config file to /data/config.yaml"
 	echo "Modify that config file to your liking."
 	echo "Start the container again after that to generate the registration file."
+	fixperms
 	exit
 fi
 
 if [ ! -f /data/registration.yaml ]; then
 	python3 -m mautrix_instagram -g -c /data/config.yaml -r /data/registration.yaml
+	fixperms
 	exit
 fi
 
-exec python3 -m mautrix_instagram -c /data/config.yaml
+fixperms
+exec su-exec $UID:$GID python3 -m mautrix_instagram -c /data/config.yaml
