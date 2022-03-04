@@ -1011,8 +1011,7 @@ class Portal(DBPortal, BasePortal):
             if reuploaded.file:
                 preview["beeper:image:encryption"] = reuploaded.file.serialize()
         preview = {k: v for k, v in preview.items() if v}
-        if "og:title" in preview:
-            content["com.beeper.linkpreviews"] = []
+        content["com.beeper.linkpreviews"] = [preview] if "og:title" in preview else []
         await self._add_instagram_reply(content, item.replied_to_message)
         return await self._send_message(intent, content, timestamp=item.timestamp // 1000)
 
@@ -1020,6 +1019,7 @@ class Portal(DBPortal, BasePortal):
         self, intent: IntentAPI, item: ThreadItem, text: str
     ) -> EventID:
         content = TextMessageEventContent(msgtype=MessageType.TEXT, body=text)
+        content["com.beeper.linkpreviews"] = []
         await self._add_instagram_reply(content, item.replied_to_message)
         return await self._send_message(intent, content, timestamp=item.timestamp // 1000)
 
