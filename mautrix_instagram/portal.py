@@ -944,7 +944,12 @@ class Portal(DBPortal, BasePortal):
                 user_link = f'<a href="https://www.instagram.com/{username}/">@{username}</a>'
                 prefix_html = f"Sent {user_link}'s story"
         elif item.reel_share.type == ReelShareType.REACTION:
-            prefix = "Reacted to your story"
+            if item.reel_share.reel_owner_id == source.igpk:
+                prefix = "Reacted to your story"
+            elif item.user_id == source.igpk:
+                prefix = "You reacted to their story"
+            else:
+                prefix = "Reacted to a story"
         elif item.reel_share.type == ReelShareType.MENTION:
             if item.reel_share.mentioned_user_id == source.igpk:
                 prefix = "Mentioned you in their story"
