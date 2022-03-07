@@ -335,6 +335,10 @@ class User(DBUser, BaseUser):
 
     async def sync(self) -> None:
         resp = await self.client.get_inbox()
+
+        if not self._listen_task:
+            await self.start_listen(resp.seq_id, resp.snapshot_at_ms)
+
         max_age = self.config["bridge.portal_create_max_age"] * 1_000_000
         limit = self.config["bridge.chat_sync_limit"]
         min_active_at = (time.time() * 1_000_000) - max_age
@@ -352,9 +356,6 @@ class User(DBUser, BaseUser):
             await self.update_direct_chats()
         except Exception:
             self.log.exception("Error updating direct chat list")
-
-        if not self._listen_task:
-            await self.start_listen(resp.seq_id, resp.snapshot_at_ms)
 
     async def start_listen(
         self, seq_id: int | None = None, snapshot_at_ms: int | None = None
