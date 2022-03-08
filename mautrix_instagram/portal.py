@@ -15,7 +15,6 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from __future__ import annotations
 
-from datetime import datetime
 from typing import TYPE_CHECKING, Any, AsyncGenerator, Awaitable, Callable, Union, cast
 from collections import deque
 from io import BytesIO
@@ -1238,8 +1237,9 @@ class Portal(DBPortal, BasePortal):
                 f"(type {item.item_type} -> fallback error {event_id})"
             )
         if is_backfill and item.reactions:
-            timestamp = datetime.fromtimestamp(float(item.timestamp)) if item.timestamp else None
-            await self._handle_instagram_reactions(msg, item.reactions.emojis, timestamp)
+            await self._handle_instagram_reactions(
+                msg, item.reactions.emojis, item.timestamp // 1000
+            )
 
     async def handle_instagram_remove(self, item_id: str) -> None:
         message = await DBMessage.get_by_item_id(item_id, self.receiver)
@@ -1254,7 +1254,7 @@ class Portal(DBPortal, BasePortal):
         self.log.debug(f"Redacted {message.mxid} after Instagram unsend")
 
     async def _handle_instagram_reactions(
-        self, message: DBMessage, reactions: list[Reaction], timestamp: datetime | None = None
+        self, message: DBMessage, reactions: list[Reaction], timestamp: int | None = None
     ) -> None:
         old_reactions: dict[int, DBReaction]
         old_reactions = {
@@ -1267,10 +1267,9 @@ class Portal(DBPortal, BasePortal):
                 continue
             puppet = await p.Puppet.get_by_pk(new_reaction.sender_id)
             intent = puppet.intent_for(self)
-            if timestamp:
-                reaction_event_id = await intent.react(self.mxid, message.mxid, new_reaction.emoji, timestamp=timestamp)
-            else:
-                reaction_event_id = await intent.react(self.mxid, message.mxid, new_reaction.emoji)
+            reaction_event_id = await intent.react(
+                self.mxid, message.mxid, new_reaction.emoji, timestamp=timestamp
+            )
             await self._upsert_reaction(
                 old_reaction, intent, reaction_event_id, message, puppet, new_reaction.emoji
             )
