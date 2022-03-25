@@ -796,7 +796,10 @@ class Portal(DBPortal, BasePortal):
             upload_file_name = None
 
         mxc = await intent.upload_media(
-            data, mime_type=upload_mime_type, filename=upload_file_name
+            data,
+            mime_type=upload_mime_type,
+            filename=upload_file_name,
+            async_upload=self.config["homeserver.async_media"],
         )
 
         if decryption_info:
