@@ -1388,6 +1388,11 @@ class Portal(DBPortal, BasePortal):
                     exc_info=True,
                 )
 
+    async def get_dm_puppet(self) -> pu.Puppet | None:
+        if not self.is_direct:
+            return None
+        return await pu.Puppet.get_by_pk(self.other_user_pk)
+
     # endregion
     # region Backfilling
 
