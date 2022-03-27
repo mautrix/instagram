@@ -796,7 +796,10 @@ class Portal(DBPortal, BasePortal):
             upload_file_name = None
 
         mxc = await intent.upload_media(
-            data, mime_type=upload_mime_type, filename=upload_file_name
+            data,
+            mime_type=upload_mime_type,
+            filename=upload_file_name,
+            async_upload=self.config["homeserver.async_media"],
         )
 
         if decryption_info:
@@ -1387,6 +1390,11 @@ class Portal(DBPortal, BasePortal):
                     f"as read by {puppet.intent.mxid}",
                     exc_info=True,
                 )
+
+    async def get_dm_puppet(self) -> pu.Puppet | None:
+        if not self.is_direct:
+            return None
+        return await pu.Puppet.get_by_pk(self.other_user_pk)
 
     # endregion
     # region Backfilling

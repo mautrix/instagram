@@ -134,6 +134,11 @@ class User(DBUser, BaseUser):
             return None
         return await pu.Puppet.get_by_pk(self.igpk)
 
+    async def get_portal_with(self, puppet: pu.Puppet, create: bool = True) -> po.Portal | None:
+        # We should probably make this work eventually, but for now, creating chats will just not
+        # work.
+        return None
+
     async def try_connect(self) -> None:
         try:
             await self.connect()
