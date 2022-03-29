@@ -1169,6 +1169,7 @@ class Portal(DBPortal, BasePortal):
             return
 
         self.log.debug(f"Starting handling of message {item.item_id} ({cc}) by {item.user_id}")
+        asyncio.create_task(sender.intent_for(self).set_typing(self.mxid, is_typing=False))
         await self._handle_deduplicated_instagram_item(source, sender, item, is_backfill)
 
     async def _handle_deduplicated_instagram_item(
