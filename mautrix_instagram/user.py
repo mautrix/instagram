@@ -501,7 +501,7 @@ class User(DBUser, BaseUser):
             return
 
         now = int(time.time() * 1000)
-        date = int(evt.value.timestamp) // 1000
+        date = evt.value.timestamp_ms
         expiry = date + evt.value.ttl
         if expiry < now:
             return

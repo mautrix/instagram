@@ -866,7 +866,7 @@ class Portal(DBPortal, BasePortal):
             )
 
         await self._add_instagram_reply(content, item.replied_to_message)
-        return await self._send_message(intent, content, timestamp=item.timestamp // 1000)
+        return await self._send_message(intent, content, timestamp=item.timestamp_ms)
 
     async def _handle_instagram_media_share(
         self, source: u.User, intent: IntentAPI, item: ThreadItem
@@ -904,7 +904,7 @@ class Portal(DBPortal, BasePortal):
             elif share_item.user.pk == source.igpk and tagged_user_id == self.other_user_pk:
                 prefix.body = prefix.formatted_body = "Tagged them in your post"
 
-        await self._send_message(intent, prefix, timestamp=item.timestamp // 1000)
+        await self._send_message(intent, prefix, timestamp=item.timestamp_ms)
         event_id = await self._handle_instagram_media(source, intent, item)
 
         external_url = f"https://www.instagram.com/p/{share_item.code}/"
@@ -930,7 +930,7 @@ class Portal(DBPortal, BasePortal):
             format=Format.HTML,
             external_url=external_url,
         )
-        await self._send_message(intent, caption, timestamp=item.timestamp // 1000)
+        await self._send_message(intent, caption, timestamp=item.timestamp_ms)
         return event_id
 
     async def _handle_instagram_reel_share(
@@ -970,7 +970,7 @@ class Portal(DBPortal, BasePortal):
             content.body = media.caption.text if media.caption else ""
         if not content.body:
             content.body = "<no caption>"
-        await self._send_message(intent, prefix_content, timestamp=item.timestamp // 1000)
+        await self._send_message(intent, prefix_content, timestamp=item.timestamp_ms)
         if isinstance(media, ExpiredMediaItem):
             # TODO send message about expired story
             pass
@@ -992,7 +992,7 @@ class Portal(DBPortal, BasePortal):
                     sender=media.user.pk,
                     ig_timestamp=None,
                 ).insert()
-        return await self._send_message(intent, content, timestamp=item.timestamp // 1000)
+        return await self._send_message(intent, content, timestamp=item.timestamp_ms)
 
     async def _handle_instagram_link(
         self,
@@ -1021,7 +1021,7 @@ class Portal(DBPortal, BasePortal):
         preview = {k: v for k, v in preview.items() if v}
         content["com.beeper.linkpreviews"] = [preview] if "og:title" in preview else []
         await self._add_instagram_reply(content, item.replied_to_message)
-        return await self._send_message(intent, content, timestamp=item.timestamp // 1000)
+        return await self._send_message(intent, content, timestamp=item.timestamp_ms)
 
     async def _handle_instagram_text(
         self, intent: IntentAPI, item: ThreadItem, text: str
@@ -1029,14 +1029,14 @@ class Portal(DBPortal, BasePortal):
         content = TextMessageEventContent(msgtype=MessageType.TEXT, body=text)
         content["com.beeper.linkpreviews"] = []
         await self._add_instagram_reply(content, item.replied_to_message)
-        return await self._send_message(intent, content, timestamp=item.timestamp // 1000)
+        return await self._send_message(intent, content, timestamp=item.timestamp_ms)
 
     async def _send_instagram_unhandled(self, intent: IntentAPI, item: ThreadItem) -> EventID:
         content = TextMessageEventContent(
             msgtype=MessageType.NOTICE, body=f"Unsupported message type {item.item_type.value}"
         )
         await self._add_instagram_reply(content, item.replied_to_message)
-        return await self._send_message(intent, content, timestamp=item.timestamp // 1000)
+        return await self._send_message(intent, content, timestamp=item.timestamp_ms)
 
     async def _handle_instagram_location(
         self, intent: IntentAPI, item: ThreadItem
@@ -1069,7 +1069,7 @@ class Portal(DBPortal, BasePortal):
 
         await self._add_instagram_reply(content, item.replied_to_message)
 
-        return await self._send_message(intent, content, timestamp=item.timestamp // 1000)
+        return await self._send_message(intent, content, timestamp=item.timestamp_ms)
 
     async def _handle_instagram_profile(
         self, intent: IntentAPI, item: ThreadItem
@@ -1082,7 +1082,7 @@ class Portal(DBPortal, BasePortal):
             msgtype=MessageType.TEXT, format=Format.HTML, body=text, formatted_body=html
         )
         await self._add_instagram_reply(content, item.replied_to_message)
-        return await self._send_message(intent, content, timestamp=item.timestamp // 1000)
+        return await self._send_message(intent, content, timestamp=item.timestamp_ms)
 
     async def handle_instagram_item(
         self, source: u.User, sender: p.Puppet, item: ThreadItem, is_backfill: bool = False
@@ -1240,9 +1240,7 @@ class Portal(DBPortal, BasePortal):
                 f"(type {item.item_type} -> fallback error {event_id})"
             )
         if is_backfill and item.reactions:
-            await self._handle_instagram_reactions(
-                msg, item.reactions.emojis, item.timestamp // 1000
-            )
+            await self._handle_instagram_reactions(msg, item.reactions.emojis, item.timestamp_ms)
 
     async def handle_instagram_remove(self, item_id: str) -> None:
         message = await DBMessage.get_by_item_id(item_id, self.receiver)

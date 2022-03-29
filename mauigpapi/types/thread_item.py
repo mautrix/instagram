@@ -504,7 +504,7 @@ class ProfileItem(BaseResponseUser, SerializableAttrs):
 class ThreadItem(SerializableAttrs):
     item_id: Optional[str] = None
     user_id: Optional[int] = None
-    timestamp: Optional[int] = None
+    timestamp: int = 0
     item_type: Optional[ThreadItemType] = None
     is_shh_mode: bool = False
 
@@ -530,6 +530,10 @@ class ThreadItem(SerializableAttrs):
     clip: Optional[ClipItem] = None
     felix_share: Optional[FelixShareItem] = None
     profile: Optional[ProfileItem] = None
+
+    @property
+    def timestamp_ms(self) -> int:
+        return self.timestamp // 1000
 
     @classmethod
     def deserialize(cls, data: JSON, catch_errors: bool = True) -> Union["ThreadItem", Obj]:

@@ -131,6 +131,10 @@ class ActivityIndicatorData(SerializableAttrs):
     ttl: int
     activity_status: TypingStatus
 
+    @property
+    def timestamp_ms(self) -> int:
+        return int(self.timestamp) // 1000
+
     @classmethod
     def deserialize(cls, data: JSON) -> "ActivityIndicatorData":
         # The ActivityIndicatorData in PubsubPayloadData is actually a string,
