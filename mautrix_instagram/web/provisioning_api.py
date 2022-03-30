@@ -31,7 +31,7 @@ from mauigpapi.errors import (
     IGLoginTwoFactorRequiredError,
     IGNotLoggedInError,
 )
-from mauigpapi.types import BaseResponseUser
+from mauigpapi.types import ChallengeStateResponse, LoginResponse, LoginResponseUser
 from mautrix.types import JSON, UserID
 from mautrix.util.logging import TraceLogger
 
@@ -160,25 +160,7 @@ class ProvisioningAPI:
             )
         except IGCheckpointError as e:
             self.log.debug("%s logged in as %s, but got a checkpoint", user.mxid, username)
-            try:
-                await api.challenge_auto(reset=True)
-            except Exception as e:
-                # Most likely means that the user has to go and verify the login on their phone.
-                # Return a 403 in this case so the client knows to show such verbiage.
-                self.log.exception("Challenge reset failed")
-                return web.json_response(
-                    data={"status": "checkpoint", "response": e},
-                    status=403,
-                    headers=self._acao_headers,
-                )
-            return web.json_response(
-                data={
-                    "status": "checkpoint",
-                    "response": e.body.serialize(),
-                },
-                status=202,
-                headers=self._acao_headers,
-            )
+            return await self.start_checkpoint(user, api, e)
         except IGLoginInvalidUserError:
             self.log.debug("%s tried to log in as non-existent user %s", user.mxid, username)
             return web.json_response(
@@ -193,8 +175,7 @@ class ProvisioningAPI:
                 status=403,
                 headers=self._acao_headers,
             )
-        self.log.debug("%s finished login after password, trying to connect", user.mxid)
-        return await self._finish_login(user, state, resp.logged_in_user)
+        return await self._finish_login(user, state, api, login_resp=resp, after="password")
 
     async def _get_user(
         self, request: web.Request, check_state: bool = False
@@ -240,27 +221,39 @@ class ProvisioningAPI:
             )
         except IGCheckpointError as e:
             self.log.debug("%s submitted a 2-factor auth code, but got a checkpoint", user.mxid)
-            try:
-                await api.challenge_auto(reset=True)
-            except Exception as e:
-                # Most likely means that the user has to go and verify the login on their phone.
-                # Return a 403 in this case so the client knows to show such verbiage.
-                self.log.exception("Challenge reset failed")
-                return web.json_response(
-                    data={"status": "checkpoint", "response": e},
-                    status=403,
-                    headers=self._acao_headers,
-                )
+            return await self.start_checkpoint(user, api, e)
+        return await self._finish_login(user, state, api, login_resp=resp, after="2-factor auth")
+
+    async def start_checkpoint(
+        self, user: u.User, api: AndroidAPI, err: IGCheckpointError
+    ) -> web.Response:
+        try:
+            resp = await api.challenge_auto(reset=True)
+        except Exception as e:
+            # Most likely means that the user has to go and verify the login on their phone.
+            # Return a 403 in this case so the client knows to show such verbiage.
+            self.log.exception("Challenge reset failed for %s", user.mxid)
             return web.json_response(
-                data={
-                    "status": "checkpoint",
-                    "response": e.body.serialize(),
-                },
-                status=202,
+                data={"status": "checkpoint", "response": e},
+                status=403,
                 headers=self._acao_headers,
             )
-        self.log.debug("%s finished login after 2-factor auth, trying to connect", user.mxid)
-        return await self._finish_login(user, state, resp.logged_in_user)
+        challenge_data = resp.serialize()
+        liu: LoginResponseUser = challenge_data.pop("logged_in_user", None)
+        self.log.debug(
+            "Challenge state for %s after auto handling: %s (logged in user: %s)",
+            user.mxid,
+            challenge_data,
+            f"{liu.pk}/{liu.username}" if liu else "null",
+        )
+        return web.json_response(
+            data={
+                "status": "checkpoint",
+                "response": err.body.serialize(),
+            },
+            status=202,
+            headers=self._acao_headers,
+        )
 
     async def login_checkpoint(self, request: web.Request) -> web.Response:
         user, data = await self._get_user(request, check_state=True)
@@ -284,21 +277,55 @@ class ProvisioningAPI:
                 status=403,
                 headers=self._acao_headers,
             )
-        self.log.debug("%s finished login after checkpoint, trying to connect", user.mxid)
-        return await self._finish_login(user, state, resp.logged_in_user)
+        challenge_data = resp.serialize()
+        liu: LoginResponseUser = challenge_data.pop("logged_in_user", None)
+        self.log.debug(
+            "Challenge state for %s after sending security code: %s (logged in user: %s)",
+            user.mxid,
+            challenge_data,
+            f"{liu.pk}/{liu.username}" if liu else "null",
+        )
+        return await self._finish_login(user, state, api, login_resp=resp, after="checkpoint")
 
     async def _finish_login(
-        self, user: u.User, state: AndroidState, resp_user: BaseResponseUser
+        self,
+        user: u.User,
+        state: AndroidState,
+        api: AndroidAPI,
+        login_resp: LoginResponse | ChallengeStateResponse,
+        after: str,
     ) -> web.Response:
+        self.log.debug(
+            "%s finished login after %s, trying to connect "
+            "(login response status: %s, logged in user ID: %s)",
+            user.mxid,
+            after,
+            login_resp.status,
+            login_resp.logged_in_user.pk if login_resp.logged_in_user else None,
+        )
         user.state = state
         pl = state.device.payload
         manufacturer, model = pl["manufacturer"], pl["model"]
-        await user.try_connect()
+        try:
+            resp = await api.current_user()
+        except IGCheckpointError as e:
+            if isinstance(login_resp, ChallengeStateResponse):
+                self.log.debug(
+                    "%s got a checkpoint after a login that looked successful, "
+                    "failing login because we already did some checkpointing",
+                    user.mxid,
+                )
+                # TODO this should probably return a proper error
+                # and there might be some cases that can still be handled
+                raise
+            self.log.debug("%s got a checkpoint after a login that looked successful", user.mxid)
+            return await self.start_checkpoint(user, api, e)
+        await user.connect()
         return web.json_response(
             data={
                 "status": "logged-in",
                 "device_displayname": f"{manufacturer} {model}",
-                "user": resp_user.serialize() if resp_user else None,
+                "user": resp.user.serialize() if resp and resp.user else None,
             },
             status=200,
             headers=self._acao_headers,

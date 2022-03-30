@@ -153,25 +153,27 @@ class User(DBUser, BaseUser):
     def is_connected(self) -> bool:
         return bool(self.client) and bool(self.mqtt) and self._is_connected
 
-    async def connect(self) -> None:
+    async def connect(self, user: CurrentUser | None = None) -> None:
         client = AndroidAPI(self.state, log=self.api_log)
 
-        try:
-            resp = await client.current_user()
-        except IGNotLoggedInError as e:
-            self.log.warning(f"Failed to connect to Instagram: {e}, logging out")
-            await self.send_bridge_notice(
-                f"You have been logged out of Instagram: {e!s}",
-                important=True,
-                error_code="ig-auth-error",
-                error_message=str(e),
-            )
-            await self.logout(from_error=True)
-            return
+        if not user:
+            try:
+                resp = await client.current_user()
+                user = resp.user
+            except IGNotLoggedInError as e:
+                self.log.warning(f"Failed to connect to Instagram: {e}, logging out")
+                await self.send_bridge_notice(
+                    f"You have been logged out of Instagram: {e!s}",
+                    important=True,
+                    error_code="ig-auth-error",
+                    error_message=str(e),
+                )
+                await self.logout(from_error=True)
+                return
         self.client = client
         self._is_logged_in = True
-        self.igpk = resp.user.pk
-        self.username = resp.user.username
+        self.igpk = user.pk
+        self.username = user.username
         await self.push_bridge_state(BridgeStateEvent.CONNECTING)
         self._track_metric(METRIC_LOGGED_IN, True)
         self.by_igpk[self.igpk] = self
@@ -187,7 +189,7 @@ class User(DBUser, BaseUser):
 
         await self.update()
 
-        self.loop.create_task(self._try_sync_puppet(resp.user))
+        self.loop.create_task(self._try_sync_puppet(user))
         self.loop.create_task(self._try_sync())
 
     async def on_connect(self, evt: Connect) -> None:

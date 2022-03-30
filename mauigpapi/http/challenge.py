@@ -30,6 +30,7 @@ class ChallengeAPI(BaseAndroidAPI):
             "guid": self.state.device.uuid,
             "device_id": self.state.device.id,
         }
+        self.log.debug("Fetching current challenge state")
         return self.__handle_resp(
             await self.std_http_get(self.__path, query=query, response_type=ChallengeStateResponse)
         )
@@ -46,6 +47,7 @@ class ChallengeAPI(BaseAndroidAPI):
             "guid": self.state.device.uuid,
             "device_id": self.state.device.id,
         }
+        self.log.debug(f"Selecting challenge method {choice} (replay: {is_replay})")
         return self.__handle_resp(
             await self.std_http_post(path, data=req, response_type=ChallengeStateResponse)
         )
@@ -60,6 +62,7 @@ class ChallengeAPI(BaseAndroidAPI):
             "guid": self.state.device.uuid,
             "device_id": self.state.device.id,
         }
+        self.log.debug("Sending challenge phone number")
         return self.__handle_resp(
             await self.std_http_post(self.__path, data=req, response_type=ChallengeStateResponse)
         )
@@ -72,6 +75,7 @@ class ChallengeAPI(BaseAndroidAPI):
             "device_id": self.state.device.id,
         }
         try:
+            self.log.debug("Sending challenge security code")
             return self.__handle_resp(
                 await self.std_http_post(
                     self.__path, data=req, response_type=ChallengeStateResponse
@@ -88,6 +92,7 @@ class ChallengeAPI(BaseAndroidAPI):
             "guid": self.state.device.uuid,
             "device_id": self.state.device.id,
         }
+        self.log.debug("Resetting challenge")
         return self.__handle_resp(
             await self.std_http_post(
                 self.__path.replace("/challenge/", "/challenge/reset/"),
@@ -101,13 +106,23 @@ class ChallengeAPI(BaseAndroidAPI):
             await self.challenge_reset()
         challenge = self.state.challenge or await self.challenge_get_state()
         if challenge.step_name == "select_verify_method":
+            self.log.debug(
+                "Got select_verify_method challenge step, "
+                f"auto-selecting {challenge.step_data.choice}"
+            )
             return await self.challenge_select_method(challenge.step_data.choice)
         elif challenge.step_name == "delta_login_review":
+            self.log.debug("Got delta_login_review challenge step, auto-selecting was_me=True")
             return await self.challenge_delta_review(was_me=True)
+        else:
+            self.log.debug(f"Got unknown challenge step {challenge.step_name}, not doing anything")
         return challenge
 
     def __handle_resp(self, resp: ChallengeStateResponse) -> ChallengeStateResponse:
         if resp.action == "close":
+            self.log.debug(
+                f"Challenge closed (step: {resp.step_name}, has user: {bool(resp.logged_in_user)})"
+            )
             self.state.challenge = None
             self.state.challenge_path = None
         else:
