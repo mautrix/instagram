@@ -545,6 +545,32 @@ class ThreadItem(SerializableAttrs):
             log.debug("Failed to deserialize ThreadItem %s", data)
             return Obj(**data)
 
+    @property
+    def unhandleable_type(self) -> str:
+        if self.action_log:
+            return "action log"
+        return "unknown"
+
+    @property
+    def is_handleable(self) -> bool:
+        return bool(
+            self.media
+            or self.animated_media
+            or self.voice_media
+            or self.visual_media
+            or self.location
+            or self.profile
+            or self.reel_share
+            or self.media_share
+            or self.direct_media_share
+            or self.story_share
+            or self.clip
+            or self.felix_share
+            or self.text
+            or self.like
+            or self.link
+        )
+
 
 # This resolves the 'ThreadItem' string into an actual type.
 # Starting Python 3.10, all type annotations will be strings and have to be resolved like this.

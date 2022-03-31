@@ -1449,6 +1449,11 @@ class Portal(DBPortal, BasePortal):
                         " that's already in the database."
                     )
                     break
+            elif not item.is_handleable:
+                self.log.debug(
+                    f"Dropping {item.unhandleable_type} item {item.item_id} in backfill"
+                )
+                continue
             items.append(item)
         return items
 
