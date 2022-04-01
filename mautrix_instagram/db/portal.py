@@ -129,6 +129,11 @@ class Portal:
         return [cls._from_row(row) for row in rows]
 
     @classmethod
+    async def find_private_chat_id(cls, receiver: int, other_user: int) -> str | None:
+        q = "SELECT thread_id FROM portal WHERE receiver=$1 AND other_user_pk=$2"
+        return await cls.db.fetchval(q, receiver, other_user)
+
+    @classmethod
     async def all_with_room(cls) -> list[Portal]:
         q = (
             "SELECT thread_id, receiver, other_user_pk, mxid, name, avatar_url, encrypted, "

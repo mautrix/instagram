@@ -16,6 +16,7 @@
 from __future__ import annotations
 
 from typing import AsyncIterable, Type
+import json
 
 from ..types import (
     CommandResponse,
@@ -104,6 +105,31 @@ class ThreadAPI(BaseAndroidAPI):
             has_more = resp.thread.has_older
             for item in resp.thread.items:
                 yield item
+
+    async def create_group_thread(self, recipient_users: list[int | str]) -> Thread:
+        return await self.std_http_post(
+            "/api/v1/direct_v2/create_group_thread/",
+            data={
+                "_csrftoken": self.state.cookies.csrf_token,
+                "_uuid": self.state.device.uuid,
+                "_uid": self.state.cookies.user_id,
+                "recipient_users": json.dumps(
+                    [str(user) for user in recipient_users], separators=(",", ":")
+                ),
+            },
+            response_type=Thread,
+        )
+
+    async def approve_thread(self, thread_ids: list[int | str]) -> None:
+        await self.std_http_post(
+            "/api/v1/direct_v2/threads/approve_multiple/",
+            data={
+                "thread_ids": json.dumps(
+                    [str(thread) for thread in thread_ids], separators=(",", ":")
+                ),
+                "folder": "",
+            },
+        )
 
     async def delete_item(self, thread_id: str, item_id: str) -> None:
         await self.std_http_post(

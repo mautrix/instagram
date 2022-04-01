@@ -43,7 +43,7 @@
   * [x] Automatic portal creation
     * [x] At startup
     * [x] When receiving message
-  * [ ] Private chat creation by inviting Matrix puppet of Instagram user to new room
+  * [x] Private chat creation by inviting Matrix puppet of Instagram user to new room
   * [x] Option to use own Matrix account for messages sent from other Instagram clients
   * [x] End-to-bridge encryption in Matrix rooms
 

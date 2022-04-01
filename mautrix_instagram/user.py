@@ -135,8 +135,17 @@ class User(DBUser, BaseUser):
         return await pu.Puppet.get_by_pk(self.igpk)
 
     async def get_portal_with(self, puppet: pu.Puppet, create: bool = True) -> po.Portal | None:
-        # We should probably make this work eventually, but for now, creating chats will just not
-        # work.
+        if not self.igpk:
+            return None
+        portal = await po.Portal.find_private_chat(self.igpk, puppet.pk)
+        if portal:
+            return portal
+        if create:
+            # TODO add error handling somewhere
+            thread = await self.client.create_group_thread([puppet.pk])
+            portal = await po.Portal.get_by_thread(thread, self.igpk)
+            await portal.update_info(thread, self)
+            return portal
         return None
 
     async def try_connect(self) -> None:

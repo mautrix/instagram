@@ -1319,6 +1319,15 @@ class Portal(DBPortal, BasePortal):
             await self.update()
         # TODO update power levels with thread.admin_user_ids
 
+    async def update_info_from_puppet(self, puppet: p.Puppet | None = None) -> None:
+        if not self.is_direct:
+            return
+        if not puppet:
+            puppet = await self.get_dm_puppet()
+        await self._update_photo_from_puppet(puppet)
+        if self.name and not self.name_set:
+            await self._update_name(self.name)
+
     async def _update_name(self, name: str) -> bool:
         if name and (self.name != name or not self.name_set):
             self.name = name
@@ -1390,10 +1399,10 @@ class Portal(DBPortal, BasePortal):
                     exc_info=True,
                 )
 
-    async def get_dm_puppet(self) -> pu.Puppet | None:
+    async def get_dm_puppet(self) -> p.Puppet | None:
         if not self.is_direct:
             return None
-        return await pu.Puppet.get_by_pk(self.other_user_pk)
+        return await p.Puppet.get_by_pk(self.other_user_pk)
 
     # endregion
     # region Backfilling
@@ -1661,6 +1670,13 @@ class Portal(DBPortal, BasePortal):
     @classmethod
     def find_private_chats_with(cls, other_user: int) -> AsyncGenerator[Portal, None]:
         return cls._db_to_portals(super().find_private_chats_with(other_user))
+
+    @classmethod
+    async def find_private_chat(cls, receiver: int, other_user: int) -> Portal | None:
+        thread_id = await super().find_private_chat_id(receiver, other_user)
+        if not thread_id:
+            return None
+        return await cls.get_by_thread_id(thread_id, receiver=receiver, is_group=False)
 
     @classmethod
     async def _db_to_portals(cls, query: Awaitable[list[Portal]]) -> AsyncGenerator[Portal, None]:
