@@ -21,7 +21,13 @@ from .error import (
     LoginTwoFactorInfo,
     SpamResponse,
 )
-from .login import LoginResponse, LoginResponseNametag, LoginResponseUser, LogoutResponse
+from .login import (
+    FacebookLoginResponse,
+    LoginResponse,
+    LoginResponseNametag,
+    LoginResponseUser,
+    LogoutResponse,
+)
 from .mqtt import (
     ActivityIndicatorData,
     AppPresenceEvent,

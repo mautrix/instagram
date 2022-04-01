@@ -25,7 +25,7 @@ from Crypto.Cipher import AES, PKCS1_v1_5
 from Crypto.PublicKey import RSA
 from Crypto.Random import get_random_bytes
 
-from ..types import LoginResponse, LogoutResponse
+from ..types import FacebookLoginResponse, LoginResponse, LogoutResponse
 from .base import BaseAndroidAPI
 
 
@@ -93,6 +93,23 @@ class LoginAPI(BaseAndroidAPI):
         }
         return await self.std_http_post(
             "/api/v1/accounts/two_factor_login/", data=req, response_type=LoginResponse
+        )
+
+    async def facebook_signup(self, fb_access_token: str) -> FacebookLoginResponse:
+        req = {
+            "jazoest": self._jazoest,
+            "dryrun": "true",
+            "fb_req_flag": "false",
+            "phone_id": self.state.device.phone_id,
+            "force_signup_with_fb_after_cp_claiming": "false",
+            "adid": self.state.device.adid,
+            "guid": self.state.device.uuid,
+            "device_id": self.state.device.id,
+            # "waterfall_id": uuid4(),
+            "fb_access_token": fb_access_token,
+        }
+        return await self.std_http_post(
+            "/api/v1/fb/facebook_signup/", data=req, response_type=FacebookLoginResponse
         )
 
     async def logout(self, one_tap_app_login: bool | None = None) -> LogoutResponse:

@@ -54,6 +54,14 @@ class LoginResponse(SerializableAttrs):
 
 
 @dataclass
+class FacebookLoginResponse(LoginResponse, SerializableAttrs):
+    code: int = 0
+    fb_access_token: Optional[str] = None
+    fb_user_id: Optional[str] = None
+    session_flush_nonce: Optional[str] = None
+
+
+@dataclass
 class LogoutResponse(SerializableAttrs):
     status: str
     login_nonce: Optional[str] = None

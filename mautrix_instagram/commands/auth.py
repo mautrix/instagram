@@ -37,15 +37,13 @@ from .typehint import CommandEvent
 SECTION_AUTH = HelpSection("Authentication", 10, "")
 
 
-async def get_login_state(
-    user: u.User, username: str, seed: str
-) -> tuple[AndroidAPI, AndroidState]:
+async def get_login_state(user: u.User, seed: str) -> tuple[AndroidAPI, AndroidState]:
     if user.command_status and user.command_status["action"] == "Login":
         api: AndroidAPI = user.command_status["api"]
         state: AndroidState = user.command_status["state"]
     else:
         state = AndroidState()
-        seed = hmac.new(seed.encode("utf-8"), username.encode("utf-8"), hashlib.sha256).digest()
+        seed = hmac.new(seed.encode("utf-8"), user.mxid.encode("utf-8"), hashlib.sha256).digest()
         state.device.generate(seed)
         api = AndroidAPI(state, log=user.api_log)
         await api.qe_sync_login_experiments()
@@ -73,7 +71,7 @@ async def login(evt: CommandEvent) -> None:
         return
     username = evt.args[0]
     password = " ".join(evt.args[1:])
-    api, state = await get_login_state(evt.sender, username, evt.config["instagram.device_seed"])
+    api, state = await get_login_state(evt.sender, evt.config["instagram.device_seed"])
     try:
         resp = await api.login(username, password)
     except IGLoginTwoFactorRequiredError as e:
