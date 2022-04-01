@@ -72,9 +72,6 @@ class User:
 
     @classmethod
     async def all_logged_in(cls) -> list[User]:
-        q = (
-            "SELECT mxid, igpk, state, notice_room "
-            'FROM "user" WHERE igpk IS NOT NULL AND state IS NOT NULL'
-        )
+        q = 'SELECT mxid, igpk, state, notice_room FROM "user" WHERE igpk IS NOT NULL'
         rows = await cls.db.fetch(q)
         return [cls._from_row(row) for row in rows]

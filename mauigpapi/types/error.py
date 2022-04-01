@@ -58,6 +58,8 @@ class LoginRequiredResponse(SerializableAttrs):
     logout_reason: int
     message: str  # login_required or user_has_logged_out
     status: str  # fail
+    error_title: Optional[str] = None
+    error_body: Optional[str] = None
 
 
 @dataclass

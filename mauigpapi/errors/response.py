@@ -73,6 +73,13 @@ class IGCheckpointError(IGResponseError):
 class IGNotLoggedInError(IGResponseError):
     body: LoginRequiredResponse
 
+    @property
+    def proper_message(self) -> str:
+        return (
+            f"{self.body.error_title or self.body.message} "
+            f"(reason code: {self.body.logout_reason})"
+        )
+
 
 class IGUserHasLoggedOutError(IGNotLoggedInError):
     pass

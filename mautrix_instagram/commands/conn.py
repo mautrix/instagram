@@ -46,14 +46,9 @@ async def ping(evt: CommandEvent) -> None:
     try:
         user_info = await evt.sender.client.current_user()
     except IGNotLoggedInError as e:
-        # TODO maybe don't always log out?
-        evt.log.exception(
-            f"Got error checking current user for %s, logging out. %s",
-            evt.sender.mxid,
-            e.body.json(),
-        )
+        evt.log.exception("Got error checking current user for %s", evt.sender.mxid)
         await evt.reply("You have been logged out")
-        await evt.sender.logout()
+        await evt.sender.logout(error=e)
     else:
         user = user_info.user
         await evt.reply(

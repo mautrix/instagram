@@ -154,6 +154,9 @@ class User(DBUser, BaseUser):
         return bool(self.client) and bool(self.mqtt) and self._is_connected
 
     async def connect(self, user: CurrentUser | None = None) -> None:
+        if not self.state:
+            await self.push_bridge_state(BridgeStateEvent.BAD_CREDENTIALS, error="logged-out")
+            return
         client = AndroidAPI(self.state, log=self.api_log)
 
         if not user:
@@ -162,13 +165,7 @@ class User(DBUser, BaseUser):
                 user = resp.user
             except IGNotLoggedInError as e:
                 self.log.warning(f"Failed to connect to Instagram: {e}, logging out")
-                await self.send_bridge_notice(
-                    f"You have been logged out of Instagram: {e!s}",
-                    important=True,
-                    error_code="ig-auth-error",
-                    error_message=str(e),
-                )
-                await self.logout(from_error=True)
+                await self.logout(error=e)
                 return
         self.client = client
         self._is_logged_in = True
@@ -317,6 +314,9 @@ class User(DBUser, BaseUser):
                     try:
                         await self.sync()
                         return
+                    except IGNotLoggedInError as e:
+                        self.log.exception("Got not logged in error while syncing for refresh")
+                        await self.logout(error=e)
                     except Exception:
                         if retry_count >= 4:
                             raise
@@ -432,8 +432,8 @@ class User(DBUser, BaseUser):
         self._is_connected = False
         await self.update()
 
-    async def logout(self, from_error: bool = False) -> None:
-        if self.client:
+    async def logout(self, error: IGNotLoggedInError | None = None) -> None:
+        if self.client and error is None:
             try:
                 await self.client.logout(one_tap_app_login=False)
             except Exception:
@@ -442,7 +442,7 @@ class User(DBUser, BaseUser):
             self.mqtt.disconnect()
         self._track_metric(METRIC_CONNECTED, False)
         self._track_metric(METRIC_LOGGED_IN, False)
-        if not from_error:
+        if error is None:
             await self.push_bridge_state(BridgeStateEvent.LOGGED_OUT)
             puppet = await pu.Puppet.get_by_pk(self.igpk, create=False)
             if puppet and puppet.is_real_user:
@@ -453,7 +453,14 @@ class User(DBUser, BaseUser):
                 pass
             self.igpk = None
         else:
-            await self.push_bridge_state(BridgeStateEvent.BAD_CREDENTIALS)
+            self.log.debug("Auth error body: %s", error.body.serialize())
+            await self.send_bridge_notice(
+                f"You have been logged out of Instagram: {error.proper_message}",
+                important=True,
+                state_event=BridgeStateEvent.BAD_CREDENTIALS,
+                error_code="ig-auth-error",
+                error_message=error.proper_message,
+            )
         self.client = None
         self.mqtt = None
         self.state = None
