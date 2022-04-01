@@ -36,6 +36,9 @@ setuptools.setup(
     name="mautrix-instagram",
     version=version,
     url="https://github.com/mautrix/instagram",
+    project_urls={
+        "Changelog": "https://github.com/mautrix/instagram/blob/master/CHANGELOG.md",
+    },
 
     author="Tulir Asokan",
     author_email="tulir@maunium.net",
