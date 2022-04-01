@@ -15,6 +15,7 @@
 * Disabled file logging in Docker image by default.
   * If you want to enable it, set the `filename` in the file log handler to a
     path that is writable, then add `"file"` back to `logging.root.handlers`.
+* Dropped Python 3.7 support.
 
 [MSC2246]: https://github.com/matrix-org/matrix-spec-proposals/pull/2246
 
