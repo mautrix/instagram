@@ -319,6 +319,7 @@ class User(DBUser, BaseUser):
             await self.stop_listen()
             if resync:
                 retry_count = 0
+                minutes = 1
                 while True:
                     try:
                         await self.sync()
@@ -327,12 +328,15 @@ class User(DBUser, BaseUser):
                         self.log.exception("Got not logged in error while syncing for refresh")
                         await self.logout(error=e)
                     except Exception:
-                        if retry_count >= 4:
-                            raise
+                        if retry_count >= 4 and minutes < 5:
+                            minutes += 1
                         retry_count += 1
-                        self.log.exception("Error while syncing for refresh, retrying in 1 minute")
+                        s = "s" if minutes != 1 else ""
+                        self.log.exception(
+                            f"Error while syncing for refresh, retrying in {minutes} minute{s}"
+                        )
                         await self.push_bridge_state(BridgeStateEvent.UNKNOWN_ERROR)
-                        await asyncio.sleep(60)
+                        await asyncio.sleep(minutes * 60)
             else:
                 await self.start_listen()
         finally:
