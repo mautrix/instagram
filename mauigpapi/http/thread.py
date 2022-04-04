@@ -120,7 +120,17 @@ class ThreadAPI(BaseAndroidAPI):
             response_type=Thread,
         )
 
-    async def approve_thread(self, thread_ids: list[int | str]) -> None:
+    async def approve_thread(self, thread_id: int | str) -> None:
+        await self.std_http_post(
+            f"/api/v1/direct_v2/threads/{thread_id}/approve/",
+            data={
+                "filter": "DEFAULT",
+                "_uuid": self.state.device.uuid,
+            },
+            raw=True,
+        )
+
+    async def approve_threads(self, thread_ids: list[int | str]) -> None:
         await self.std_http_post(
             "/api/v1/direct_v2/threads/approve_multiple/",
             data={

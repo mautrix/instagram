@@ -286,6 +286,21 @@ class Portal(DBPortal, BasePortal):
                 confirmed=True,
             )
 
+    async def _handle_matrix_giphy(
+        self,
+        sender: u.User,
+        event_id: EventID,
+        request_id: str,
+        giphy_id: str,
+    ) -> CommandResponse:
+        self.log.trace(f"Broadcasting giphy from {event_id} with request ID {request_id}")
+        return await sender.client.broadcast(
+            self.thread_id,
+            ThreadItemType.ANIMATED_MEDIA,
+            client_context=request_id,
+            id=giphy_id,
+        )
+
     async def _handle_matrix_image(
         self,
         sender: u.User,
@@ -417,6 +432,10 @@ class Portal(DBPortal, BasePortal):
                 urls = None
             resp = await sender.mqtt.send_text(
                 self.thread_id, text=text, urls=urls, client_context=request_id, **reply_to
+            )
+        elif message.msgtype.is_media and "fi.mau.instagram.giphy_id" in message:
+            resp = await self._handle_matrix_giphy(
+                sender, event_id, request_id, message["fi.mau.instagram.giphy_id"]
             )
         elif message.msgtype.is_media:
             if message.file and decrypt_attachment:
