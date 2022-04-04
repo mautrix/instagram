@@ -104,3 +104,7 @@ class LoginErrorResponse(SerializableAttrs):
     two_factor_required: Optional[bool] = None
     two_factor_info: Optional[LoginTwoFactorInfo] = None
     phone_verification_settings: Optional[LoginPhoneVerificationSettings] = None
+
+    # FB login error fields
+    account_created: Optional[bool] = None
+    dryrun_passed: Optional[bool] = None

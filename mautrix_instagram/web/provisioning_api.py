@@ -31,6 +31,7 @@ from mauigpapi.errors import (
     IGBad2FACodeError,
     IGChallengeWrongCodeError,
     IGCheckpointError,
+    IGFBNoContactPointFoundError,
     IGLoginBadPasswordError,
     IGLoginInvalidUserError,
     IGLoginTwoFactorRequiredError,
@@ -370,13 +371,36 @@ class ProvisioningAPI:
 
         try:
             fb_access_token = data["access_token"]
-            logger_id = data["state"]["0_auth_logger_id"]
+            state = data.get("state", {})
+            if isinstance(state, str):
+                state = json.loads(state)
+            logger_id = state.get("0_auth_logger_id")
         except KeyError as e:
             raise self._missing_key_error(e)
+        except json.JSONDecodeError:
+            raise web.HTTPBadRequest(
+                text='{"error": "Non-JSON state field"}', headers=self._headers
+            )
 
         self.log.debug(
             "%s is attempting to log in with Facebook token (logger ID %s)", user.mxid, logger_id
         )
         api, state = await get_login_state(user, self.device_seed)
-        resp = await api.facebook_signup(fb_access_token)
+        try:
+            resp = await api.facebook_signup(fb_access_token)
+        except IGFBNoContactPointFoundError as e:
+            self.log.debug(
+                "%s sent a valid Facebook token, "
+                "but it didn't seem to have an Instagram account linked (%s)",
+                user.mxid,
+                e.body.serialize(),
+            )
+            return web.json_response(
+                data={
+                    "error": "You don't have an Instagram account linked to that Facebook account",
+                    "status": e.body.error_type,
+                },
+                status=403,
+                headers=self._acao_headers,
+            )
         return await self._finish_login(user, state, api, login_resp=resp, after="facebook auth")

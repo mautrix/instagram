@@ -31,6 +31,7 @@ from ..errors import (
     IGActionSpamError,
     IGBad2FACodeError,
     IGCheckpointError,
+    IGFBNoContactPointFoundError,
     IGInactiveUserError,
     IGLoginBadPasswordError,
     IGLoginInvalidUserError,
@@ -219,6 +220,8 @@ class BaseAndroidAPI:
             raise IGLoginInvalidUserError(resp, data)
         elif error_type == "sms_code_validation_code_invalid":
             raise IGBad2FACodeError(resp, data)
+        elif error_type == "fb_no_contact_point_found":
+            raise IGFBNoContactPointFoundError(resp, data)
 
         raise IGResponseError(resp, data)
 

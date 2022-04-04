@@ -117,5 +117,9 @@ class IGLoginInvalidUserError(IGLoginError):
     pass
 
 
+class IGFBNoContactPointFoundError(IGLoginError):
+    pass
+
+
 class IGBad2FACodeError(IGResponseError):
     pass
