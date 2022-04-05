@@ -19,7 +19,13 @@ from aiohttp import ClientResponse
 
 from mautrix.types import JSON, Serializable
 
-from ..types import CheckpointResponse, LoginErrorResponse, LoginRequiredResponse, SpamResponse
+from ..types import (
+    CheckpointResponse,
+    ConsentRequiredResponse,
+    LoginErrorResponse,
+    LoginRequiredResponse,
+    SpamResponse,
+)
 from .base import IGError
 
 
@@ -39,6 +45,8 @@ class IGResponseError(IGError):
         type_hint = get_type_hints(type(self)).get("body", JSON)
         if type_hint is not JSON and issubclass(type_hint, Serializable):
             self.body = type_hint.deserialize(json)
+        else:
+            self.body = json
         super().__init__(f"{prefix}: {self._message_override or message}")
 
     @property
@@ -68,6 +76,10 @@ class IGCheckpointError(IGResponseError):
     @property
     def url(self) -> str:
         return self.body.challenge.api_path
+
+
+class IGConsentRequiredError(IGResponseError):
+    body: ConsentRequiredResponse
 
 
 class IGNotLoggedInError(IGResponseError):

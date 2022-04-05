@@ -53,6 +53,20 @@ class CheckpointResponse(SerializableAttrs):
 
 
 @dataclass
+class ConsentData(SerializableAttrs):
+    headline: str
+    content: str
+    button_text: str
+
+
+@dataclass
+class ConsentRequiredResponse(SerializableAttrs):
+    message: str  # consent_required
+    status: str  # fail
+    consent_data: ConsentData
+
+
+@dataclass
 class LoginRequiredResponse(SerializableAttrs):
     # TODO enum?
     logout_reason: int

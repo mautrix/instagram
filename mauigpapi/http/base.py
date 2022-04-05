@@ -31,6 +31,7 @@ from ..errors import (
     IGActionSpamError,
     IGBad2FACodeError,
     IGCheckpointError,
+    IGConsentRequiredError,
     IGFBNoContactPointFoundError,
     IGInactiveUserError,
     IGLoginBadPasswordError,
@@ -202,6 +203,8 @@ class BaseAndroidAPI:
                 err = IGCheckpointError(resp, data)
                 self.state.challenge_path = err.url
                 raise err
+            elif message == "consent_required":
+                raise IGConsentRequiredError(resp, data)
             elif message == "user_has_logged_out":
                 raise IGUserHasLoggedOutError(resp, data)
             elif message == "login_required":

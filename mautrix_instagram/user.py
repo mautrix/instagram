@@ -23,6 +23,7 @@ import time
 from mauigpapi import AndroidAPI, AndroidMQTT, AndroidState
 from mauigpapi.errors import (
     IGCheckpointError,
+    IGConsentRequiredError,
     IGNotLoggedInError,
     IGUserIDNotFoundError,
     IrisSubscribeError,
@@ -64,8 +65,9 @@ BridgeState.human_readable_errors.update(
     {
         "ig-connection-error": "Instagram disconnected unexpectedly",
         "ig-auth-error": "Authentication error from Instagram: {message}",
-        "ig-checkpoint": "Instagram checkpoint error. Please check Instagram website.",
-        "ig-checkpoint-locked": "Instagram checkpoint error. Please check Instagram website.",
+        "ig-checkpoint": "Instagram checkpoint error. Please check the Instagram website.",
+        "ig-consent-required": "Instagram requires a consent update. Please check the Instagram website.",
+        "ig-checkpoint-locked": "Instagram checkpoint error. Please check the Instagram website.",
         "ig-disconnected": None,
         "ig-no-mqtt": "You're not connected to Instagram",
         "logged-out": "You're not logged into Instagram",
@@ -179,7 +181,7 @@ class User(DBUser, BaseUser):
                 self.log.warning(f"Failed to connect to Instagram: {e}, logging out")
                 await self.logout(error=e)
                 return
-            except IGCheckpointError as e:
+            except (IGCheckpointError, IGConsentRequiredError) as e:
                 await self._handle_checkpoint(e, on="connect", client=client)
                 return
         self.client = client
@@ -352,10 +354,20 @@ class User(DBUser, BaseUser):
             self._is_refreshing = False
 
     async def _handle_checkpoint(
-        self, e: IGCheckpointError, on: str, client: AndroidAPI | None = None
+        self,
+        e: IGCheckpointError | IGConsentRequiredError,
+        on: str,
+        client: AndroidAPI | None = None,
     ) -> None:
         self.log.warning(f"Got checkpoint error on {on}: {e.body.serialize()}")
         client = client or self.client
+        self.client = None
+        self.mqtt = None
+        if isinstance(e, IGConsentRequiredError):
+            await self.push_bridge_state(
+                BridgeStateEvent.BAD_CREDENTIALS, error="ig-consent-required"
+            )
+            return
         error_code = "ig-checkpoint"
         try:
             resp = await client.challenge_reset()
@@ -364,9 +376,6 @@ class User(DBUser, BaseUser):
                 error_code = "ig-checkpoint-locked"
         except Exception:
             self.log.exception("Error resetting challenge state")
-        await self.push_bridge_state(BridgeStateEvent.BAD_CREDENTIALS, error=error_code)
-        self.client = None
-        self.mqtt = None
         # if on == "connect":
         #     await self.connect()
         # else:
