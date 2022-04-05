@@ -365,7 +365,9 @@ class User(DBUser, BaseUser):
         self.mqtt = None
         if isinstance(e, IGConsentRequiredError):
             await self.push_bridge_state(
-                BridgeStateEvent.BAD_CREDENTIALS, error="ig-consent-required"
+                BridgeStateEvent.BAD_CREDENTIALS,
+                error="ig-consent-required",
+                info=e.body.serialize(),
             )
             return
         error_code = "ig-checkpoint"
@@ -376,6 +378,9 @@ class User(DBUser, BaseUser):
                 error_code = "ig-checkpoint-locked"
         except Exception:
             self.log.exception("Error resetting challenge state")
+        await self.push_bridge_state(
+            BridgeStateEvent.BAD_CREDENTIALS, error=error_code, info=e.body.serialize()
+        )
         # if on == "connect":
         #     await self.connect()
         # else:
