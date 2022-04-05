@@ -17,7 +17,7 @@ from typing import Optional
 
 from attr import dataclass
 
-from mautrix.types import SerializableAttrs
+from mautrix.types import SerializableAttrs, field
 
 from .login import LoginResponseUser
 
@@ -38,6 +38,15 @@ class ChallengeStateData(SerializableAttrs):
     form_type: Optional[str] = None
 
 
+@dataclass
+class ChallengeContext(SerializableAttrs):
+    step_name: Optional[str] = None
+    challenge_type_enum: Optional[str] = None
+    cni: Optional[int] = None
+    is_stateless: bool = False
+    present_as_modal: bool = False
+
+
 @dataclass(kw_only=True)
 class ChallengeStateResponse(SerializableAttrs):
     # TODO enum?
@@ -50,7 +59,11 @@ class ChallengeStateResponse(SerializableAttrs):
     action: Optional[str] = None
     status: str
 
-    # flow_render_type: int
-    # bloks_action: str
-    # challenge_context: str
-    # challenge_type_enum_str: str
+    flow_render_type: Optional[int] = None
+    bloks_action: Optional[str] = None
+    challenge_context_str: Optional[str] = field(default=None, json="challenge_context")
+    challenge_type_enum_str: Optional[str] = None
+
+    @property
+    def challenge_context(self) -> ChallengeContext:
+        return ChallengeContext.parse_json(self.challenge_context_str)

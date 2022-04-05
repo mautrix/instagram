@@ -22,6 +22,7 @@ import time
 
 from mauigpapi import AndroidAPI, AndroidMQTT, AndroidState
 from mauigpapi.errors import (
+    IGCheckpointError,
     IGNotLoggedInError,
     IGUserIDNotFoundError,
     IrisSubscribeError,
@@ -63,6 +64,8 @@ BridgeState.human_readable_errors.update(
     {
         "ig-connection-error": "Instagram disconnected unexpectedly",
         "ig-auth-error": "Authentication error from Instagram: {message}",
+        "ig-checkpoint": "Instagram checkpoint error. Please check Instagram website.",
+        "ig-checkpoint-locked": "Instagram checkpoint error. Please check Instagram website.",
         "ig-disconnected": None,
         "ig-no-mqtt": "You're not connected to Instagram",
         "logged-out": "You're not logged into Instagram",
@@ -175,6 +178,9 @@ class User(DBUser, BaseUser):
             except IGNotLoggedInError as e:
                 self.log.warning(f"Failed to connect to Instagram: {e}, logging out")
                 await self.logout(error=e)
+                return
+            except IGCheckpointError as e:
+                await self._handle_checkpoint(e, on="connect", client=client)
                 return
         self.client = client
         self._is_logged_in = True
@@ -327,6 +333,9 @@ class User(DBUser, BaseUser):
                     except IGNotLoggedInError as e:
                         self.log.exception("Got not logged in error while syncing for refresh")
                         await self.logout(error=e)
+                    except IGCheckpointError as e:
+                        await self._handle_checkpoint(e, on="refresh")
+                        return
                     except Exception:
                         if retry_count >= 4 and minutes < 5:
                             minutes += 1
@@ -341,6 +350,27 @@ class User(DBUser, BaseUser):
                 await self.start_listen()
         finally:
             self._is_refreshing = False
+
+    async def _handle_checkpoint(
+        self, e: IGCheckpointError, on: str, client: AndroidAPI | None = None
+    ) -> None:
+        self.log.warning(f"Got checkpoint error on {on}: {e.body.serialize()}")
+        client = client or self.client
+        error_code = "ig-checkpoint"
+        try:
+            resp = await client.challenge_reset()
+            self.log.debug(f"Challenge state: {resp.serialize()}")
+            if resp.challenge_context.challenge_type_enum == "HACKED_LOCK":
+                error_code = "ig-checkpoint-locked"
+        except Exception:
+            self.log.exception("Error resetting challenge state")
+        await self.push_bridge_state(BridgeStateEvent.BAD_CREDENTIALS, error=error_code)
+        self.client = None
+        self.mqtt = None
+        # if on == "connect":
+        #     await self.connect()
+        # else:
+        #     await self.sync()
 
     async def _sync_thread(self, thread: Thread, min_active_at: int) -> None:
         portal = await po.Portal.get_by_thread(thread, self.igpk)

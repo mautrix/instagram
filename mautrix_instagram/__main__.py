@@ -116,7 +116,7 @@ class InstagramBridge(Bridge):
                 return
             log.info("Executing periodic reconnections")
             for user in User.by_igpk.values():
-                if not user.is_connected and not always_reconnect:
+                if not user.client or (not user.is_connected and not always_reconnect):
                     log.debug("Not reconnecting %s: not connected", user.mxid)
                     continue
                 log.debug("Executing periodic reconnect for %s", user.mxid)
