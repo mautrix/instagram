@@ -373,14 +373,23 @@ class User(DBUser, BaseUser):
         error_code = "ig-checkpoint"
         try:
             resp = await client.challenge_reset()
+            info = {
+                "challenge_context": (
+                    resp.challenge_context.serialize() if resp.challenge_context_str else None
+                ),
+                "step_name": resp.step_name,
+                "step_data": resp.step_data.serialize() if resp.step_data else None,
+                "user_id": resp.user_id,
+                "action": resp.action,
+                "status": resp.status,
+            }
             self.log.debug(f"Challenge state: {resp.serialize()}")
             if resp.challenge_context.challenge_type_enum == "HACKED_LOCK":
                 error_code = "ig-checkpoint-locked"
         except Exception:
             self.log.exception("Error resetting challenge state")
-        await self.push_bridge_state(
-            BridgeStateEvent.BAD_CREDENTIALS, error=error_code, info=e.body.serialize()
-        )
+            info = {"challenge": e.body.challenge.serialize() if e.body.challenge else None}
+        await self.push_bridge_state(BridgeStateEvent.BAD_CREDENTIALS, error=error_code, info=info)
         # if on == "connect":
         #     await self.connect()
         # else:
