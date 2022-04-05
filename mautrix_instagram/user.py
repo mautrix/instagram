@@ -382,6 +382,7 @@ class User(DBUser, BaseUser):
                 "user_id": resp.user_id,
                 "action": resp.action,
                 "status": resp.status,
+                "challenge": e.body.challenge.serialize() if e.body.challenge else None,
             }
             self.log.debug(f"Challenge state: {resp.serialize()}")
             if resp.challenge_context.challenge_type_enum == "HACKED_LOCK":
