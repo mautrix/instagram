@@ -1405,7 +1405,12 @@ class Portal(DBPortal, BasePortal):
         for user_id, receipt in receipts.items():
             message = await DBMessage.get_by_item_id(receipt.item_id, self.receiver)
             if not message:
-                continue
+                message = await DBMessage.get_closest(self.mxid, int(receipt.timestamp))
+                if not message:
+                    self.log.debug(
+                        "Couldn't find message %s to mark as read by %s", receipt, user_id
+                    )
+                    continue
             puppet = await p.Puppet.get_by_pk(int(user_id), create=False)
             if not puppet:
                 continue

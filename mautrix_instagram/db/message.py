@@ -1,5 +1,5 @@
 # mautrix-instagram - A Matrix-Instagram puppeting bridge.
-# Copyright (C) 2020 Tulir Asokan
+# Copyright (C) 2022 Tulir Asokan
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as published by
@@ -62,12 +62,11 @@ class Message:
     async def delete_all(cls, room_id: RoomID) -> None:
         await cls.db.execute("DELETE FROM message WHERE mx_room=$1", room_id)
 
+    _columns = "mxid, mx_room, item_id, client_context, receiver, sender, ig_timestamp"
+
     @classmethod
     async def get_by_mxid(cls, mxid: EventID, mx_room: RoomID) -> Message | None:
-        q = (
-            "SELECT mxid, mx_room, item_id, client_context, receiver, sender, ig_timestamp "
-            "FROM message WHERE mxid=$1 AND mx_room=$2"
-        )
+        q = f"SELECT {cls._columns} FROM message WHERE mxid=$1 AND mx_room=$2"
         row = await cls.db.fetchrow(q, mxid, mx_room)
         if not row:
             return None
@@ -75,22 +74,31 @@ class Message:
 
     @classmethod
     async def get_last(cls, mx_room: RoomID) -> Message | None:
-        q = (
-            "SELECT mxid, mx_room, item_id, client_context, receiver, sender, ig_timestamp "
-            "FROM message WHERE mx_room=$1 AND item_id NOT LIKE 'fi.mau.instagram.%' "
-            "AND ig_timestamp IS NOT NULL ORDER BY ig_timestamp DESC LIMIT 1"
-        )
+        q = f"""
+        SELECT {cls._columns} FROM message
+        WHERE mx_room=$1 AND ig_timestamp IS NOT NULL AND item_id NOT LIKE 'fi.mau.instagram.%'
+        ORDER BY ig_timestamp DESC LIMIT 1
+        """
         row = await cls.db.fetchrow(q, mx_room)
         if not row:
             return None
         return cls(**row)
 
     @classmethod
+    async def get_closest(cls, mx_room: RoomID, before_ts: int) -> Message | None:
+        q = f"""
+        SELECT {cls._columns} FROM message
+        WHERE mx_room=$1 AND ig_timestamp<=$2 AND item_id NOT LIKE 'fi.mau.instagram.%'
+        ORDER BY ig_timestamp DESC LIMIT 1
+        """
+        row = await cls.db.fetchrow(q, mx_room, before_ts)
+        if not row:
+            return None
+        return cls(**row)
+
+    @classmethod
     async def get_by_item_id(cls, item_id: str, receiver: int) -> Message | None:
-        q = (
-            "SELECT mxid, mx_room, item_id, client_context, receiver, sender, ig_timestamp "
-            "FROM message WHERE item_id=$1 AND receiver=$2"
-        )
+        q = f"SELECT {cls._columns} FROM message WHERE item_id=$1 AND receiver=$2"
         row = await cls.db.fetchrow(q, item_id, receiver)
         if not row:
             return None
