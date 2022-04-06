@@ -25,6 +25,7 @@ from mauigpapi.errors import (
     IGCheckpointError,
     IGConsentRequiredError,
     IGNotLoggedInError,
+    IGRateLimitError,
     IGUserIDNotFoundError,
     IrisSubscribeError,
     MQTTNotConnected,
@@ -68,6 +69,7 @@ BridgeState.human_readable_errors.update(
         "ig-checkpoint": "Instagram checkpoint error. Please check the Instagram website.",
         "ig-consent-required": "Instagram requires a consent update. Please check the Instagram website.",
         "ig-checkpoint-locked": "Instagram checkpoint error. Please check the Instagram website.",
+        "ig-rate-limit": "Got Instagram ratelimit error, waiting a few minutes before retrying...",
         "ig-disconnected": None,
         "ig-no-mqtt": "You're not connected to Instagram",
         "logged-out": "You're not logged into Instagram",
@@ -156,8 +158,11 @@ class User(DBUser, BaseUser):
     async def try_connect(self) -> None:
         try:
             await self.connect()
-        except Exception:
+        except Exception as e:
             self.log.exception("Error while connecting to Instagram")
+            await self.push_bridge_state(
+                BridgeStateEvent.UNKNOWN_ERROR, info={"python_error": str(e)}
+            )
 
     @property
     def api_log(self) -> TraceLogger:
@@ -269,10 +274,14 @@ class User(DBUser, BaseUser):
         important: bool = False,
         error_code: str | None = None,
         error_message: str | None = None,
+        info: dict | None = None,
     ) -> EventID | None:
         if state_event:
             await self.push_bridge_state(
-                state_event, error=error_code, message=error_message if error_code else text
+                state_event,
+                error=error_code,
+                message=error_message if error_code else text,
+                info=info,
             )
         if self.config["bridge.disable_bridge_notices"]:
             return None
@@ -310,9 +319,11 @@ class User(DBUser, BaseUser):
     async def _try_sync(self) -> None:
         try:
             await self.sync()
-        except Exception:
+        except Exception as e:
             self.log.exception("Exception while syncing")
-            await self.push_bridge_state(BridgeStateEvent.UNKNOWN_ERROR)
+            await self.push_bridge_state(
+                BridgeStateEvent.UNKNOWN_ERROR, info={"python_error": str(e)}
+            )
 
     async def get_direct_chats(self) -> dict[UserID, list[RoomID]]:
         return {
@@ -338,15 +349,25 @@ class User(DBUser, BaseUser):
                     except IGCheckpointError as e:
                         await self._handle_checkpoint(e, on="refresh")
                         return
-                    except Exception:
+                    except Exception as e:
                         if retry_count >= 4 and minutes < 5:
                             minutes += 1
+                        errcode = "unknown-error"
+                        if isinstance(e, IGRateLimitError):
+                            self.log.debug("Ratelimit error content: %s", e.body)
+                            errcode = "ig-rate-limit"
+                            if minutes < 60:
+                                minutes += 1
                         retry_count += 1
                         s = "s" if minutes != 1 else ""
                         self.log.exception(
                             f"Error while syncing for refresh, retrying in {minutes} minute{s}"
                         )
-                        await self.push_bridge_state(BridgeStateEvent.UNKNOWN_ERROR)
+                        await self.push_bridge_state(
+                            BridgeStateEvent.UNKNOWN_ERROR,
+                            error=errcode,
+                            info={"python_error": str(e)},
+                        )
                         await asyncio.sleep(minutes * 60)
             else:
                 await self.start_listen()
@@ -408,7 +429,20 @@ class User(DBUser, BaseUser):
             self.log.debug(f"{thread.thread_id} is not active and doesn't have a portal")
 
     async def sync(self) -> None:
-        resp = await self.client.get_inbox()
+        sleep_minutes = 2
+        while True:
+            try:
+                resp = await self.client.get_inbox()
+                break
+            except IGRateLimitError as e:
+                self.log.error(
+                    "Got ratelimit error while trying to get inbox (%s), retrying in %d minutes",
+                    e.body,
+                    sleep_minutes,
+                )
+                await self.push_bridge_state(BridgeStateEvent.UNKNOWN_ERROR, error="ig-rate-limit")
+                await asyncio.sleep(sleep_minutes * 60)
+                sleep_minutes += 2
 
         if not self._listen_task:
             await self.start_listen(resp.seq_id, resp.snapshot_at_ms)
@@ -467,13 +501,14 @@ class User(DBUser, BaseUser):
                 error_code="ig-connection-error",
             )
             self.mqtt.disconnect()
-        except Exception:
+        except Exception as e:
             self.log.exception("Fatal error in listener")
             await self.send_bridge_notice(
                 "Fatal error in listener (see logs for more info)",
                 state_event=BridgeStateEvent.UNKNOWN_ERROR,
                 important=True,
                 error_code="ig-connection-error",
+                info={"python_error": str(e)},
             )
             self.mqtt.disconnect()
         else:
