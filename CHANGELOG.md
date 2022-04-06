@@ -1,10 +1,11 @@
-# v0.1.3 (unreleased)
+# v0.1.3 (2022-04-06)
 
 * Added support for Matrix->Instagram replies.
 * Added support for sending clickable links with previews to Instagram.
 * Added support for creating DMs from Matrix (by starting a chat with a ghost).
 * Added option to use [MSC2246] async media uploads.
 * Added support for logging in with a Facebook token in the provisioning API.
+* Added support for sending giphy gifs (requires client support).
 * Changed some fields to stop the user from showing up as online on Instagram
   all the time.
 * Fixed messages on Instagram not being marked as read if last event on Matrix
