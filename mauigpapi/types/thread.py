@@ -42,6 +42,10 @@ class ThreadUserLastSeenAt(SerializableAttrs):
     item_id: str
     shh_seen_state: Dict[str, Any]
 
+    @property
+    def timestamp_ms(self) -> int:
+        return int(self.timestamp) // 1000
+
 
 @dataclass(kw_only=True)
 class Thread(SerializableAttrs):

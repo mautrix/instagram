@@ -37,6 +37,10 @@ class Message:
     sender: int
     ig_timestamp: int | None
 
+    @property
+    def ig_timestamp_ms(self) -> int:
+        return (self.ig_timestamp // 1000) if self.ig_timestamp else 0
+
     async def insert(self) -> None:
         q = """
             INSERT INTO message (mxid, mx_room, item_id, client_context, receiver, sender,

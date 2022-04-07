@@ -22,6 +22,7 @@ import asyncio
 import json
 import mimetypes
 import re
+import time
 
 import asyncpg
 import magic
@@ -30,7 +31,6 @@ from mauigpapi.types import (
     AnimatedMediaItem,
     CommandResponse,
     ExpiredMediaItem,
-    LinkContext,
     MediaShareItem,
     MediaType,
     MessageSyncMessage,
@@ -241,6 +241,7 @@ class Portal(DBPortal, BasePortal):
         message: DBMessage,
         sender: u.User | p.Puppet,
         reaction: str,
+        mx_timestamp: int,
     ) -> None:
         if existing:
             self.log.debug(
@@ -248,7 +249,9 @@ class Portal(DBPortal, BasePortal):
                 f" (message: {message.mxid})"
             )
             await intent.redact(existing.mx_room, existing.mxid)
-            await existing.edit(reaction=reaction, mxid=mxid, mx_room=message.mx_room)
+            await existing.edit(
+                reaction=reaction, mxid=mxid, mx_room=message.mx_room, mx_timestamp=mx_timestamp
+            )
         else:
             self.log.debug(f"_upsert_reaction inserting {mxid} (message: {message.mxid})")
             await DBReaction(
@@ -258,6 +261,7 @@ class Portal(DBPortal, BasePortal):
                 ig_receiver=self.receiver,
                 ig_sender=sender.igpk,
                 reaction=reaction,
+                mx_timestamp=mx_timestamp,
             ).insert()
 
     # endregion
@@ -521,10 +525,10 @@ class Portal(DBPortal, BasePortal):
             )
 
     async def handle_matrix_reaction(
-        self, sender: u.User, event_id: EventID, reacting_to: EventID, emoji: str
+        self, sender: u.User, event_id: EventID, reacting_to: EventID, emoji: str, timestamp: int
     ) -> None:
         try:
-            await self._handle_matrix_reaction(sender, event_id, reacting_to, emoji)
+            await self._handle_matrix_reaction(sender, event_id, reacting_to, emoji, timestamp)
         except Exception as e:
             self.log.exception(f"Fatal error handling Matrix event {event_id}: {e}")
             message = "Fatal error handling reaction (see logs for more details)"
@@ -542,7 +546,7 @@ class Portal(DBPortal, BasePortal):
             )
 
     async def _handle_matrix_reaction(
-        self, sender: u.User, event_id: EventID, reacting_to: EventID, emoji: str
+        self, sender: u.User, event_id: EventID, reacting_to: EventID, emoji: str, timestamp: int
     ) -> None:
         message = await DBMessage.get_by_mxid(reacting_to, self.mxid)
         if not message or message.is_internal:
@@ -592,7 +596,7 @@ class Portal(DBPortal, BasePortal):
                 await self._send_delivery_receipt(event_id)
                 self.log.trace(f"{sender.mxid} reacted to {message.item_id} with {emoji}")
                 await self._upsert_reaction(
-                    existing, self.main_intent, event_id, message, sender, emoji
+                    existing, self.main_intent, event_id, message, sender, emoji, timestamp
                 )
 
     async def handle_matrix_redaction(
@@ -1260,39 +1264,51 @@ class Portal(DBPortal, BasePortal):
                 f"(type {item.item_type} -> fallback error {event_id})"
             )
         if is_backfill and item.reactions:
-            await self._handle_instagram_reactions(msg, item.reactions.emojis, item.timestamp_ms)
+            await self._handle_instagram_reactions(msg, item.reactions.emojis, is_backfill=True)
 
     async def handle_instagram_remove(self, item_id: str) -> None:
         message = await DBMessage.get_by_item_id(item_id, self.receiver)
         if message is None:
             return
         await message.delete()
-        sender = await p.Puppet.get_by_pk(message.sender)
-        try:
-            await sender.intent_for(self).redact(self.mxid, message.mxid)
-        except MForbidden:
-            await self.main_intent.redact(self.mxid, message.mxid)
-        self.log.debug(f"Redacted {message.mxid} after Instagram unsend")
+        if message.mxid:
+            sender = await p.Puppet.get_by_pk(message.sender)
+            try:
+                await sender.intent_for(self).redact(self.mxid, message.mxid)
+            except MForbidden:
+                await self.main_intent.redact(self.mxid, message.mxid)
+            self.log.debug(f"Redacted {message.mxid} after Instagram unsend")
 
     async def _handle_instagram_reactions(
-        self, message: DBMessage, reactions: list[Reaction], timestamp: int | None = None
+        self, message: DBMessage, reactions: list[Reaction], is_backfill: bool = False
     ) -> None:
         old_reactions: dict[int, DBReaction]
         old_reactions = {
             reaction.ig_sender: reaction
             for reaction in await DBReaction.get_all_by_item_id(message.item_id, self.receiver)
         }
+        timestamp_deduplicator = 1
         for new_reaction in reactions:
             old_reaction = old_reactions.pop(new_reaction.sender_id, None)
             if old_reaction and old_reaction.reaction == new_reaction.emoji:
                 continue
             puppet = await p.Puppet.get_by_pk(new_reaction.sender_id)
             intent = puppet.intent_for(self)
+            timestamp = new_reaction.timestamp_ms if is_backfill else int(time.time() * 1000)
+            if is_backfill:
+                timestamp += timestamp_deduplicator
+                timestamp_deduplicator += 1
             reaction_event_id = await intent.react(
                 self.mxid, message.mxid, new_reaction.emoji, timestamp=timestamp
             )
             await self._upsert_reaction(
-                old_reaction, intent, reaction_event_id, message, puppet, new_reaction.emoji
+                old_reaction,
+                intent,
+                reaction_event_id,
+                message,
+                puppet,
+                new_reaction.emoji,
+                timestamp,
             )
         for old_reaction in old_reactions.values():
             await old_reaction.delete()
@@ -1403,14 +1419,21 @@ class Portal(DBPortal, BasePortal):
 
     async def _update_read_receipts(self, receipts: dict[int | str, ThreadUserLastSeenAt]) -> None:
         for user_id, receipt in receipts.items():
+            message: DBMessage | DBReaction
             message = await DBMessage.get_by_item_id(receipt.item_id, self.receiver)
             if not message:
-                message = await DBMessage.get_closest(self.mxid, int(receipt.timestamp))
-                if not message:
+                reaction: DBReaction
+                message, reaction = await asyncio.gather(
+                    DBMessage.get_closest(self.mxid, int(receipt.timestamp)),
+                    DBReaction.get_closest(self.mxid, receipt.timestamp_ms),
+                )
+                if (not message or not message.mxid) and not reaction:
                     self.log.debug(
                         "Couldn't find message %s to mark as read by %s", receipt, user_id
                     )
                     continue
+                elif not message or (reaction and reaction.mx_timestamp > message.ig_timestamp_ms):
+                    message = reaction
             puppet = await p.Puppet.get_by_pk(int(user_id), create=False)
             if not puppet:
                 continue

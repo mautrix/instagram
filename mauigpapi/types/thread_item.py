@@ -383,9 +383,13 @@ class AnimatedMediaItem(SerializableAttrs):
 class Reaction(SerializableAttrs):
     sender_id: int
     timestamp: int
-    client_context: int
+    client_context: Optional[str]
     emoji: str = "❤️"
     super_react_type: Optional[str] = None
+
+    @property
+    def timestamp_ms(self) -> int:
+        return self.timestamp // 1000
 
 
 @dataclass

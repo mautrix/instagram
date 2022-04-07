@@ -120,3 +120,8 @@ async def upgrade_v5(conn: Connection) -> None:
 @upgrade_table.register(description="Allow hidden events in message table")
 async def upgrade_v6(conn: Connection) -> None:
     await conn.execute("ALTER TABLE message ALTER COLUMN mxid DROP NOT NULL")
+
+
+@upgrade_table.register(description="Store reaction timestamps")
+async def upgrade_v7(conn: Connection) -> None:
+    await conn.execute("ALTER TABLE reaction ADD COLUMN mx_timestamp BIGINT")

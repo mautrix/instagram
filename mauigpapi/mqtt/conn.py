@@ -448,7 +448,7 @@ class AndroidMQTT:
             try:
                 await handler(evt)
             except Exception:
-                self.log.exception(f"Error in {type(evt)} handler")
+                self.log.exception(f"Error in {type(evt).__name__} handler")
 
     def disconnect(self) -> None:
         self._client.disconnect()
