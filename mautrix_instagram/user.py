@@ -429,7 +429,9 @@ class User(DBUser, BaseUser):
                     e.body,
                     sleep_minutes,
                 )
-                await self.push_bridge_state(BridgeStateEvent.UNKNOWN_ERROR, error="ig-rate-limit")
+                await self.push_bridge_state(
+                    BridgeStateEvent.TRANSIENT_DISCONNECT, error="ig-rate-limit"
+                )
                 await asyncio.sleep(sleep_minutes * 60)
                 sleep_minutes += 2
             except IGCheckpointError as e:
