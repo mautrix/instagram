@@ -343,21 +343,9 @@ class User(DBUser, BaseUser):
                     try:
                         await self.sync()
                         return
-                    except IGNotLoggedInError as e:
-                        self.log.exception("Got not logged in error while syncing for refresh")
-                        await self.logout(error=e)
-                    except IGCheckpointError as e:
-                        await self._handle_checkpoint(e, on="refresh")
-                        return
                     except Exception as e:
-                        if retry_count >= 4 and minutes < 5:
+                        if retry_count >= 4 and minutes < 10:
                             minutes += 1
-                        errcode = "unknown-error"
-                        if isinstance(e, IGRateLimitError):
-                            self.log.debug("Ratelimit error content: %s", e.body)
-                            errcode = "ig-rate-limit"
-                            if minutes < 60:
-                                minutes += 1
                         retry_count += 1
                         s = "s" if minutes != 1 else ""
                         self.log.exception(
@@ -365,7 +353,8 @@ class User(DBUser, BaseUser):
                         )
                         await self.push_bridge_state(
                             BridgeStateEvent.UNKNOWN_ERROR,
-                            error=errcode,
+                            error="unknown-error",
+                            message="An unknown error occurred while connecting to Instagram",
                             info={"python_error": str(e)},
                         )
                         await asyncio.sleep(minutes * 60)
@@ -412,10 +401,6 @@ class User(DBUser, BaseUser):
             self.log.exception("Error resetting challenge state")
             info = {"challenge": e.body.challenge.serialize() if e.body.challenge else None}
         await self.push_bridge_state(BridgeStateEvent.BAD_CREDENTIALS, error=error_code, info=info)
-        # if on == "connect":
-        #     await self.connect()
-        # else:
-        #     await self.sync()
 
     async def _sync_thread(self, thread: Thread, min_active_at: int) -> None:
         portal = await po.Portal.get_by_thread(thread, self.igpk)
@@ -434,6 +419,10 @@ class User(DBUser, BaseUser):
             try:
                 resp = await self.client.get_inbox()
                 break
+            except IGNotLoggedInError as e:
+                self.log.exception("Got not logged in error while syncing")
+                await self.logout(error=e)
+                return
             except IGRateLimitError as e:
                 self.log.error(
                     "Got ratelimit error while trying to get inbox (%s), retrying in %d minutes",
@@ -443,6 +432,9 @@ class User(DBUser, BaseUser):
                 await self.push_bridge_state(BridgeStateEvent.UNKNOWN_ERROR, error="ig-rate-limit")
                 await asyncio.sleep(sleep_minutes * 60)
                 sleep_minutes += 2
+            except IGCheckpointError as e:
+                await self._handle_checkpoint(e, on="sync")
+                return
 
         if not self._listen_task:
             await self.start_listen(resp.seq_id, resp.snapshot_at_ms)
