@@ -239,8 +239,9 @@ class ProvisioningAPI:
                 status=403,
                 headers=self._acao_headers,
             )
+        liu = resp.logged_in_user
         challenge_data = resp.serialize()
-        liu: LoginResponseUser = challenge_data.pop("logged_in_user", None)
+        challenge_data.pop("logged_in_user", None)
         self.log.debug(
             "Challenge state for %s after auto handling: %s (logged in user: %s)",
             user.mxid,
@@ -278,8 +279,9 @@ class ProvisioningAPI:
                 status=403,
                 headers=self._acao_headers,
             )
+        liu = resp.logged_in_user
         challenge_data = resp.serialize()
-        liu: LoginResponseUser = challenge_data.pop("logged_in_user", None)
+        challenge_data.pop("logged_in_user", None)
         self.log.debug(
             "Challenge state for %s after sending security code: %s (logged in user: %s)",
             user.mxid,
