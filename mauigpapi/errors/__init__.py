@@ -3,8 +3,8 @@ from .mqtt import IGMQTTError, IrisSubscribeError, MQTTNotConnected, MQTTNotLogg
 from .response import (
     IGActionSpamError,
     IGBad2FACodeError,
+    IGChallengeError,
     IGChallengeWrongCodeError,
-    IGCheckpointError,
     IGConsentRequiredError,
     IGFBNoContactPointFoundError,
     IGInactiveUserError,
@@ -22,4 +22,4 @@ from .response import (
     IGUnknownError,
     IGUserHasLoggedOutError,
 )
-from .state import IGCookieNotFoundError, IGNoCheckpointError, IGUserIDNotFoundError
+from .state import IGCookieNotFoundError, IGNoChallengeError, IGUserIDNotFoundError

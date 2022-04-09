@@ -22,7 +22,7 @@ from attr import dataclass
 
 from mautrix.types import SerializableAttrs, field
 
-from ..errors import IGCookieNotFoundError, IGNoCheckpointError, IGUserIDNotFoundError
+from ..errors import IGCookieNotFoundError, IGNoChallengeError, IGUserIDNotFoundError
 from ..types import ChallengeStateResponse
 from .application import AndroidApplication
 from .cookies import Cookies
@@ -74,7 +74,7 @@ class AndroidState(SerializableAttrs):
     @property
     def challenge_path(self) -> str:
         if not self._challenge_path:
-            raise IGNoCheckpointError()
+            raise IGNoChallengeError()
         return self._challenge_path
 
     @challenge_path.setter

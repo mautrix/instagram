@@ -35,7 +35,7 @@ class SpamResponse(SerializableAttrs):
 
 
 @dataclass
-class CheckpointChallenge(SerializableAttrs):
+class ChallengeData(SerializableAttrs):
     url: str
     api_path: str
     hide_webview_header: bool
@@ -45,10 +45,10 @@ class CheckpointChallenge(SerializableAttrs):
 
 
 @dataclass
-class CheckpointResponse(SerializableAttrs):
+class ChallengeResponse(SerializableAttrs):
     message: str  # challenge_required
     status: str  # fail
-    challenge: CheckpointChallenge
+    challenge: ChallengeData
     error_type: Optional[str] = None
 
 

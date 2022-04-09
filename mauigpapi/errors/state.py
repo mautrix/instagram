@@ -26,6 +26,6 @@ class IGCookieNotFoundError(IGError):
         super().__init__(f"Cookie '{key}' not found")
 
 
-class IGNoCheckpointError(IGError):
-    def __init__(self, message: str = "No checkpoint data available"):
+class IGNoChallengeError(IGError):
+    def __init__(self, message: str = "No challenge data available"):
         super().__init__(message)

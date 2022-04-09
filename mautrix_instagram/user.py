@@ -22,7 +22,7 @@ import time
 
 from mauigpapi import AndroidAPI, AndroidMQTT, AndroidState
 from mauigpapi.errors import (
-    IGCheckpointError,
+    IGChallengeError,
     IGConsentRequiredError,
     IGNotLoggedInError,
     IGRateLimitError,
@@ -186,7 +186,7 @@ class User(DBUser, BaseUser):
                 self.log.warning(f"Failed to connect to Instagram: {e}, logging out")
                 await self.logout(error=e)
                 return
-            except (IGCheckpointError, IGConsentRequiredError) as e:
+            except (IGChallengeError, IGConsentRequiredError) as e:
                 await self._handle_checkpoint(e, on="connect", client=client)
                 return
         self.client = client
@@ -365,7 +365,7 @@ class User(DBUser, BaseUser):
 
     async def _handle_checkpoint(
         self,
-        e: IGCheckpointError | IGConsentRequiredError,
+        e: IGChallengeError | IGConsentRequiredError,
         on: str,
         client: AndroidAPI | None = None,
     ) -> None:
@@ -434,7 +434,7 @@ class User(DBUser, BaseUser):
                 )
                 await asyncio.sleep(sleep_minutes * 60)
                 sleep_minutes += 2
-            except IGCheckpointError as e:
+            except IGChallengeError as e:
                 await self._handle_checkpoint(e, on="sync")
                 return
 

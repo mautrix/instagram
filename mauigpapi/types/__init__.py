@@ -12,8 +12,8 @@ from .account import (
 from .challenge import ChallengeStateData, ChallengeStateResponse
 from .direct_inbox import DMInbox, DMInboxCursor, DMInboxResponse, DMThreadResponse
 from .error import (
-    CheckpointChallenge,
-    CheckpointResponse,
+    ChallengeData,
+    ChallengeResponse,
     ConsentRequiredResponse,
     LoginErrorResponse,
     LoginErrorResponseButton,

@@ -29,8 +29,8 @@ from yarl import URL
 from mauigpapi import AndroidAPI, AndroidState
 from mauigpapi.errors import (
     IGBad2FACodeError,
+    IGChallengeError,
     IGChallengeWrongCodeError,
-    IGCheckpointError,
     IGFBNoContactPointFoundError,
     IGLoginBadPasswordError,
     IGLoginInvalidUserError,
@@ -156,7 +156,7 @@ class ProvisioningAPI:
                 status=202,
                 headers=self._acao_headers,
             )
-        except IGCheckpointError as e:
+        except IGChallengeError as e:
             self.log.debug("%s logged in as %s, but got a checkpoint", user.mxid, username)
             return await self.start_checkpoint(user, api, e)
         except IGLoginInvalidUserError:
@@ -220,13 +220,13 @@ class ProvisioningAPI:
                 status=403,
                 headers=self._acao_headers,
             )
-        except IGCheckpointError as e:
+        except IGChallengeError as e:
             self.log.debug("%s submitted a 2-factor auth code, but got a checkpoint", user.mxid)
             return await self.start_checkpoint(user, api, e)
         return await self._finish_login(user, state, api, login_resp=resp, after="2-factor auth")
 
     async def start_checkpoint(
-        self, user: u.User, api: AndroidAPI, err: IGCheckpointError
+        self, user: u.User, api: AndroidAPI, err: IGChallengeError
     ) -> web.Response:
         try:
             resp = await api.challenge_auto(reset=True)
@@ -311,7 +311,7 @@ class ProvisioningAPI:
         manufacturer, model = pl["manufacturer"], pl["model"]
         try:
             resp = await api.current_user()
-        except IGCheckpointError as e:
+        except IGChallengeError as e:
             if isinstance(login_resp, ChallengeStateResponse):
                 self.log.debug(
                     "%s got a checkpoint after a login that looked successful, "

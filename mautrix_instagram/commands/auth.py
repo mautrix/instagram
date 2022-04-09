@@ -20,8 +20,8 @@ import hmac
 
 from mauigpapi.errors import (
     IGBad2FACodeError,
+    IGChallengeError,
     IGChallengeWrongCodeError,
-    IGCheckpointError,
     IGLoginBadPasswordError,
     IGLoginInvalidUserError,
     IGLoginTwoFactorRequiredError,
@@ -95,7 +95,7 @@ async def login(evt: CommandEvent) -> None:
             "2fa_identifier": tfa_info.two_factor_identifier,
         }
         await evt.reply(msg)
-    except IGCheckpointError:
+    except IGChallengeError:
         await api.challenge_auto(reset=True)
         evt.sender.command_status = {
             **evt.sender.command_status,
@@ -131,7 +131,7 @@ async def enter_login_2fa(evt: CommandEvent) -> None:
             "Invalid 2-factor authentication code. Please try again "
             "or use `$cmdprefix+sp cancel` to cancel."
         )
-    except IGCheckpointError:
+    except IGChallengeError:
         await api.challenge_auto(reset=True)
         evt.sender.command_status = {
             **evt.sender.command_status,

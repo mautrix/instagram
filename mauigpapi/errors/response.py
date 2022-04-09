@@ -20,7 +20,7 @@ from aiohttp import ClientResponse
 from mautrix.types import JSON, Serializable
 
 from ..types import (
-    CheckpointResponse,
+    ChallengeResponse,
     ConsentRequiredResponse,
     LoginErrorResponse,
     LoginRequiredResponse,
@@ -81,8 +81,8 @@ class IGRateLimitError(IGResponseError):
     pass
 
 
-class IGCheckpointError(IGResponseError):
-    body: CheckpointResponse
+class IGChallengeError(IGResponseError):
+    body: ChallengeResponse
 
     @property
     def url(self) -> str:

@@ -30,7 +30,7 @@ from mautrix.util.logging import TraceLogger
 from ..errors import (
     IGActionSpamError,
     IGBad2FACodeError,
-    IGCheckpointError,
+    IGChallengeError,
     IGConsentRequiredError,
     IGFBNoContactPointFoundError,
     IGInactiveUserError,
@@ -204,7 +204,7 @@ class BaseAndroidAPI:
         message = data.get("message")
         if isinstance(message, str):
             if message == "challenge_required":
-                err = IGCheckpointError(resp, data)
+                err = IGChallengeError(resp, data)
                 self.state.challenge_path = err.url
                 raise err
             elif message == "consent_required":
