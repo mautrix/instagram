@@ -33,6 +33,17 @@ class IGChallengeWrongCodeError(IGError):
     pass
 
 
+class IGUnknownError(IGError):
+    response: ClientResponse
+
+    def __init__(self, response: ClientResponse) -> None:
+        super().__init__(
+            f"Request {response.request_info.method} {response.request_info.url.path} failed: "
+            f"HTTP {response.status} with non-JSON body"
+        )
+        self.response = response
+
+
 class IGResponseError(IGError):
     response: ClientResponse
 

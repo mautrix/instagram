@@ -19,6 +19,7 @@ from .response import (
     IGRateLimitError,
     IGResponseError,
     IGSentryBlockError,
+    IGUnknownError,
     IGUserHasLoggedOutError,
 )
 from .state import IGCookieNotFoundError, IGNoCheckpointError, IGUserIDNotFoundError

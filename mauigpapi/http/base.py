@@ -21,7 +21,7 @@ import logging
 import random
 import time
 
-from aiohttp import ClientResponse, ClientSession
+from aiohttp import ClientResponse, ClientSession, ContentTypeError
 from yarl import URL
 
 from mautrix.types import JSON, Serializable
@@ -43,6 +43,7 @@ from ..errors import (
     IGRateLimitError,
     IGResponseError,
     IGSentryBlockError,
+    IGUnknownError,
     IGUserHasLoggedOutError,
 )
 from ..state import AndroidState
@@ -176,7 +177,10 @@ class BaseAndroidAPI:
 
     async def _handle_response(self, resp: ClientResponse) -> JSON:
         self._handle_response_headers(resp)
-        body = await resp.json()
+        try:
+            body = await resp.json()
+        except (json.JSONDecodeError, ContentTypeError) as e:
+            raise IGUnknownError(resp) from e
         if body.get("status", "fail") == "ok":
             return body
         else:
