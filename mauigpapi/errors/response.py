@@ -81,6 +81,10 @@ class IGRateLimitError(IGResponseError):
     pass
 
 
+class IGCheckpointError(IGResponseError):
+    pass
+
+
 class IGChallengeError(IGResponseError):
     body: ChallengeResponse
 

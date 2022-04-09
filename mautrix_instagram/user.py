@@ -23,6 +23,7 @@ import time
 from mauigpapi import AndroidAPI, AndroidMQTT, AndroidState
 from mauigpapi.errors import (
     IGChallengeError,
+    IGCheckpointError,
     IGConsentRequiredError,
     IGNotLoggedInError,
     IGRateLimitError,
@@ -321,6 +322,8 @@ class User(DBUser, BaseUser):
             await self.sync()
         except Exception as e:
             self.log.exception("Exception while syncing")
+            if isinstance(e, IGCheckpointError):
+                self.log.debug("Checkpoint error content: %s", e.body)
             await self.push_bridge_state(
                 BridgeStateEvent.UNKNOWN_ERROR, info={"python_error": str(e)}
             )
@@ -351,6 +354,8 @@ class User(DBUser, BaseUser):
                         self.log.exception(
                             f"Error while syncing for refresh, retrying in {minutes} minute{s}"
                         )
+                        if isinstance(e, IGCheckpointError):
+                            self.log.debug("Checkpoint error content: %s", e.body)
                         await self.push_bridge_state(
                             BridgeStateEvent.UNKNOWN_ERROR,
                             error="unknown-error",
@@ -434,7 +439,7 @@ class User(DBUser, BaseUser):
                 )
                 await asyncio.sleep(sleep_minutes * 60)
                 sleep_minutes += 2
-            except IGChallengeError as e:
+            except (IGChallengeError, IGConsentRequiredError) as e:
                 await self._handle_checkpoint(e, on="sync")
                 return
 

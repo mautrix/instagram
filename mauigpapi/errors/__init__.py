@@ -5,6 +5,7 @@ from .response import (
     IGBad2FACodeError,
     IGChallengeError,
     IGChallengeWrongCodeError,
+    IGCheckpointError,
     IGConsentRequiredError,
     IGFBNoContactPointFoundError,
     IGInactiveUserError,
