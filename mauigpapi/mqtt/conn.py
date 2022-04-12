@@ -53,7 +53,7 @@ from ..types import (
     ThreadSyncEvent,
     TypingStatus,
 )
-from .events import Connect, Disconnect
+from .events import Connect, Disconnect, NewSequenceID
 from .otclient import MQTToTClient
 from .subscription import GraphQLQueryID, RealtimeTopic, everclear_subscriptions
 from .thrift import ForegroundStateConfig, IncomingMessage, RealtimeClientInfo, RealtimeConfig
@@ -329,6 +329,9 @@ class AndroidMQTT:
                 self.log.trace(f"Got new seq_id: {parsed_item.seq_id}")
                 self._iris_seq_id = parsed_item.seq_id
                 self._iris_snapshot_at_ms = int(time.time() * 1000)
+                asyncio.create_task(
+                    self._dispatch(NewSequenceID(self._iris_seq_id, self._iris_snapshot_at_ms))
+                )
             for part in parsed_item.data:
                 self._on_messager_sync_item(part, parsed_item)
 
@@ -564,6 +567,14 @@ class AndroidMQTT:
         resp_dict = json.loads(resp.payload.decode("utf-8"))
         if resp_dict["error_type"] and resp_dict["error_message"]:
             raise IrisSubscribeError(resp_dict["error_type"], resp_dict["error_message"])
+        latest_seq_id = resp_dict.get("latest_seq_id")
+        if latest_seq_id > self._iris_seq_id:
+            self.log.info(f"Latest sequence ID is {latest_seq_id}, catching up from {seq_id}")
+            self._iris_seq_id = latest_seq_id
+            self._iris_snapshot_at_ms = resp_dict.get("subscribed_at_ms", int(time.time() * 1000))
+            asyncio.create_task(
+                self._dispatch(NewSequenceID(self._iris_seq_id, self._iris_snapshot_at_ms))
+            )
 
     def graphql_subscribe(self, subs: set[str]) -> asyncio.Future:
         self._graphql_subs |= subs

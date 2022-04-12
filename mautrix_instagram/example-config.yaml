@@ -102,9 +102,14 @@ bridge:
     displayname_max_length: 100
 
     # Maximum number of seconds since the last activity in a chat to automatically create portals.
-    portal_create_max_age: 86400
+    portal_create_max_age: 259200
     # Maximum number of chats to fetch for startup sync
-    chat_sync_limit: 100
+    chat_sync_limit: 20
+    # Maximum number of chats to create during startup sync
+    chat_create_limit: 10
+    # Should the chat list be synced on startup?
+    # If false, the bridge will try to reconnect to MQTT directly and ask the server to send missed events.
+    resync_on_startup: true
     # Whether or not to use /sync to get read receipts and typing notifications
     # when double puppeting is enabled
     sync_with_custom_puppets: true

@@ -35,18 +35,37 @@ class User:
     igpk: int | None
     state: AndroidState | None
     notice_room: RoomID | None
+    seq_id: int | None
+    snapshot_at_ms: int | None
+
+    @property
+    def _values(self):
+        return (
+            self.mxid,
+            self.igpk,
+            self.state.json() if self.state else None,
+            self.notice_room,
+            self.seq_id,
+            self.snapshot_at_ms,
+        )
 
     async def insert(self) -> None:
-        q = 'INSERT INTO "user" (mxid, igpk, state, notice_room) VALUES ($1, $2, $3, $4)'
-        await self.db.execute(
-            q, self.mxid, self.igpk, self.state.json() if self.state else None, self.notice_room
-        )
+        q = """
+        INSERT INTO "user" (mxid, igpk, state, notice_room, seq_id, snapshot_at_ms)
+        VALUES ($1, $2, $3, $4, $5, $6)
+        """
+        await self.db.execute(q, *self._values)
 
     async def update(self) -> None:
-        q = 'UPDATE "user" SET igpk=$2, state=$3, notice_room=$4 WHERE mxid=$1'
-        await self.db.execute(
-            q, self.mxid, self.igpk, self.state.json() if self.state else None, self.notice_room
-        )
+        q = """
+        UPDATE "user" SET igpk=$2, state=$3, notice_room=$4, seq_id=$5, snapshot_at_ms=$6
+        WHERE mxid=$1
+        """
+        await self.db.execute(q, *self._values)
+
+    async def save_seq_id(self) -> None:
+        q = 'UPDATE "user" SET seq_id=$2, snapshot_at_ms=$3 WHERE mxid=$1'
+        await self.db.execute(q, self.mxid, self.seq_id, self.snapshot_at_ms)
 
     @classmethod
     def _from_row(cls, row: asyncpg.Record) -> User:
@@ -54,9 +73,11 @@ class User:
         state_str = data.pop("state")
         return cls(state=AndroidState.parse_json(state_str) if state_str else None, **data)
 
+    _columns = "mxid, igpk, state, notice_room, seq_id, snapshot_at_ms"
+
     @classmethod
     async def get_by_mxid(cls, mxid: UserID) -> User | None:
-        q = 'SELECT mxid, igpk, state, notice_room FROM "user" WHERE mxid=$1'
+        q = f'SELECT {cls._columns} FROM "user" WHERE mxid=$1'
         row = await cls.db.fetchrow(q, mxid)
         if not row:
             return None
@@ -64,7 +85,7 @@ class User:
 
     @classmethod
     async def get_by_igpk(cls, igpk: int) -> User | None:
-        q = 'SELECT mxid, igpk, state, notice_room FROM "user" WHERE igpk=$1'
+        q = f'SELECT {cls._columns} FROM "user" WHERE igpk=$1'
         row = await cls.db.fetchrow(q, igpk)
         if not row:
             return None
@@ -72,6 +93,6 @@ class User:
 
     @classmethod
     async def all_logged_in(cls) -> list[User]:
-        q = 'SELECT mxid, igpk, state, notice_room FROM "user" WHERE igpk IS NOT NULL'
+        q = f'SELECT {cls._columns} FROM "user" WHERE igpk IS NOT NULL'
         rows = await cls.db.fetch(q)
         return [cls._from_row(row) for row in rows]

@@ -24,3 +24,9 @@ class Connect:
 @dataclass
 class Disconnect:
     reason: str
+
+
+@dataclass
+class NewSequenceID:
+    seq_id: int
+    snapshot_at_ms: int

@@ -125,3 +125,9 @@ async def upgrade_v6(conn: Connection) -> None:
 @upgrade_table.register(description="Store reaction timestamps")
 async def upgrade_v7(conn: Connection) -> None:
     await conn.execute("ALTER TABLE reaction ADD COLUMN mx_timestamp BIGINT")
+
+
+@upgrade_table.register(description="Store sync sequence ID in user table")
+async def upgrade_v8(conn: Connection) -> None:
+    await conn.execute('ALTER TABLE "user" ADD COLUMN seq_id BIGINT')
+    await conn.execute('ALTER TABLE "user" ADD COLUMN snapshot_at_ms BIGINT')
