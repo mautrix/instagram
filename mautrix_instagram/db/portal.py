@@ -20,7 +20,9 @@ from typing import TYPE_CHECKING, ClassVar
 from attr import dataclass
 
 from mautrix.types import ContentURI, RoomID, UserID
-from mautrix.util.async_db import Database, Row, Record
+from mautrix.util.async_db import Database
+
+from . import Record
 
 fake_db = Database.create("") if TYPE_CHECKING else None
 
@@ -72,7 +74,7 @@ class Portal:
         await self.db.execute(q, *self._values)
 
     @classmethod
-    def _from_row(cls, row: Row | Record) -> Portal:
+    def _from_row(cls, row: Record) -> Portal:
         return cls(**row)
 
     @classmethod

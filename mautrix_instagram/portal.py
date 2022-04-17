@@ -24,13 +24,6 @@ import mimetypes
 import re
 import time
 
-try:
-    import asyncpg
-    UNIQUE_ERROR = asyncpg.UniqueViolationError
-except ImportError:
-    import sqlite3
-    UNIQUE_ERROR = sqlite3.IntegrityError
-
 import magic
 
 from mauigpapi.types import (
@@ -78,7 +71,7 @@ from mautrix.util.simple_lock import SimpleLock
 
 from . import matrix as m, puppet as p, user as u
 from .config import Config
-from .db import Message as DBMessage, Portal as DBPortal, Reaction as DBReaction
+from .db import Message as DBMessage, Portal as DBPortal, Reaction as DBReaction, UniqueError
 
 if TYPE_CHECKING:
     from .__main__ import InstagramBridge
@@ -519,7 +512,7 @@ class Portal(DBPortal, BasePortal):
                     sender=sender.igpk,
                     ig_timestamp=int(resp.payload.timestamp),
                 ).insert()
-            except UNIQUE_ERROR as e:
+            except UniqueError as e:
                 self.log.warning(
                     f"Error while persisting {event_id} ({resp.payload.client_context}) "
                     f"-> {resp.payload.item_id}: {e}"
