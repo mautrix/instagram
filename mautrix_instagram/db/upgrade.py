@@ -13,10 +13,12 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from mautrix.util.async_db import UpgradeTable, Connection, Scheme
 import re
 
+from mautrix.util.async_db import Connection, Scheme, UpgradeTable
+
 upgrade_table = UpgradeTable()
+
 
 async def drop_not_null(conn: Connection, table: str, column: str):
     if conn.scheme == Scheme.SQLITE:
@@ -25,14 +27,12 @@ async def drop_not_null(conn: Connection, table: str, column: str):
         # We'd start a transaction, but we're already in one
         schema_version = await conn.fetchval("PRAGMA schema_version")
         table_sql = await conn.fetchval(
-            "SELECT sql FROM sqlite_schema WHERE type='table' AND name=$1",
-            table
+            "SELECT sql FROM sqlite_schema WHERE type='table' AND name=$1", table
         )
-        new_table_sql = re.sub(f'({column}\\s+\\w+) NOT NULL', r'\1', table_sql)
+        new_table_sql = re.sub(f"({column}\\s+\\w+) NOT NULL", r"\1", table_sql)
         await conn.execute("PRAGMA writable_schema=ON")
         await conn.execute(
-            "UPDATE sqlite_schema SET sql=$1 WHERE type='table' AND name=$2",
-            new_table_sql, table
+            "UPDATE sqlite_schema SET sql=$1 WHERE type='table' AND name=$2", new_table_sql, table
         )
         await conn.execute(f"PRAGMA schema_version={schema_version + 1}")
         await conn.execute("PRAGMA writable_schema=OFF")
@@ -141,6 +141,7 @@ async def upgrade_v5(conn: Connection) -> None:
 @upgrade_table.register(description="Allow hidden events in message table")
 async def upgrade_v6(conn: Connection) -> None:
     await drop_not_null(conn, "message", "mxid")
+
 
 @upgrade_table.register(description="Store reaction timestamps")
 async def upgrade_v7(conn: Connection) -> None:
