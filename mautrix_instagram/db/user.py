@@ -23,7 +23,7 @@ from mauigpapi.state import AndroidState
 from mautrix.types import RoomID, UserID
 from mautrix.util.async_db import Database
 
-from . import Record
+from .shim import Record
 
 fake_db = Database.create("") if TYPE_CHECKING else None
 
