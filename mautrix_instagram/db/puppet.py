@@ -19,10 +19,9 @@ from typing import TYPE_CHECKING, ClassVar
 
 from attr import dataclass
 from yarl import URL
-import asyncpg
 
 from mautrix.types import ContentURI, SyncToken, UserID
-from mautrix.util.async_db import Database
+from mautrix.util.async_db import Database, Row, Record
 
 fake_db = Database.create("") if TYPE_CHECKING else None
 
@@ -81,7 +80,7 @@ class Puppet:
         await self.db.execute(q, *self._values)
 
     @classmethod
-    def _from_row(cls, row: asyncpg.Record) -> Puppet:
+    def _from_row(cls, row: Row | Record) -> Puppet:
         data = {**row}
         base_url_str = data.pop("base_url")
         base_url = URL(base_url_str) if base_url_str is not None else None

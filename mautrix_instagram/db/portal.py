@@ -18,10 +18,9 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, ClassVar
 
 from attr import dataclass
-import asyncpg
 
 from mautrix.types import ContentURI, RoomID, UserID
-from mautrix.util.async_db import Database
+from mautrix.util.async_db import Database, Row, Record
 
 fake_db = Database.create("") if TYPE_CHECKING else None
 
@@ -73,7 +72,7 @@ class Portal:
         await self.db.execute(q, *self._values)
 
     @classmethod
-    def _from_row(cls, row: asyncpg.Record) -> Portal:
+    def _from_row(cls, row: Row | Record) -> Portal:
         return cls(**row)
 
     @classmethod

@@ -24,7 +24,13 @@ import mimetypes
 import re
 import time
 
-import asyncpg
+try:
+    import asyncpg
+    UNIQUE_ERROR = asyncpg.UniqueViolationError
+except ImportError:
+    import sqlite3
+    UNIQUE_ERROR = sqlite3.IntegrityError
+
 import magic
 
 from mauigpapi.types import (
@@ -513,7 +519,7 @@ class Portal(DBPortal, BasePortal):
                     sender=sender.igpk,
                     ig_timestamp=int(resp.payload.timestamp),
                 ).insert()
-            except asyncpg.UniqueViolationError as e:
+            except UNIQUE_ERROR as e:
                 self.log.warning(
                     f"Error while persisting {event_id} ({resp.payload.client_context}) "
                     f"-> {resp.payload.item_id}: {e}"

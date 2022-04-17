@@ -18,11 +18,10 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, ClassVar
 
 from attr import dataclass
-import asyncpg
 
 from mauigpapi.state import AndroidState
 from mautrix.types import RoomID, UserID
-from mautrix.util.async_db import Database
+from mautrix.util.async_db import Database, Row, Record
 
 fake_db = Database.create("") if TYPE_CHECKING else None
 
@@ -68,7 +67,7 @@ class User:
         await self.db.execute(q, self.mxid, self.seq_id, self.snapshot_at_ms)
 
     @classmethod
-    def _from_row(cls, row: asyncpg.Record) -> User:
+    def _from_row(cls, row: Row | Record) -> User:
         data = {**row}
         state_str = data.pop("state")
         return cls(state=AndroidState.parse_json(state_str) if state_str else None, **data)
