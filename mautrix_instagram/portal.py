@@ -557,8 +557,8 @@ class Portal(DBPortal, BasePortal):
         message = await DBMessage.get_by_mxid(reacting_to, self.mxid)
         if not message or message.is_internal:
             self.log.debug(f"Ignoring reaction to unknown event {reacting_to}")
-            await self.main_intent.redact(self.mxid, event_id, reason="Unknown target event")
-            raise NotImplementedError("Unknown target event")
+            await self.main_intent.redact(self.mxid, event_id, reason="Unknown target message")
+            raise NotImplementedError("Unknown target message")
 
         existing = await DBReaction.get_by_item_id(message.item_id, message.receiver, sender.igpk)
         if existing and existing.reaction == emoji:
