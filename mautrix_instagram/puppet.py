@@ -158,7 +158,7 @@ class Puppet(DBPuppet, BasePuppet):
         if pic_id != self.photo_id or not self.avatar_set:
             self.photo_id = pic_id
             if info.has_anonymous_profile_picture:
-                mxc = None
+                mxc = ""
             else:
                 async with source.client.raw_http_get(info.profile_pic_url) as resp:
                     content_type = resp.headers["Content-Type"]
