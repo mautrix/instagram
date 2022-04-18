@@ -279,7 +279,7 @@ class Portal(DBPortal, BasePortal):
         try:
             await self._handle_matrix_message(sender, message, event_id)
         except Exception as e:
-            self.log.exception(f"Fatal error handling Matrix event {event_id}: {e}")
+            self.log.exception(f"Error handling Matrix event {event_id}: {e}")
             await self._send_bridge_error(
                 sender,
                 e,
@@ -530,8 +530,10 @@ class Portal(DBPortal, BasePortal):
         try:
             await self._handle_matrix_reaction(sender, event_id, reacting_to, emoji, timestamp)
         except Exception as e:
-            self.log.exception(f"Fatal error handling Matrix event {event_id}: {e}")
-            message = "Fatal error handling reaction (see logs for more details)"
+            self.log.exception(
+                f"Error handling Matrix reaction {event_id}: {type(e).__name__}: {e}"
+            )
+            message = "Error handling reaction (see logs for more details)"
             if isinstance(e, NotImplementedError):
                 message = None
 
@@ -548,14 +550,15 @@ class Portal(DBPortal, BasePortal):
     async def _handle_matrix_reaction(
         self, sender: u.User, event_id: EventID, reacting_to: EventID, emoji: str, timestamp: int
     ) -> None:
+        if not await sender.is_logged_in():
+            self.log.debug(f"Ignoring reaction by non-logged-in user {sender.mxid}")
+            raise NotImplementedError("User is not logged in")
+
         message = await DBMessage.get_by_mxid(reacting_to, self.mxid)
         if not message or message.is_internal:
             self.log.debug(f"Ignoring reaction to unknown event {reacting_to}")
-            return
-
-        if not await sender.is_logged_in():
-            self.log.debug(f"Ignoring reaction by non-logged-in user {sender.mxid}")
-            return
+            await self.main_intent.redact(self.mxid, event_id, reason="Unknown target event")
+            raise NotImplementedError("Unknown target event")
 
         existing = await DBReaction.get_by_item_id(message.item_id, message.receiver, sender.igpk)
         if existing and existing.reaction == emoji:
@@ -570,34 +573,28 @@ class Portal(DBPortal, BasePortal):
         dedup_id = (message.item_id, sender.igpk, emoji)
         self._reaction_dedup.appendleft(dedup_id)
         async with self._reaction_lock:
-            try:
-                resp = await sender.mqtt.send_reaction(
-                    self.thread_id, item_id=message.item_id, emoji=emoji
-                )
-                if resp.status != "ok":
-                    if resp.payload.message == "invalid unicode emoji":
-                        # Instagram doesn't support this reaction. Notify the user, and redact it
-                        # so that it doesn't get confusing.
-                        await self.main_intent.redact(
-                            self.mxid, event_id, reason="Unsupported emoji"
-                        )
-                        raise NotImplementedError(f"Instagram does not support the {emoji} emoji.")
-                    raise Exception(f"Failed to react to {event_id}: {resp}")
-            except Exception as e:
-                self.log.exception(f"Failed to handle {event_id}: {e}")
-                raise
-            else:
-                sender.send_remote_checkpoint(
-                    status=MessageSendCheckpointStatus.SUCCESS,
-                    event_id=event_id,
-                    room_id=self.mxid,
-                    event_type=EventType.REACTION,
-                )
-                await self._send_delivery_receipt(event_id)
-                self.log.trace(f"{sender.mxid} reacted to {message.item_id} with {emoji}")
-                await self._upsert_reaction(
-                    existing, self.main_intent, event_id, message, sender, emoji, timestamp
-                )
+            resp = await sender.mqtt.send_reaction(
+                self.thread_id, item_id=message.item_id, emoji=emoji
+            )
+            if resp.status != "ok":
+                if resp.payload.message == "invalid unicode emoji":
+                    # Instagram doesn't support this reaction. Notify the user, and redact it
+                    # so that it doesn't get confusing.
+                    await self.main_intent.redact(self.mxid, event_id, reason="Unsupported emoji")
+                    raise NotImplementedError(f"Instagram does not support the {emoji} emoji.")
+                raise Exception(f"Unknown response error: {resp}")
+
+            sender.send_remote_checkpoint(
+                status=MessageSendCheckpointStatus.SUCCESS,
+                event_id=event_id,
+                room_id=self.mxid,
+                event_type=EventType.REACTION,
+            )
+            await self._send_delivery_receipt(event_id)
+            self.log.trace(f"{sender.mxid} reacted to {message.item_id} with {emoji}")
+            await self._upsert_reaction(
+                existing, self.main_intent, event_id, message, sender, emoji, timestamp
+            )
 
     async def handle_matrix_redaction(
         self, orig_sender: u.User, event_id: EventID, redaction_event_id: EventID
@@ -610,7 +607,7 @@ class Portal(DBPortal, BasePortal):
 
             await self._handle_matrix_redaction(sender, event_id, redaction_event_id)
         except Exception as e:
-            self.log.exception(f"Fatal error handling Matrix event {event_id}: {e}")
+            self.log.exception(f"Error handling Matrix redaction {event_id}: {e}")
             await self._send_bridge_error(
                 sender or orig_sender,
                 e,
