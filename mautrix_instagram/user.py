@@ -72,6 +72,8 @@ METRIC_CONNECTED = Gauge("bridge_connected", "Bridged users connected to Instagr
 BridgeState.human_readable_errors.update(
     {
         "ig-connection-error": "Instagram disconnected unexpectedly",
+        "ig-refresh-connection-error": "Reconnecting failed again after refresh: {message}",
+        "ig-connection-fatal-error": "Instagram disconnected unexpectedly",
         "ig-auth-error": "Authentication error from Instagram: {message}",
         "ig-checkpoint": "Instagram checkpoint error. Please check the Instagram website.",
         "ig-consent-required": "Instagram requires a consent update. Please check the Instagram website.",
@@ -470,7 +472,7 @@ class User(DBUser, BaseUser):
         await self.save_seq_id()
 
         if not self._listen_task:
-            self.start_listen()
+            self.start_listen(is_after_sync=True)
 
         max_age = self.config["bridge.portal_create_max_age"] * 1_000_000
         limit = self.config["bridge.chat_sync_limit"]
@@ -494,12 +496,14 @@ class User(DBUser, BaseUser):
         except Exception:
             self.log.exception("Error updating direct chat list")
 
-    def start_listen(self) -> None:
+    def start_listen(self, is_after_sync: bool = False) -> None:
         self.shutdown = False
-        task = self._listen(seq_id=self.seq_id, snapshot_at_ms=self.snapshot_at_ms)
+        task = self._listen(
+            seq_id=self.seq_id, snapshot_at_ms=self.snapshot_at_ms, is_after_sync=is_after_sync
+        )
         self._listen_task = self.loop.create_task(task)
 
-    async def _listen(self, seq_id: int, snapshot_at_ms: int) -> None:
+    async def _listen(self, seq_id: int, snapshot_at_ms: int, is_after_sync: bool) -> None:
         try:
             await self.mqtt.listen(
                 graphql_subs={
@@ -515,8 +519,19 @@ class User(DBUser, BaseUser):
                 snapshot_at_ms=snapshot_at_ms,
             )
         except IrisSubscribeError as e:
-            self.log.warning(f"Got IrisSubscribeError {e}, refreshing...")
-            asyncio.create_task(self.refresh())
+            if is_after_sync:
+                self.log.exception("Got IrisSubscribeError right after refresh")
+                await self.send_bridge_notice(
+                    f"Reconnecting failed again after refresh: {e}",
+                    important=True,
+                    state_event=BridgeStateEvent.UNKNOWN_ERROR,
+                    error_code="ig-refresh-connection-error",
+                    error_message=str(e),
+                    info={"python_error": str(e)},
+                )
+            else:
+                self.log.warning(f"Got IrisSubscribeError {e}, refreshing...")
+                asyncio.create_task(self.refresh())
         except (MQTTNotConnected, MQTTNotLoggedIn) as e:
             await self.send_bridge_notice(
                 f"Error in listener: {e}",
@@ -531,7 +546,7 @@ class User(DBUser, BaseUser):
                 "Fatal error in listener (see logs for more info)",
                 state_event=BridgeStateEvent.UNKNOWN_ERROR,
                 important=True,
-                error_code="ig-connection-error",
+                error_code="ig-unknown-connection-error",
                 info={"python_error": str(e)},
             )
             self.mqtt.disconnect()
