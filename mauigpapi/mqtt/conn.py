@@ -247,7 +247,7 @@ class AndroidMQTT:
                 except (asyncio.TimeoutError, IrisSubscribeError) as e:
                     self.log.exception("Error requesting iris subscribe")
                     retry += 1
-                    if retry >= 5:
+                    if retry >= 5 or isinstance(e, IrisSubscribeError):
                         self._disconnect_error = e
                         self.disconnect()
                         break

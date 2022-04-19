@@ -516,7 +516,7 @@ class User(DBUser, BaseUser):
             )
         except IrisSubscribeError as e:
             self.log.warning(f"Got IrisSubscribeError {e}, refreshing...")
-            await self.refresh()
+            asyncio.create_task(self.refresh())
         except (MQTTNotConnected, MQTTNotLoggedIn) as e:
             await self.send_bridge_notice(
                 f"Error in listener: {e}",
