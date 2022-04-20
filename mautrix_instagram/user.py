@@ -206,6 +206,9 @@ class User(DBUser, BaseUser):
                 self.log.warning(f"Failed to connect to Instagram: {e}, logging out")
                 await self.logout(error=e)
                 return
+            except IGCheckpointError as e:
+                self.log.debug("Checkpoint error content: %s", e.body)
+                raise
             except (IGChallengeError, IGConsentRequiredError) as e:
                 await self._handle_checkpoint(e, on="connect", client=client)
                 return
@@ -463,6 +466,9 @@ class User(DBUser, BaseUser):
                 )
                 await asyncio.sleep(sleep_minutes * 60)
                 sleep_minutes += 2
+            except IGCheckpointError as e:
+                self.log.debug("Checkpoint error content: %s", e.body)
+                raise
             except (IGChallengeError, IGConsentRequiredError) as e:
                 await self._handle_checkpoint(e, on="sync")
                 return
