@@ -96,9 +96,19 @@ class ThreadAPI(BaseAndroidAPI):
         )
 
     async def iter_thread(
-        self, thread_id: str, seq_id: int | None = None, cursor: str | None = None
+        self,
+        thread_id: str,
+        seq_id: int | None = None,
+        cursor: str | None = None,
+        start_at: Thread | None = None,
     ) -> AsyncIterable[ThreadItem]:
-        has_more = True
+        if start_at:
+            for item in start_at.items:
+                yield item
+            cursor = start_at.oldest_cursor
+            has_more = start_at.has_older
+        else:
+            has_more = True
         while has_more:
             resp = await self.get_thread(thread_id, seq_id=seq_id, cursor=cursor)
             cursor = resp.thread.oldest_cursor
