@@ -53,6 +53,15 @@ class ChallengeResponse(SerializableAttrs):
 
 
 @dataclass
+class CheckpointResponse(SerializableAttrs):
+    message: str  # checkpoint_required
+    status: str  # fail
+    checkpoint_url: Optional[str] = None
+    lock: bool = False
+    flow_render_type: int = 0
+
+
+@dataclass
 class ConsentData(SerializableAttrs):
     headline: str
     content: str

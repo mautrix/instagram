@@ -21,6 +21,7 @@ from mautrix.types import JSON, Serializable
 
 from ..types import (
     ChallengeResponse,
+    CheckpointResponse,
     ConsentRequiredResponse,
     LoginErrorResponse,
     LoginRequiredResponse,
@@ -82,7 +83,7 @@ class IGRateLimitError(IGResponseError):
 
 
 class IGCheckpointError(IGResponseError):
-    pass
+    body: CheckpointResponse
 
 
 class IGChallengeError(IGResponseError):

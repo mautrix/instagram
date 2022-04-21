@@ -14,6 +14,7 @@ from .direct_inbox import DMInbox, DMInboxCursor, DMInboxResponse, DMThreadRespo
 from .error import (
     ChallengeData,
     ChallengeResponse,
+    CheckpointResponse,
     ConsentRequiredResponse,
     LoginErrorResponse,
     LoginErrorResponseButton,
