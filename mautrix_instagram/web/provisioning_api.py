@@ -31,13 +31,15 @@ from mauigpapi.errors import (
     IGBad2FACodeError,
     IGChallengeError,
     IGChallengeWrongCodeError,
+    IGCheckpointError,
+    IGConsentRequiredError,
     IGFBNoContactPointFoundError,
     IGLoginBadPasswordError,
     IGLoginInvalidUserError,
     IGLoginTwoFactorRequiredError,
     IGNotLoggedInError,
 )
-from mauigpapi.types import ChallengeStateResponse, LoginResponse, LoginResponseUser
+from mauigpapi.types import ChallengeStateResponse, LoginResponse
 from mautrix.types import JSON, UserID
 from mautrix.util.logging import TraceLogger
 
@@ -133,6 +135,50 @@ class ProvisioningAPI:
                 data["instagram"]["mqtt_is_connected"] = user.is_connected
         return web.json_response(data, headers=self._acao_headers)
 
+    def _consent_error(
+        self, user: u.User, username: str, e: IGConsentRequiredError, after: str = ""
+    ) -> web.Response:
+        self.log.debug(
+            "%s logged in as %s%s, but got a consent required error: %s",
+            user.mxid,
+            username,
+            f" (after {after})" if after else "",
+            e.body.serialize(),
+        )
+        return web.json_response(
+            data={
+                "error": (
+                    "Instagram requires a consent update. Please resolve the issue on "
+                    "the Instagram website or app before logging in here."
+                ),
+                "status": "account-unavailable-consent",
+            },
+            status=401,
+            headers=self._acao_headers,
+        )
+
+    def _checkpoint_error(
+        self, user: u.User, username: str, e: IGCheckpointError, after: str = ""
+    ) -> web.Response:
+        self.log.debug(
+            "%s logged in as %s%s, but got a checkpoint required error: %s",
+            user.mxid,
+            username,
+            f" (after {after})" if after else "",
+            e.body.serialize(),
+        )
+        return web.json_response(
+            data={
+                "error": (
+                    "Got a checkpoint required error from Instagram. "
+                    "Please try again in 5-20 minutes."
+                ),
+                "status": "account-unavailable-checkpoint",
+            },
+            status=401,
+            headers=self._acao_headers,
+        )
+
     async def login(self, request: web.Request) -> web.Response:
         user, data = await self._get_user(request, check_state=False)
 
@@ -157,8 +203,12 @@ class ProvisioningAPI:
                 headers=self._acao_headers,
             )
         except IGChallengeError as e:
-            self.log.debug("%s logged in as %s, but got a checkpoint", user.mxid, username)
+            self.log.debug("%s logged in as %s, but got a challenge", user.mxid, username)
             return await self.start_checkpoint(user, api, e)
+        except IGConsentRequiredError as e:
+            return self._consent_error(user, username, e)
+        except IGCheckpointError as e:
+            return self._checkpoint_error(user, username, e)
         except IGLoginInvalidUserError:
             self.log.debug("%s tried to log in as non-existent user %s", user.mxid, username)
             return web.json_response(
@@ -221,8 +271,12 @@ class ProvisioningAPI:
                 headers=self._acao_headers,
             )
         except IGChallengeError as e:
-            self.log.debug("%s submitted a 2-factor auth code, but got a checkpoint", user.mxid)
+            self.log.debug("%s submitted a 2-factor auth code, but got a challenge", user.mxid)
             return await self.start_checkpoint(user, api, e)
+        except IGConsentRequiredError as e:
+            return self._consent_error(user, username, e, after="2fa")
+        except IGCheckpointError as e:
+            return self._checkpoint_error(user, username, e, after="2fa")
         return await self._finish_login(user, state, api, login_resp=resp, after="2-factor auth")
 
     async def start_checkpoint(
@@ -270,7 +324,7 @@ class ProvisioningAPI:
         try:
             resp = await api.challenge_send_security_code(code=code)
         except IGChallengeWrongCodeError:
-            self.log.debug("%s submitted an incorrect checkpoint challenge code", user.mxid)
+            self.log.debug("%s submitted an incorrect challenge code", user.mxid)
             return web.json_response(
                 data={
                     "error": "Incorrect challenge code",
@@ -279,6 +333,10 @@ class ProvisioningAPI:
                 status=403,
                 headers=self._acao_headers,
             )
+        except IGConsentRequiredError as e:
+            return self._consent_error(user, "<username not known>", e, after="challenge")
+        except IGCheckpointError as e:
+            return self._checkpoint_error(user, "<username not known>", e, after="challenge")
         liu = resp.logged_in_user
         challenge_data = resp.serialize()
         challenge_data.pop("logged_in_user", None)
@@ -288,7 +346,7 @@ class ProvisioningAPI:
             challenge_data,
             f"{liu.pk}/{liu.username}" if liu else "null",
         )
-        return await self._finish_login(user, state, api, login_resp=resp, after="checkpoint")
+        return await self._finish_login(user, state, api, login_resp=resp, after="challenge")
 
     async def _finish_login(
         self,
@@ -309,20 +367,29 @@ class ProvisioningAPI:
         user.state = state
         pl = state.device.payload
         manufacturer, model = pl["manufacturer"], pl["model"]
+        username = (
+            login_resp.logged_in_user.username
+            if login_resp.logged_in_user
+            else "<username not known>"
+        )
         try:
             resp = await api.current_user()
         except IGChallengeError as e:
             if isinstance(login_resp, ChallengeStateResponse):
                 self.log.debug(
-                    "%s got a checkpoint after a login that looked successful, "
-                    "failing login because we already did some checkpointing",
+                    "%s got a challenge after a login that looked successful, "
+                    "failing login because we already did some challenging",
                     user.mxid,
                 )
                 # TODO this should probably return a proper error
                 # and there might be some cases that can still be handled
                 raise
-            self.log.debug("%s got a checkpoint after a login that looked successful", user.mxid)
+            self.log.debug("%s got a challenge after a login that looked successful", user.mxid)
             return await self.start_checkpoint(user, api, e)
+        except IGConsentRequiredError as e:
+            return self._consent_error(user, username, e, after=f"{after}/success")
+        except IGCheckpointError as e:
+            return self._checkpoint_error(user, username, e, after=f"{after}/success")
         await user.connect(user=resp.user)
         return web.json_response(
             data={
@@ -405,4 +472,8 @@ class ProvisioningAPI:
                 status=403,
                 headers=self._acao_headers,
             )
+        except IGCheckpointError as e:
+            return self._checkpoint_error(user, "<facebook credentials>", e, after="facebook auth")
+        except IGConsentRequiredError as e:
+            return self._consent_error(user, "<facebook credentials>", e, after="facebook auth")
         return await self._finish_login(user, state, api, login_resp=resp, after="facebook auth")
