@@ -63,7 +63,9 @@ class InstagramBridge(Bridge):
         super().prepare_bridge()
         cfg = self.config["bridge.provisioning"]
         self.provisioning_api = ProvisioningAPI(
-            shared_secret=cfg["shared_secret"], device_seed=self.config["instagram.device_seed"]
+            shared_secret=cfg["shared_secret"],
+            device_seed=self.config["instagram.device_seed"],
+            segment_key=cfg["segment_key"],
         )
         self.az.app.add_subapp(cfg["prefix"], self.provisioning_api.app)
 

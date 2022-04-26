@@ -38,23 +38,27 @@ from mauigpapi.errors import (
     IGLoginInvalidUserError,
     IGLoginTwoFactorRequiredError,
     IGNotLoggedInError,
+    IGResponseError,
 )
 from mauigpapi.types import ChallengeStateResponse, LoginResponse
-from mautrix.types import JSON, UserID
+from mautrix.types import JSON, Serializable, UserID
 from mautrix.util.logging import TraceLogger
 
 from .. import user as u
 from ..commands.auth import get_login_state
+from .segment import init as init_segment, track
 
 
 class ProvisioningAPI:
     log: TraceLogger = logging.getLogger("mau.web.provisioning")
     app: web.Application
 
-    def __init__(self, shared_secret: str, device_seed: str) -> None:
+    def __init__(self, shared_secret: str, device_seed: str, segment_key: str | None) -> None:
         self.app = web.Application()
         self.shared_secret = shared_secret
         self.device_seed = device_seed
+        if segment_key:
+            init_segment(segment_key)
         self.app.router.add_get("/api/whoami", self.status)
         self.app.router.add_options("/api/login", self.login_options)
         self.app.router.add_options("/api/login/2fa", self.login_options)
@@ -136,15 +140,16 @@ class ProvisioningAPI:
         return web.json_response(data, headers=self._acao_headers)
 
     def _consent_error(
-        self, user: u.User, username: str, e: IGConsentRequiredError, after: str = ""
+        self, user: u.User, username: str, e: IGConsentRequiredError, after: str
     ) -> web.Response:
         self.log.debug(
-            "%s logged in as %s%s, but got a consent required error: %s",
+            "%s logged in as %s (after %s), but got a consent required error: %s",
             user.mxid,
             username,
-            f" (after {after})" if after else "",
+            after,
             e.body.serialize(),
         )
+        track(user, "$login_failed", {"error": "consent-required", "after": after})
         return web.json_response(
             data={
                 "error": (
@@ -158,15 +163,16 @@ class ProvisioningAPI:
         )
 
     def _checkpoint_error(
-        self, user: u.User, username: str, e: IGCheckpointError, after: str = ""
+        self, user: u.User, username: str, e: IGCheckpointError, after: str
     ) -> web.Response:
         self.log.debug(
-            "%s logged in as %s%s, but got a checkpoint required error: %s",
+            "%s logged in as %s (after %s), but got a checkpoint required error: %s",
             user.mxid,
             username,
-            f" (after {after})" if after else "",
+            after,
             e.body.serialize(),
         )
+        track(user, "$login_failed", {"error": "checkpoint-required", "after": after})
         return web.json_response(
             data={
                 "error": (
@@ -176,6 +182,27 @@ class ProvisioningAPI:
                 "status": "account-unavailable-checkpoint",
             },
             status=401,
+            headers=self._acao_headers,
+        )
+
+    def _unknown_error(
+        self, user: u.User, username: str, e: Exception, after: str
+    ) -> web.Response:
+        self.log.exception(
+            "Unknown error while %s was trying to log in as %s (after %s)",
+            user.mxid,
+            username,
+            after,
+        )
+        if isinstance(e, IGResponseError):
+            self.log.debug(
+                "Login error body: %s",
+                e.body.serialize() if isinstance(e.body, Serializable) else e.body,
+            )
+        track(user, "$login_failed", {"error": "unknown-error"})
+        return web.json_response(
+            data={"error": "Unknown error while logging in", "status": "unknown-error"},
+            status=500,
             headers=self._acao_headers,
         )
 
@@ -189,10 +216,12 @@ class ProvisioningAPI:
             raise self._missing_key_error(e)
 
         self.log.debug("%s is attempting to log in as %s", user.mxid, username)
+        track(user, "$login_start")
         api, state = await get_login_state(user, self.device_seed)
         try:
             resp = await api.login(username, password)
         except IGLoginTwoFactorRequiredError as e:
+            track(user, "$login_2fa")
             self.log.debug("%s logged in as %s, but needs 2-factor auth", user.mxid, username)
             return web.json_response(
                 data={
@@ -204,13 +233,14 @@ class ProvisioningAPI:
             )
         except IGChallengeError as e:
             self.log.debug("%s logged in as %s, but got a challenge", user.mxid, username)
-            return await self.start_checkpoint(user, api, e)
+            return await self.start_checkpoint(user, api, e, after="password")
         except IGConsentRequiredError as e:
-            return self._consent_error(user, username, e)
+            return self._consent_error(user, username, e, after="password")
         except IGCheckpointError as e:
-            return self._checkpoint_error(user, username, e)
+            return self._checkpoint_error(user, username, e, after="password")
         except IGLoginInvalidUserError:
             self.log.debug("%s tried to log in as non-existent user %s", user.mxid, username)
+            track(user, "$login_failed", {"error": "invalid-username"})
             return web.json_response(
                 data={"error": "Invalid username", "status": "invalid-username"},
                 status=404,
@@ -218,11 +248,14 @@ class ProvisioningAPI:
             )
         except IGLoginBadPasswordError:
             self.log.debug("%s tried to log in as %s with the wrong password", user.mxid, username)
+            track(user, "$login_failed", {"error": "incorrect-password"})
             return web.json_response(
                 data={"error": "Incorrect password", "status": "incorrect-password"},
                 status=403,
                 headers=self._acao_headers,
             )
+        except Exception as e:
+            return self._unknown_error(user, username, e, after="password")
         return await self._finish_login(user, state, api, login_resp=resp, after="password")
 
     async def _get_user(
@@ -256,12 +289,14 @@ class ProvisioningAPI:
 
         api: AndroidAPI = user.command_status["api"]
         state: AndroidState = user.command_status["state"]
+        track(user, "$login_submit_2fa")
         try:
             resp = await api.two_factor_login(
                 username, code=code, identifier=identifier, is_totp=is_totp
             )
         except IGBad2FACodeError:
             self.log.debug("%s submitted an incorrect 2-factor auth code", user.mxid)
+            track(user, "$login_failed", {"error": "incorrect-2fa-code"})
             return web.json_response(
                 data={
                     "error": "Incorrect 2-factor authentication code",
@@ -272,15 +307,17 @@ class ProvisioningAPI:
             )
         except IGChallengeError as e:
             self.log.debug("%s submitted a 2-factor auth code, but got a challenge", user.mxid)
-            return await self.start_checkpoint(user, api, e)
+            return await self.start_checkpoint(user, api, e, after="2fa")
         except IGConsentRequiredError as e:
             return self._consent_error(user, username, e, after="2fa")
         except IGCheckpointError as e:
             return self._checkpoint_error(user, username, e, after="2fa")
+        except Exception as e:
+            return self._unknown_error(user, username, e, after="2fa")
         return await self._finish_login(user, state, api, login_resp=resp, after="2-factor auth")
 
     async def start_checkpoint(
-        self, user: u.User, api: AndroidAPI, err: IGChallengeError
+        self, user: u.User, api: AndroidAPI, err: IGChallengeError, after: str
     ) -> web.Response:
         try:
             resp = await api.challenge_auto(reset=True)
@@ -288,6 +325,7 @@ class ProvisioningAPI:
             # Most likely means that the user has to go and verify the login on their phone.
             # Return a 403 in this case so the client knows to show such verbiage.
             self.log.exception("Challenge reset failed for %s", user.mxid)
+            track(user, "$login_failed", {"error": "challenge-reset-fail", "after": after})
             return web.json_response(
                 data={"status": "checkpoint", "response": e},
                 status=403,
@@ -302,6 +340,7 @@ class ProvisioningAPI:
             challenge_data,
             f"{liu.pk}/{liu.username}" if liu else "null",
         )
+        track(user, "$login_challenge", {"after": after})
         return web.json_response(
             data={
                 "status": "checkpoint",
@@ -321,10 +360,12 @@ class ProvisioningAPI:
 
         api: AndroidAPI = user.command_status["api"]
         state: AndroidState = user.command_status["state"]
+        track(user, "$login_submit_challenge")
         try:
             resp = await api.challenge_send_security_code(code=code)
         except IGChallengeWrongCodeError:
             self.log.debug("%s submitted an incorrect challenge code", user.mxid)
+            track(user, "$login_failed", {"error": "incorrect-challenge-code"})
             return web.json_response(
                 data={
                     "error": "Incorrect challenge code",
@@ -337,6 +378,8 @@ class ProvisioningAPI:
             return self._consent_error(user, "<username not known>", e, after="challenge")
         except IGCheckpointError as e:
             return self._checkpoint_error(user, "<username not known>", e, after="challenge")
+        except Exception as e:
+            return self._unknown_error(user, "<username not known>", e, after="challenge")
         liu = resp.logged_in_user
         challenge_data = resp.serialize()
         challenge_data.pop("logged_in_user", None)
@@ -376,6 +419,7 @@ class ProvisioningAPI:
             resp = await api.current_user()
         except IGChallengeError as e:
             if isinstance(login_resp, ChallengeStateResponse):
+                track(user, "$login_failed", {"error": "repeat-challenge", "after": after})
                 self.log.debug(
                     "%s got a challenge after a login that looked successful, "
                     "failing login because we already did some challenging",
@@ -385,11 +429,14 @@ class ProvisioningAPI:
                 # and there might be some cases that can still be handled
                 raise
             self.log.debug("%s got a challenge after a login that looked successful", user.mxid)
-            return await self.start_checkpoint(user, api, e)
+            return await self.start_checkpoint(user, api, e, after=f"{after}/success")
         except IGConsentRequiredError as e:
             return self._consent_error(user, username, e, after=f"{after}/success")
         except IGCheckpointError as e:
             return self._checkpoint_error(user, username, e, after=f"{after}/success")
+        except Exception as e:
+            return self._unknown_error(user, username, e, after=f"{after}/success")
+        track(user, "$login_success")
         await user.connect(user=resp.user)
         return web.json_response(
             data={
@@ -403,6 +450,7 @@ class ProvisioningAPI:
 
     async def logout(self, request: web.Request) -> web.Response:
         user = await self.check_token(request)
+        track(user, "$logout")
         await user.logout()
         return web.json_response({}, headers=self._acao_headers)
 
