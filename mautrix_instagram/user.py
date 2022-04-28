@@ -667,9 +667,22 @@ class User(DBUser, BaseUser):
 
     @async_time(METRIC_THREAD_SYNC)
     async def handle_thread_sync(self, evt: ThreadSyncEvent) -> None:
-        self.log.trace("Received thread sync event %s", evt)
+        self.log.trace("Thread sync event content: %s", evt)
         portal = await po.Portal.get_by_thread(evt, receiver=self.igpk)
-        await portal.create_matrix_room(self, evt)
+        if portal.mxid:
+            self.log.debug("Got thread sync event for %s with existing portal", portal.thread_id)
+            await portal.update_matrix_room(self, evt)
+        elif evt.is_group:
+            self.log.debug(
+                "Got thread sync event for group %s without existing portal, creating room",
+                portal.thread_id,
+            )
+            await portal.create_matrix_room(self, evt)
+        else:
+            self.log.debug(
+                "Got thread sync event for DM %s without existing portal, ignoring",
+                portal.thread_id,
+            )
 
     @async_time(METRIC_RTD)
     async def handle_rtd(self, evt: RealtimeDirectEvent) -> None:
