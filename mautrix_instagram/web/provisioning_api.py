@@ -321,13 +321,17 @@ class ProvisioningAPI:
     ) -> web.Response:
         try:
             resp = await api.challenge_auto(reset=True)
-        except Exception as e:
+        except Exception:
             # Most likely means that the user has to go and verify the login on their phone.
             # Return a 403 in this case so the client knows to show such verbiage.
             self.log.exception("Challenge reset failed for %s", user.mxid)
             track(user, "$login_failed", {"error": "challenge-reset-fail", "after": after})
             return web.json_response(
-                data={"status": "checkpoint", "response": e},
+                data={
+                    "status": "checkpoint",
+                    "response": err.body.serialize(),
+                    "error": "Checking challenge state failed",
+                },
                 status=403,
                 headers=self._acao_headers,
             )
