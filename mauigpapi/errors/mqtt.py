@@ -28,6 +28,11 @@ class MQTTNotConnected(IGMQTTError):
     pass
 
 
+class MQTTConnectionUnauthorized(IGMQTTError):
+    def __init__(self) -> None:
+        super().__init__("Server refused connection with error code 5")
+
+
 class IrisSubscribeError(IGMQTTError):
     def __init__(self, type: str, message: str) -> None:
         super().__init__(f"{type}: {message}")

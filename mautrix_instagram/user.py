@@ -29,6 +29,7 @@ from mauigpapi.errors import (
     IGRateLimitError,
     IGUserIDNotFoundError,
     IrisSubscribeError,
+    MQTTConnectionUnauthorized,
     MQTTNotConnected,
     MQTTNotLoggedIn,
 )
@@ -509,6 +510,29 @@ class User(DBUser, BaseUser):
         )
         self._listen_task = self.loop.create_task(task)
 
+    async def fetch_user_and_reconnect(self) -> None:
+        self.log.debug("Refetching current user after disconnection")
+        try:
+            resp = await self.client.current_user()
+        except IGNotLoggedInError as e:
+            self.log.warning(f"Failed to reconnect to Instagram: {e}, logging out")
+            await self.logout(error=e)
+            return
+        except (IGChallengeError, IGConsentRequiredError) as e:
+            await self._handle_checkpoint(e, on="reconnect")
+            return
+        except Exception as e:
+            self.log.exception("Error while reconnecting to Instagram")
+            if isinstance(e, IGCheckpointError):
+                self.log.debug("Checkpoint error content: %s", e.body)
+            await self.push_bridge_state(
+                BridgeStateEvent.UNKNOWN_ERROR, info={"python_error": str(e)}
+            )
+            return
+        else:
+            self.log.debug(f"Confirmed current user {resp.user.pk}")
+            self.start_listen()
+
     async def _listen(self, seq_id: int, snapshot_at_ms: int, is_after_sync: bool) -> None:
         try:
             await self.mqtt.listen(
@@ -538,7 +562,8 @@ class User(DBUser, BaseUser):
             else:
                 self.log.warning(f"Got IrisSubscribeError {e}, refreshing...")
                 asyncio.create_task(self.refresh())
-        except (MQTTNotConnected, MQTTNotLoggedIn) as e:
+        except (MQTTNotConnected, MQTTNotLoggedIn, MQTTConnectionUnauthorized) as e:
+            self.log.warning(f"Unexpected connection error: {e}")
             await self.send_bridge_notice(
                 f"Error in listener: {e}",
                 important=True,
@@ -546,6 +571,7 @@ class User(DBUser, BaseUser):
                 error_code="ig-connection-error",
             )
             self.mqtt.disconnect()
+            asyncio.create_task(self.fetch_user_and_reconnect())
         except Exception as e:
             self.log.exception("Fatal error in listener")
             await self.send_bridge_notice(
