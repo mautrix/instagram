@@ -79,7 +79,8 @@ class InstagramBridge(Bridge):
         self.periodic_reconnect_task = asyncio.create_task(self._try_periodic_reconnect_loop())
 
     def prepare_stop(self) -> None:
-        self.periodic_reconnect_task.cancel()
+        if self.periodic_reconnect_task is not None and not self.periodic_reconnect_task.done():
+            self.periodic_reconnect_task.cancel()
         self.add_shutdown_actions(user.stop_listen() for user in User.by_igpk.values())
         self.log.debug("Stopping puppet syncers")
         for puppet in Puppet.by_custom_mxid.values():
