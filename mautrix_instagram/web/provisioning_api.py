@@ -233,7 +233,7 @@ class ProvisioningAPI:
             )
         except IGChallengeError as e:
             self.log.debug("%s logged in as %s, but got a challenge", user.mxid, username)
-            return await self.start_checkpoint(user, api, e, after="password")
+            return await self.start_checkpoint(user, state, api, e, after="password")
         except IGConsentRequiredError as e:
             return self._consent_error(user, username, e, after="password")
         except IGCheckpointError as e:
@@ -307,7 +307,7 @@ class ProvisioningAPI:
             )
         except IGChallengeError as e:
             self.log.debug("%s submitted a 2-factor auth code, but got a challenge", user.mxid)
-            return await self.start_checkpoint(user, api, e, after="2fa")
+            return await self.start_checkpoint(user, state, api, e, after="2fa")
         except IGConsentRequiredError as e:
             return self._consent_error(user, username, e, after="2fa")
         except IGCheckpointError as e:
@@ -317,7 +317,7 @@ class ProvisioningAPI:
         return await self._finish_login(user, state, api, login_resp=resp, after="2-factor auth")
 
     async def start_checkpoint(
-        self, user: u.User, api: AndroidAPI, err: IGChallengeError, after: str
+        self, user: u.User, state: AndroidState, api: AndroidAPI, err: IGChallengeError, after: str
     ) -> web.Response:
         try:
             resp = await api.challenge_auto(reset=True)
@@ -344,6 +344,10 @@ class ProvisioningAPI:
             challenge_data,
             f"{liu.pk}/{liu.username}" if liu else "null",
         )
+        if resp.action == "close" and resp.status == "ok":
+            return await self._finish_login(
+                user, state, api, resp, after=f"{after}/challenge-auto"
+            )
         track(user, "$login_challenge", {"after": after})
         return web.json_response(
             data={
@@ -433,7 +437,7 @@ class ProvisioningAPI:
                 # and there might be some cases that can still be handled
                 raise
             self.log.debug("%s got a challenge after a login that looked successful", user.mxid)
-            return await self.start_checkpoint(user, api, e, after=f"{after}/success")
+            return await self.start_checkpoint(user, state, api, e, after=f"{after}/success")
         except IGConsentRequiredError as e:
             return self._consent_error(user, username, e, after=f"{after}/success")
         except IGCheckpointError as e:
