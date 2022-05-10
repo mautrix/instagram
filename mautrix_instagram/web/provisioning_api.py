@@ -238,6 +238,18 @@ class ProvisioningAPI:
             password = data["password"]
         except KeyError as e:
             raise self._missing_key_error(e)
+        if not username:
+            return web.json_response(
+                data={"error": "Username not entered", "state": "missing-field"},
+                status=400,
+                headers=self._acao_headers,
+            )
+        elif not password:
+            return web.json_response(
+                data={"error": "Password not entered", "state": "missing-field"},
+                status=400,
+                headers=self._acao_headers,
+            )
 
         self.log.debug("%s is attempting to log in as %s", user.mxid, username)
         track(user, "$login_start")
@@ -310,6 +322,12 @@ class ProvisioningAPI:
             is_totp = data["is_totp"]
         except KeyError as e:
             raise self._missing_key_error(e)
+        if not code:
+            return web.json_response(
+                data={"error": "2-factor code not entered", "state": "missing-field"},
+                status=400,
+                headers=self._acao_headers,
+            )
 
         api: AndroidAPI = user.command_status["api"]
         state: AndroidState = user.command_status["state"]
@@ -389,6 +407,12 @@ class ProvisioningAPI:
             code = data["code"]
         except KeyError as e:
             raise self._missing_key_error(e)
+        if not code:
+            return web.json_response(
+                data={"error": "Challenge code not entered", "state": "missing-field"},
+                status=400,
+                headers=self._acao_headers,
+            )
 
         api: AndroidAPI = user.command_status["api"]
         state: AndroidState = user.command_status["state"]
