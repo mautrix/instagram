@@ -36,6 +36,7 @@ from mauigpapi.errors import (
     IGFBNoContactPointFoundError,
     IGLoginBadPasswordError,
     IGLoginInvalidUserError,
+    IGLoginRequiredError,
     IGLoginTwoFactorRequiredError,
     IGNotLoggedInError,
     IGResponseError,
@@ -180,6 +181,29 @@ class ProvisioningAPI:
                     "Please try again in 5-20 minutes."
                 ),
                 "status": "account-unavailable-checkpoint",
+            },
+            status=401,
+            headers=self._acao_headers,
+        )
+
+    def _login_required_error(
+        self, user: u.User, username: str, e: IGLoginRequiredError, after: str
+    ) -> web.Response:
+        self.log.debug(
+            "%s logged in as %s (after %s), but got logged out immediately afterwards: %s",
+            user.mxid,
+            username,
+            after,
+            e.body.serialize(),
+        )
+        track(user, "$login_failed", {"error": "immediately-logged-out", "after": after})
+        return web.json_response(
+            data={
+                "error": (
+                    f"Instagram logged you out with reason code {e.body.logout_reason}. "
+                    f"Please try logging in again."
+                ),
+                "status": "logged-out",
             },
             status=401,
             headers=self._acao_headers,
@@ -442,6 +466,8 @@ class ProvisioningAPI:
             return self._consent_error(user, username, e, after=f"{after}/success")
         except IGCheckpointError as e:
             return self._checkpoint_error(user, username, e, after=f"{after}/success")
+        except IGLoginRequiredError as e:
+            return self._login_required_error(user, username, e, after=f"{after}/success")
         except Exception as e:
             return self._unknown_error(user, username, e, after=f"{after}/success")
         track(user, "$login_success")
