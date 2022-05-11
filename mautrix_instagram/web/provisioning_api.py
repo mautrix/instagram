@@ -38,6 +38,7 @@ from mauigpapi.errors import (
     IGLoginInvalidUserError,
     IGLoginRequiredError,
     IGLoginTwoFactorRequiredError,
+    IGLoginUnusablePasswordError,
     IGNotLoggedInError,
     IGResponseError,
 )
@@ -287,6 +288,22 @@ class ProvisioningAPI:
             track(user, "$login_failed", {"error": "incorrect-password"})
             return web.json_response(
                 data={"error": "Incorrect password", "status": "incorrect-password"},
+                status=403,
+                headers=self._acao_headers,
+            )
+        except IGLoginUnusablePasswordError as e:
+            self.log.debug(
+                "%s tried to log in as %s with an unusable password: %s",
+                user.mxid,
+                username,
+                e.body.serialize(),
+            )
+            track(user, "$login_failed", {"error": "unusable-password"})
+            return web.json_response(
+                data={
+                    "error": "Unusable password - please check the Instagram website or app first",
+                    "status": "unusable-password",
+                },
                 status=403,
                 headers=self._acao_headers,
             )

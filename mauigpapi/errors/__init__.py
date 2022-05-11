@@ -20,6 +20,7 @@ from .response import (
     IGLoginInvalidUserError,
     IGLoginRequiredError,
     IGLoginTwoFactorRequiredError,
+    IGLoginUnusablePasswordError,
     IGNotFoundError,
     IGNotLoggedInError,
     IGPrivateUserError,

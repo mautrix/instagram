@@ -39,6 +39,7 @@ from ..errors import (
     IGLoginInvalidUserError,
     IGLoginRequiredError,
     IGLoginTwoFactorRequiredError,
+    IGLoginUnusablePasswordError,
     IGNotFoundError,
     IGPrivateUserError,
     IGRateLimitError,
@@ -226,6 +227,8 @@ class BaseAndroidAPI:
             raise IGInactiveUserError(resp, data)
         elif error_type == "bad_password":
             raise IGLoginBadPasswordError(resp, data)
+        elif error_type == "unusable_password":
+            raise IGLoginUnusablePasswordError(resp, data)
         elif error_type == "invalid_user":
             raise IGLoginInvalidUserError(resp, data)
         elif error_type == "sms_code_validation_code_invalid":
