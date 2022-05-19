@@ -159,8 +159,9 @@ bridge:
         resync: true
         # Should even disconnected users be reconnected?
         always: false
-    # End-to-bridge encryption support options. You must install the e2be optional dependency for
-    # this to work. See https://github.com/tulir/mautrix-telegram/wiki/End‐to‐bridge-encryption
+    # End-to-bridge encryption support options.
+    #
+    # See https://docs.mau.fi/bridges/general/end-to-bridge-encryption.html for more info.
     encryption:
         # Allow encryption, work in group chat rooms with e2ee enabled
         allow: false
