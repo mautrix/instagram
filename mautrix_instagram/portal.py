@@ -52,6 +52,7 @@ from mautrix.bridge import BasePortal, NotificationDisabler, async_getter_lock
 from mautrix.errors import MatrixError, MForbidden, MNotFound, SessionNotFound
 from mautrix.types import (
     AudioInfo,
+    BeeperMessageStatusEventContent,
     ContentURI,
     EventID,
     EventType,
@@ -60,7 +61,10 @@ from mautrix.types import (
     LocationMessageEventContent,
     MediaMessageEventContent,
     MessageEventContent,
+    MessageStatusReason,
     MessageType,
+    RelatesTo,
+    RelationType,
     RoomID,
     TextMessageEventContent,
     UserID,
@@ -199,19 +203,35 @@ class Portal(DBPortal, BasePortal):
             except Exception:
                 self.log.exception("Failed to send delivery receipt for %s", event_id)
 
+    async def _send_bridge_success(
+        self,
+        sender: u.User,
+        event_id: EventID,
+        event_type: EventType,
+        msgtype: MessageType | None = None,
+    ) -> None:
+        sender.send_remote_checkpoint(
+            status=MessageSendCheckpointStatus.SUCCESS,
+            event_id=event_id,
+            room_id=self.mxid,
+            event_type=event_type,
+            message_type=msgtype,
+        )
+        asyncio.create_task(self._send_message_status(event_id, err=None))
+        await self._send_delivery_receipt(event_id)
+
     async def _send_bridge_error(
         self,
         sender: u.User,
-        err: Exception | str,
+        err: Exception,
         event_id: EventID,
         event_type: EventType,
         message_type: MessageType | None = None,
         msg: str | None = None,
         confirmed: bool = False,
-        status: MessageSendCheckpointStatus = MessageSendCheckpointStatus.PERM_FAILURE,
     ) -> None:
         sender.send_remote_checkpoint(
-            status,
+            self._status_from_exception(err),
             event_id,
             self.mxid,
             event_type,
@@ -232,6 +252,34 @@ class Portal(DBPortal, BasePortal):
                     body=f"\u26a0 Your {event_type_str} {error_type} bridged: {msg or str(err)}",
                 ),
             )
+        asyncio.create_task(self._send_message_status(event_id, err))
+
+    async def _send_message_status(self, event_id: EventID, err: Exception | None) -> None:
+        if not self.config["bridge.message_status_events"]:
+            return
+        intent = self.az.intent if self.encrypted else self.main_intent
+        status = BeeperMessageStatusEventContent(
+            network=self.bridge_info_state_key,
+            relates_to=RelatesTo(
+                rel_type=RelationType.REFERENCE,
+                event_id=event_id,
+            ),
+            success=err is None,
+        )
+        if err:
+            status.reason = MessageStatusReason.GENERIC_ERROR
+            status.error = str(err)
+            status.is_certain = True
+            status.can_retry = True
+            if isinstance(err, NotImplementedError):
+                status.can_retry = False
+                status.reason = MessageStatusReason.UNSUPPORTED
+
+        await intent.send_message_event(
+            room_id=self.mxid,
+            event_type=EventType.BEEPER_MESSAGE_STATUS,
+            content=status,
+        )
 
     async def _upsert_reaction(
         self,
@@ -286,8 +334,11 @@ class Portal(DBPortal, BasePortal):
                 event_id,
                 EventType.ROOM_MESSAGE,
                 message_type=message.msgtype,
-                status=self._status_from_exception(e),
                 confirmed=True,
+            )
+        else:
+            await self._send_bridge_success(
+                sender, event_id, EventType.ROOM_MESSAGE, message.msgtype
             )
 
     async def _handle_matrix_giphy(
@@ -494,15 +545,7 @@ class Portal(DBPortal, BasePortal):
             self.log.warning(f"Failed to handle {event_id}: {resp}")
             raise Exception(f"Failed to handle event. Error: {resp.payload.message}")
         else:
-            sender.send_remote_checkpoint(
-                status=MessageSendCheckpointStatus.SUCCESS,
-                event_id=event_id,
-                room_id=self.mxid,
-                event_type=EventType.ROOM_MESSAGE,
-                message_type=message.msgtype,
-            )
             self._msgid_dedup.appendleft(resp.payload.item_id)
-            await self._send_delivery_receipt(event_id)
             try:
                 await DBMessage(
                     mxid=event_id,
@@ -542,10 +585,11 @@ class Portal(DBPortal, BasePortal):
                 e,
                 event_id,
                 EventType.REACTION,
-                status=self._status_from_exception(e),
                 confirmed=True,
                 msg=message,
             )
+        else:
+            await self._send_bridge_success(sender, event_id, EventType.REACTION)
 
     async def _handle_matrix_reaction(
         self, sender: u.User, event_id: EventID, reacting_to: EventID, emoji: str, timestamp: int
@@ -562,12 +606,6 @@ class Portal(DBPortal, BasePortal):
 
         existing = await DBReaction.get_by_item_id(message.item_id, message.receiver, sender.igpk)
         if existing and existing.reaction == emoji:
-            sender.send_remote_checkpoint(
-                status=MessageSendCheckpointStatus.SUCCESS,
-                event_id=event_id,
-                room_id=self.mxid,
-                event_type=EventType.REACTION,
-            )
             return
 
         dedup_id = (message.item_id, sender.igpk, emoji)
@@ -584,13 +622,6 @@ class Portal(DBPortal, BasePortal):
                     raise NotImplementedError(f"Instagram does not support the {emoji} emoji.")
                 raise Exception(f"Unknown response error: {resp}")
 
-            sender.send_remote_checkpoint(
-                status=MessageSendCheckpointStatus.SUCCESS,
-                event_id=event_id,
-                room_id=self.mxid,
-                event_type=EventType.REACTION,
-            )
-            await self._send_delivery_receipt(event_id)
             self.log.trace(f"{sender.mxid} reacted to {message.item_id} with {emoji}")
             await self._upsert_reaction(
                 existing, self.main_intent, event_id, message, sender, emoji, timestamp
@@ -605,7 +636,7 @@ class Portal(DBPortal, BasePortal):
             if not sender:
                 raise Exception("User is not logged in")
 
-            await self._handle_matrix_redaction(sender, event_id, redaction_event_id)
+            await self._handle_matrix_redaction(sender, event_id)
         except Exception as e:
             self.log.exception(f"Error handling Matrix redaction {event_id}: {e}")
             await self._send_bridge_error(
@@ -613,13 +644,12 @@ class Portal(DBPortal, BasePortal):
                 e,
                 redaction_event_id,
                 EventType.ROOM_REDACTION,
-                status=self._status_from_exception(e),
                 confirmed=True,
             )
+        else:
+            await self._send_bridge_success(sender, redaction_event_id, EventType.ROOM_REDACTION)
 
-    async def _handle_matrix_redaction(
-        self, sender: u.User, event_id: EventID, redaction_event_id: EventID
-    ) -> None:
+    async def _handle_matrix_redaction(self, sender: u.User, event_id: EventID) -> None:
         if not sender.is_connected:
             raise Exception("You're not connected to Instagram")
 
@@ -636,14 +666,7 @@ class Portal(DBPortal, BasePortal):
             except Exception as e:
                 raise Exception(f"Removing reaction failed: {e}")
             else:
-                sender.send_remote_checkpoint(
-                    status=MessageSendCheckpointStatus.SUCCESS,
-                    event_id=redaction_event_id,
-                    room_id=self.mxid,
-                    event_type=EventType.ROOM_REDACTION,
-                )
-                await self._send_delivery_receipt(redaction_event_id)
-                self.log.trace(f"Removed {reaction} after Matrix redaction")
+                self.log.trace(f"Removed reaction to {reaction.ig_item_id} after Matrix redaction")
             return
 
         message = await DBMessage.get_by_mxid(event_id, self.mxid)
@@ -655,17 +678,10 @@ class Portal(DBPortal, BasePortal):
             except Exception as e:
                 raise Exception(f"Removing message failed: {e}")
             else:
-                sender.send_remote_checkpoint(
-                    status=MessageSendCheckpointStatus.SUCCESS,
-                    event_id=redaction_event_id,
-                    room_id=self.mxid,
-                    event_type=EventType.ROOM_REDACTION,
-                )
-                await self._send_delivery_receipt(redaction_event_id)
-                self.log.trace(f"Removed {reaction} after Matrix redaction")
+                self.log.trace(f"Removed message {message.item_id} after Matrix redaction")
             return
 
-        raise Exception("No message or reaction found for redaction")
+        raise NotImplementedError("No message or reaction found for redaction")
 
     async def handle_matrix_typing(self, users: set[UserID]) -> None:
         if users == self._typing:
