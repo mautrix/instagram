@@ -227,7 +227,6 @@ class Portal(DBPortal, BasePortal):
         event_id: EventID,
         event_type: EventType,
         message_type: MessageType | None = None,
-        msg: str | None = None,
         confirmed: bool = False,
     ) -> None:
         sender.send_remote_checkpoint(
@@ -249,7 +248,7 @@ class Portal(DBPortal, BasePortal):
                 self.main_intent,
                 TextMessageEventContent(
                     msgtype=MessageType.NOTICE,
-                    body=f"\u26a0 Your {event_type_str} {error_type} bridged: {msg or str(err)}",
+                    body=f"\u26a0 Your {event_type_str} {error_type} bridged: {str(err)}",
                 ),
             )
         asyncio.create_task(self._send_message_status(event_id, err))
@@ -576,17 +575,12 @@ class Portal(DBPortal, BasePortal):
             self.log.exception(
                 f"Error handling Matrix reaction {event_id}: {type(e).__name__}: {e}"
             )
-            message = "Error handling reaction (see logs for more details)"
-            if isinstance(e, NotImplementedError):
-                message = None
-
             await self._send_bridge_error(
                 sender,
                 e,
                 event_id,
                 EventType.REACTION,
                 confirmed=True,
-                msg=message,
             )
         else:
             await self._send_bridge_success(sender, event_id, EventType.REACTION)
