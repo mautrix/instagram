@@ -326,7 +326,7 @@ class Portal(DBPortal, BasePortal):
         try:
             await self._handle_matrix_message(sender, message, event_id)
         except Exception as e:
-            self.log.exception(f"Error handling Matrix event {event_id}: {e}")
+            self.log.exception(f"Error handling Matrix event {event_id}")
             await self._send_bridge_error(
                 sender,
                 e,
@@ -572,9 +572,7 @@ class Portal(DBPortal, BasePortal):
         try:
             await self._handle_matrix_reaction(sender, event_id, reacting_to, emoji, timestamp)
         except Exception as e:
-            self.log.exception(
-                f"Error handling Matrix reaction {event_id}: {type(e).__name__}: {e}"
-            )
+            self.log.exception(f"Error handling Matrix reaction {event_id}")
             await self._send_bridge_error(
                 sender,
                 e,
@@ -632,7 +630,7 @@ class Portal(DBPortal, BasePortal):
 
             await self._handle_matrix_redaction(sender, event_id)
         except Exception as e:
-            self.log.exception(f"Error handling Matrix redaction {event_id}: {e}")
+            self.log.exception(f"Error handling Matrix redaction {event_id}")
             await self._send_bridge_error(
                 sender or orig_sender,
                 e,
