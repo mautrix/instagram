@@ -1499,9 +1499,10 @@ class Portal(DBPortal, BasePortal):
         self, source: u.User, thread: Thread, is_initial: bool, limit: int
     ) -> list[ThreadItem]:
         items = []
+        excluded_count = 0
         self.log.debug("Fetching up to %d messages through %s", limit, source.igpk)
         async for item in source.client.iter_thread(self.thread_id, start_at=thread):
-            if len(items) >= limit:
+            if len(items) - excluded_count >= limit:
                 self.log.debug(f"Fetched {len(items)} messages (the limit)")
                 break
             elif not is_initial:
@@ -1514,9 +1515,10 @@ class Portal(DBPortal, BasePortal):
                     break
             elif not item.is_handleable:
                 self.log.debug(
-                    f"Dropping {item.unhandleable_type} item {item.item_id} in backfill"
+                    f"Not counting {item.unhandleable_type} item {item.item_id}"
+                    " against backfill limit"
                 )
-                continue
+                excluded_count += 1
             items.append(item)
         return items
 
