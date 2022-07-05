@@ -126,7 +126,6 @@ class Portal(DBPortal, BasePortal):
     _reqid_dedup: set[str]
     _reaction_dedup: deque[tuple[str, int, str]]
 
-    _main_intent: IntentAPI
     _last_participant_update: set[int]
     _reaction_lock: asyncio.Lock
     _backfill_leave: set[IntentAPI] | None
