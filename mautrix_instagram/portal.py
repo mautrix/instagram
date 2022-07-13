@@ -61,6 +61,7 @@ from mautrix.types import (
     LocationMessageEventContent,
     MediaMessageEventContent,
     MessageEventContent,
+    MessageStatus,
     MessageStatusReason,
     MessageType,
     RelatesTo,
@@ -109,6 +110,10 @@ MediaUploadFunc = Callable[["u.User", MediaData, IntentAPI], Awaitable[MediaMess
 SIMPLE_URL_REGEX = re.compile(
     r"(?P<url>https?://[\da-z.-]+\.[a-z]{2,}(?:/[^\s]*)?)", flags=re.IGNORECASE
 )
+
+
+class UnsupportedAttachmentError(NotImplementedError):
+    pass
 
 
 class Portal(DBPortal, BasePortal):
@@ -262,16 +267,20 @@ class Portal(DBPortal, BasePortal):
                 rel_type=RelationType.REFERENCE,
                 event_id=event_id,
             ),
-            success=err is None,
         )
         if err:
-            status.reason = MessageStatusReason.GENERIC_ERROR
             status.error = str(err)
-            status.is_certain = True
-            status.can_retry = True
             if isinstance(err, NotImplementedError):
-                status.can_retry = False
+                if isinstance(err, UnsupportedAttachmentError):
+                    status.message = str(err)
                 status.reason = MessageStatusReason.UNSUPPORTED
+                status.status = MessageStatus.FAIL
+            else:
+                status.reason = MessageStatusReason.GENERIC_ERROR
+                status.status = MessageStatus.RETRIABLE
+        else:
+            status.status = MessageStatus.SUCCESS
+        status.fill_legacy_booleans()
 
         await intent.send_message_event(
             room_id=self.mxid,
@@ -366,7 +375,7 @@ class Portal(DBPortal, BasePortal):
     ) -> CommandResponse:
         if mime_type != "image/jpeg":
             if Image is None:
-                raise NotImplementedError(
+                raise UnsupportedAttachmentError(
                     "Instagram does not allow non-JPEG images, and Pillow is not installed, "
                     "so the bridge couldn't convert the image automatically"
                 )
@@ -532,7 +541,7 @@ class Portal(DBPortal, BasePortal):
                     height=message.info.height,
                 )
             else:
-                raise NotImplementedError(
+                raise UnsupportedAttachmentError(
                     "Non-image/video/audio files are currently not supported"
                 )
         else:
