@@ -93,10 +93,6 @@ except ImportError:
     Image = None
 
 
-class IgnoredMessageError(Exception):
-    pass
-
-
 StateBridge = EventType.find("m.bridge", EventType.Class.STATE)
 StateHalfShotBridge = EventType.find("uk.half-shot.bridge", EventType.Class.STATE)
 MediaData = Union[
