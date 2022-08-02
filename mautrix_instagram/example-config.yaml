@@ -228,6 +228,9 @@ bridge:
     # Disable bridge notices entirely
     disable_bridge_notices: false
 
+    # Should Matrix m.notice-type messages be bridged?
+    bridge_notices: true
+
     # Provisioning API part of the web server for automated portal creation and fetching information.
     # Used by things like mautrix-manager (https://github.com/tulir/mautrix-manager).
     provisioning:
