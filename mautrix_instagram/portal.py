@@ -92,6 +92,11 @@ try:
 except ImportError:
     Image = None
 
+
+class IgnoredMessageError(Exception):
+    pass
+
+
 StateBridge = EventType.find("m.bridge", EventType.Class.STATE)
 StateHalfShotBridge = EventType.find("uk.half-shot.bridge", EventType.Class.STATE)
 MediaData = Union[
@@ -482,6 +487,10 @@ class Portal(DBPortal, BasePortal):
             f"Handling Matrix message {event_id} from {sender.mxid}/{sender.igpk} "
             f"with request ID {request_id}"
         )
+
+        if message.msgtype == MessageType.NOTICE and not self.config["bridge.bridge_notices"]:
+            return
+
         if message.msgtype in (MessageType.EMOTE, MessageType.TEXT, MessageType.NOTICE):
             text = message.body
             if message.msgtype == MessageType.EMOTE:
