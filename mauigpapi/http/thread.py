@@ -22,7 +22,6 @@ from ..types import (
     CommandResponse,
     DMInboxResponse,
     DMThreadResponse,
-    ShareVoiceResponse,
     Thread,
     ThreadAction,
     ThreadItem,
@@ -197,12 +196,4 @@ class ThreadAPI(BaseAndroidAPI):
     ) -> CommandResponse:
         return await self._broadcast(
             thread_id, item_type.value, CommandResponse, signed, client_context, **kwargs
-        )
-
-    async def broadcast_audio(
-        self, thread_id: str, is_direct: bool, client_context: str | None = None, **kwargs
-    ) -> ShareVoiceResponse | CommandResponse:
-        response_type = ShareVoiceResponse if is_direct else CommandResponse
-        return await self._broadcast(
-            thread_id, "share_voice", response_type, False, client_context, **kwargs
         )

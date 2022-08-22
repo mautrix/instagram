@@ -36,24 +36,3 @@ class UploadPhotoResponse(SerializableAttrs):
 class UploadVideoResponse(SerializableAttrs):
     status: str
     xsharing_nonces: Any
-
-
-@dataclass(kw_only=True)
-class ShareVoiceResponseMessage(SerializableAttrs):
-    thread_id: Optional[str] = None
-    item_id: Optional[str] = None
-    timestamp: Optional[str] = None
-    client_context: Optional[str] = None
-    participant_ids: Optional[List[int]] = None
-    message: Optional[str] = None
-
-
-@dataclass
-class ShareVoiceResponse(SerializableAttrs):
-    message_metadata: List[ShareVoiceResponseMessage]
-    status: str
-    upload_id: str
-
-    @property
-    def payload(self) -> ShareVoiceResponseMessage:
-        return self.message_metadata[0]

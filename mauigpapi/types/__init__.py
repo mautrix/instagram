@@ -99,8 +99,6 @@ from .thread_item import (
 )
 from .upload import (
     FinishUploadResponse,
-    ShareVoiceResponse,
-    ShareVoiceResponseMessage,
     UploadPhotoResponse,
     UploadVideoResponse,
 )

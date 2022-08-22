@@ -449,9 +449,9 @@ class Portal(DBPortal, BasePortal):
         self.log.trace(f"Uploading audio from {event_id}")
         _, upload_id = await sender.client.upload_mp4(data, audio=True, duration_ms=duration)
         self.log.trace(f"Broadcasting uploaded audio with request ID {request_id}")
-        return await sender.client.broadcast_audio(
+        return await sender.client.broadcast(
             self.thread_id,
-            is_direct=self.is_direct,
+            ThreadItemType.SHARE_VOICE,
             client_context=request_id,
             upload_id=upload_id,
             waveform=json.dumps([(part or 0) / 1024 for part in waveform], separators=(",", ":")),
