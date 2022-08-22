@@ -97,9 +97,5 @@ from .thread_item import (
     VoiceMediaData,
     VoiceMediaItem,
 )
-from .upload import (
-    FinishUploadResponse,
-    UploadPhotoResponse,
-    UploadVideoResponse,
-)
+from .upload import FinishUploadResponse, UploadPhotoResponse, UploadVideoResponse
 from .user import SearchResultUser, UserSearchResponse
