@@ -72,7 +72,7 @@ class CommandResponse(SerializableAttrs):
 class IrisPayloadData(SerializableAttrs):
     op: Operation
     path: str
-    value: str
+    value: str = "{}"
 
 
 @dataclass(kw_only=True)
