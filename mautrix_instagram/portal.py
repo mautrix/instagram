@@ -22,6 +22,7 @@ import asyncio
 import json
 import mimetypes
 import re
+import sqlite3
 import time
 
 import asyncpg
@@ -568,7 +569,7 @@ class Portal(DBPortal, BasePortal):
                     sender=sender.igpk,
                     ig_timestamp=int(resp.payload.timestamp),
                 ).insert()
-            except asyncpg.UniqueViolationError as e:
+            except (asyncpg.UniqueViolationError, sqlite3.IntegrityError) as e:
                 self.log.warning(
                     f"Error while persisting {event_id} ({resp.payload.client_context}) "
                     f"-> {resp.payload.item_id}: {e}"

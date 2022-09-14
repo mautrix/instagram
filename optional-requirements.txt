@@ -10,3 +10,6 @@ prometheus_client>=0.6,<0.15
 
 #/imageconvert
 pillow>=4,<10
+
+#/sqlite
+aiosqlite>=0.16,<0.18
