@@ -446,7 +446,9 @@ class AndroidMQTT:
                     waiter = self._message_response_waiters.pop(ccid)
                 except KeyError as e:
                     self.log.debug(
-                        "No handler (%s) for send message response: %s", e, message.payload
+                        "No handler for send message response: %s (missing %s key)",
+                        message.payload,
+                        e,
                     )
                 else:
                     self.log.trace("Got response to %s: %s", ccid, message.payload)
