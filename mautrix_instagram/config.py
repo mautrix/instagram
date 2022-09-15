@@ -27,12 +27,6 @@ Permissions = NamedTuple("Permissions", relay=bool, user=bool, admin=bool, level
 
 
 class Config(BaseBridgeConfig):
-    def __getitem__(self, key: str) -> Any:
-        try:
-            return os.environ[f"MAUTRIX_INSTAGRAM_{key.replace('.', '_').upper()}"]
-        except KeyError:
-            return super().__getitem__(key)
-
     @property
     def forbidden_defaults(self) -> list[ForbiddenDefault]:
         return [
@@ -44,8 +38,6 @@ class Config(BaseBridgeConfig):
     def do_update(self, helper: ConfigUpdateHelper) -> None:
         super().do_update(helper)
         copy, copy_dict, base = helper
-
-        copy("homeserver.asmux")
 
         copy("metrics.enabled")
         copy("metrics.listen_port")
