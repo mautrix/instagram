@@ -43,7 +43,6 @@ class LoginResponseUser(BaseFullResponseUser, SerializableAttrs):
     total_igtv_videos: int
     interop_messaging_user_fbid: int
     is_using_unified_inbox_for_direct: bool
-    can_see_primary_country_in_settings: str
     professional_conversion_suggested_account_type: Optional[int]
 
 
