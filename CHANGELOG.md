@@ -1,3 +1,18 @@
+# v0.2.1 (2022-09-19)
+
+* Fixed login breaking due to an Instagram API change.
+* Added support for SQLite as the bridge database.
+* Added option to use [MSC2409] and [MSC3202] for end-to-bridge encryption.
+  However, this may not work with the Synapse implementation as it hasn't been
+  tested yet.
+* The docker image now has an option to bypass the startup script by setting
+  the `MAUTRIX_DIRECT_STARTUP` environment variable. Additionally, it will
+  refuse to run as a non-root user if that variable is not set (and print an
+  error message suggesting to either set the variable or use a custom command).
+* Moved environment variable overrides for config fields to mautrix-python.
+  The new system also allows loading JSON values to enable overriding maps like
+  `login_shared_secret_map`.
+
 # v0.2.0 (2022-08-26)
 
 * Added handling for rate limit errors when connecting to Instagram.
