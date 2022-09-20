@@ -5,7 +5,7 @@ if [ ! -z "$MAUTRIX_DIRECT_STARTUP" ]; then
 		echo "| Warning: running bridge unsafely as root |"
 		echo "|------------------------------------------|"
 	fi
-	exec python3 -m mautrix_telegram -c /data/config.yaml
+	exec python3 -m mautrix_instagram -c /data/config.yaml
 elif [ $(id -u) != 0 ]; then
 	echo "The startup script must run as root. It will use su-exec to drop permissions before running the bridge."
 	echo "To bypass the startup script, either set the `MAUTRIX_DIRECT_STARTUP` environment variable,"
