@@ -108,7 +108,6 @@ class CurrentUser(BaseFullResponseUser, SerializableAttrs):
     biography: str
     can_link_entities_in_bio: bool
     biography_with_entities: EntityText
-    biography_product_mentions: List[Any]
     external_url: str
     has_biography_translation: bool = False
     hd_profile_pic_versions: List[HDProfilePictureVersion] = attr.ib(factory=lambda: [])
