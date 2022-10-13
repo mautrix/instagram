@@ -974,23 +974,26 @@ class Portal(DBPortal, BasePortal):
 
         if self.bridge.config["bridge.caption_in_message"]:
             if isinstance(content, TextMessageEventContent):
+                content.ensure_has_html()
+                prefix.ensure_has_html()
+                caption.ensure_has_html()
                 combined = TextMessageEventContent(
                     msgtype=MessageType.TEXT,
                     body="\n".join((content.body, prefix.body, caption.body)),
-                    formatted_body="<br /><br />".join(
-                        (
-                            f"<b>{content.formatted_body or content.body}</b>",
-                            prefix.formatted_body or prefix.body,
-                            caption.formatted_body or caption.body,
-                        )
+                    formatted_body=(
+                        f"<p><b>{content.formatted_body}</b></p>"
+                        f"<p>{prefix.formatted_body}</p>"
+                        f"<p>{caption.formatted_body}</p>",
                     ),
                     format=Format.HTML,
                     external_url=external_url,
                 )
             else:
+                prefix.ensure_has_html()
+                caption.ensure_has_html()
                 combined_body = "\n".join((prefix.body, caption.body))
-                combined_formatted_body = "<br /><br />".join(
-                    (prefix.formatted_body or prefix.body, caption.formatted_body or caption.body)
+                combined_formatted_body = (
+                    f"<p>{prefix.formatted_body}</p><p>{caption.formatted_body}</p>"
                 )
 
                 combined = content
@@ -1070,27 +1073,28 @@ class Portal(DBPortal, BasePortal):
         if self.bridge.config["bridge.caption_in_message"]:
             if media_content:
                 if isinstance(media_content, TextMessageEventContent):
+                    media_content.ensure_has_html()
+                    prefix_content.ensure_has_html()
+                    caption_content.ensure_has_html()
                     combined = TextMessageEventContent(
                         msgtype=MessageType.TEXT,
                         body="\n".join(
                             (media_content.body, prefix_content.body, caption_content.body)
                         ),
-                        formatted_body="<br /><br />".join(
-                            (
-                                f"<b>{caption_content.formatted_body or caption_content.body}</b>",
-                                prefix_content.formatted_body or prefix_content.body,
-                                caption_content.formatted_body or caption_content.body,
-                            )
+                        formatted_body=(
+                            f"<p><b>{media_content.formatted_body}</b></p>"
+                            f"<p>{prefix_content.formatted_body}</p>"
+                            f"<p>{caption_content.formatted_body}</p>",
                         ),
                         format=Format.HTML,
                     )
                 else:
+                    prefix_content.ensure_has_html()
+                    caption_content.ensure_has_html()
                     combined_body = "\n".join((prefix_content.body, caption_content.body))
-                    combined_formatted_body = "<br /><br />".join(
-                        (
-                            prefix_content.formatted_body or prefix_content.body,
-                            caption_content.formatted_body or caption_content.body,
-                        )
+                    combined_formatted_body = (
+                        f"<p>{prefix_content.formatted_body}</p>"
+                        f"<p>{caption_content.formatted_body}</p>"
                     )
 
                     combined = media_content
