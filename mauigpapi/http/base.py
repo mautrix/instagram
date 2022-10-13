@@ -21,7 +21,7 @@ import logging
 import random
 import time
 
-from aiohttp import ClientResponse, ClientSession, ContentTypeError
+from aiohttp import ClientResponse, ClientSession, ContentTypeError, CookieJar
 from yarl import URL
 
 from mautrix.types import JSON, Serializable
@@ -48,7 +48,13 @@ from ..errors import (
     IGUnknownError,
     IGUserHasLoggedOutError,
 )
+from ..proxy import ProxyHandler
 from ..state import AndroidState
+
+try:
+    from aiohttp_socks import ProxyConnector
+except ImportError:
+    ProxyConnector = None
 
 T = TypeVar("T")
 
@@ -65,10 +71,18 @@ class BaseAndroidAPI:
     state: AndroidState
     log: TraceLogger
 
-    def __init__(self, state: AndroidState, log: TraceLogger | None = None) -> None:
-        self.http = ClientSession(cookie_jar=state.cookies.jar)
-        self.state = state
+    def __init__(
+        self,
+        state: AndroidState,
+        log: TraceLogger | None = None,
+        proxy_handler: ProxyHandler | None = None,
+    ) -> None:
         self.log = log or logging.getLogger("mauigpapi.http")
+
+        self.proxy_handler = proxy_handler
+        self.setup_http(cookie_jar=state.cookies.jar)
+
+        self.state = state
 
     @staticmethod
     def sign(req: Any, filter_nulls: bool = False) -> dict[str, str]:
@@ -120,6 +134,18 @@ class BaseAndroidAPI:
             "accept-encoding": "gzip",
         }
         return {k: v for k, v in headers.items() if v is not None}
+
+    def setup_http(self, cookie_jar: CookieJar) -> None:
+        connector = None
+        http_proxy = self.proxy_handler.get_proxy_url()
+        if http_proxy:
+            if ProxyConnector:
+                connector = ProxyConnector.from_url(http_proxy)
+            else:
+                self.log.warning("http_proxy is set, but aiohttp-socks is not installed")
+
+        self.http = ClientSession(connector=connector, cookie_jar=cookie_jar)
+        return None
 
     def raw_http_get(self, url: URL | str):
         if isinstance(url, str):
