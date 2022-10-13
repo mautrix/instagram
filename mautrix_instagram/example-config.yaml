@@ -237,6 +237,9 @@ bridge:
     unimportant_bridge_notices: true
     # Disable bridge notices entirely
     disable_bridge_notices: false
+    # Send captions in the same message as images. This will send data compatible with both MSC2530 and MSC3552.
+    # This is currently not supported in most clients.
+    caption_in_message: false
 
     # Should Matrix m.notice-type messages be bridged?
     bridge_notices: true

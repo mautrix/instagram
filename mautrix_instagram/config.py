@@ -77,6 +77,7 @@ class Config(BaseBridgeConfig):
         copy("bridge.resend_bridge_info")
         copy("bridge.unimportant_bridge_notices")
         copy("bridge.disable_bridge_notices")
+        copy("bridge.caption_in_message")
         copy("bridge.bridge_notices")
 
         copy("bridge.provisioning.enabled")
