@@ -1014,6 +1014,7 @@ class Portal(DBPortal, BasePortal):
     async def _handle_instagram_reel_share(
         self, source: u.User, intent: IntentAPI, item: ThreadItem
     ) -> EventID | None:
+        assert item.reel_share
         media = item.reel_share.media
         prefix_html = None
         if item.reel_share.type == ReelShareType.REPLY:
@@ -1043,26 +1044,84 @@ class Portal(DBPortal, BasePortal):
         if prefix_html:
             prefix_content.format = Format.HTML
             prefix_content.formatted_body = prefix_html
-        content = TextMessageEventContent(msgtype=MessageType.TEXT, body=item.reel_share.text)
-        if not content.body and isinstance(media, MediaShareItem):
-            content.body = media.caption.text if media.caption else ""
-        if not content.body:
-            content.body = "<no caption>"
-        await self._send_message(intent, prefix_content, timestamp=item.timestamp_ms)
+        caption_content = TextMessageEventContent(
+            msgtype=MessageType.TEXT, body=item.reel_share.text
+        )
+        if not caption_content.body and isinstance(media, MediaShareItem):
+            caption_content.body = media.caption.text if media.caption else ""
+        if not caption_content.body:
+            caption_content.body = "<no caption>"
+
+        media_content = None
+        fake_item_id = f"fi.mau.instagram.reel_share.{item.user_id}.{media.pk}"
         if isinstance(media, ExpiredMediaItem):
-            # TODO send message about expired story
-            pass
+            media_content = TextMessageEventContent(
+                msgtype=MessageType.NOTICE, body="Story expired"
+            )
         else:
-            fake_item_id = f"fi.mau.instagram.reel_share.{item.user_id}.{media.pk}"
             existing = await DBMessage.get_by_item_id(fake_item_id, self.receiver)
             if existing:
                 # If the user already reacted or replied to the same reel share item,
                 # use a Matrix reply instead of reposting the image.
-                content.set_reply(existing.mxid)
+                caption_content.set_reply(existing.mxid)
             else:
-                content = await self._convert_instagram_media(source, intent, item)
+                media_content = await self._convert_instagram_media(source, intent, item)
+
+        if self.bridge.config["bridge.caption_in_message"]:
+            if media_content:
+                if isinstance(media_content, TextMessageEventContent):
+                    combined = TextMessageEventContent(
+                        msgtype=MessageType.TEXT,
+                        body="\n".join(
+                            (media_content.body, prefix_content.body, caption_content.body)
+                        ),
+                        formatted_body="<br /><br />".join(
+                            (
+                                f"<b>{caption_content.formatted_body or caption_content.body}</b>",
+                                prefix_content.formatted_body or prefix_content.body,
+                                caption_content.formatted_body or caption_content.body,
+                            )
+                        ),
+                        format=Format.HTML,
+                    )
+                else:
+                    combined_body = "\n".join((prefix_content.body, caption_content.body))
+                    combined_formatted_body = "<br /><br />".join(
+                        (
+                            prefix_content.formatted_body or prefix_content.body,
+                            caption_content.formatted_body or caption_content.body,
+                        )
+                    )
+
+                    combined = media_content
+                    combined["filename"] = combined.body
+                    combined.body = combined_body
+                    combined["format"] = str(Format.HTML)
+                    combined["org.matrix.msc1767.caption"] = {
+                        "org.matrix.msc1767.text": combined_body,
+                        "org.matrix.msc1767.html": combined_formatted_body,
+                    }
+                    combined["formatted_body"] = combined_formatted_body
+            else:
+                combined = caption_content
+
+            event_id = await self._send_message(intent, combined, timestamp=item.timestamp_ms)
+
+            if media_content:
+                await DBMessage(
+                    mxid=event_id,
+                    mx_room=self.mxid,
+                    item_id=fake_item_id,
+                    client_context=None,
+                    receiver=self.receiver,
+                    sender=media.user.pk,
+                    ig_timestamp=None,
+                ).insert()
+        else:
+            await self._send_message(intent, prefix_content, timestamp=item.timestamp_ms)
+            if media_content:
                 media_event_id = await self._send_message(
-                    intent, content, timestamp=item.timestamp_ms
+                    intent, media_content, timestamp=item.timestamp_ms
                 )
                 await DBMessage(
                     mxid=media_event_id,
@@ -1073,7 +1132,10 @@ class Portal(DBPortal, BasePortal):
                     sender=media.user.pk,
                     ig_timestamp=None,
                 ).insert()
-        return await self._send_message(intent, content, timestamp=item.timestamp_ms)
+            event_id = await self._send_message(
+                intent, caption_content, timestamp=item.timestamp_ms
+            )
+        return event_id
 
     async def _handle_instagram_link(
         self,
