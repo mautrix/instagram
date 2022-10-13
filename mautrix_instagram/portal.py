@@ -982,7 +982,7 @@ class Portal(DBPortal, BasePortal):
                     body="\n".join((content.body, prefix.body, caption.body)),
                     formatted_body=(
                         f"<p><b>{content.formatted_body}</b></p>"
-                        f"<p>{prefix.formatted_body}</p>"
+                        f"<p><i>{prefix.formatted_body}</p>"
                         f"<p>{caption.formatted_body}</p>",
                     ),
                     format=Format.HTML,
@@ -993,7 +993,7 @@ class Portal(DBPortal, BasePortal):
                 caption.ensure_has_html()
                 combined_body = "\n".join((prefix.body, caption.body))
                 combined_formatted_body = (
-                    f"<p>{prefix.formatted_body}</p><p>{caption.formatted_body}</p>"
+                    f"<p><i>{prefix.formatted_body}</i></p><p>{caption.formatted_body}</p>"
                 )
 
                 combined = content
@@ -1083,7 +1083,7 @@ class Portal(DBPortal, BasePortal):
                         ),
                         formatted_body=(
                             f"<p><b>{media_content.formatted_body}</b></p>"
-                            f"<p>{prefix_content.formatted_body}</p>"
+                            f"<p><i>{prefix_content.formatted_body}</i></p>"
                             f"<p>{caption_content.formatted_body}</p>",
                         ),
                         format=Format.HTML,
@@ -1093,7 +1093,7 @@ class Portal(DBPortal, BasePortal):
                     caption_content.ensure_has_html()
                     combined_body = "\n".join((prefix_content.body, caption_content.body))
                     combined_formatted_body = (
-                        f"<p>{prefix_content.formatted_body}</p>"
+                        f"<p><i>{prefix_content.formatted_body}</i></p>"
                         f"<p>{caption_content.formatted_body}</p>"
                     )
 
