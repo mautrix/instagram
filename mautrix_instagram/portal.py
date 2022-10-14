@@ -1110,17 +1110,6 @@ class Portal(DBPortal, BasePortal):
                 combined = caption_content
 
             event_id = await self._send_message(intent, combined, timestamp=item.timestamp_ms)
-
-            if media_content:
-                await DBMessage(
-                    mxid=event_id,
-                    mx_room=self.mxid,
-                    item_id=fake_item_id,
-                    client_context=None,
-                    receiver=self.receiver,
-                    sender=media.user.pk,
-                    ig_timestamp=None,
-                ).insert()
         else:
             await self._send_message(intent, prefix_content, timestamp=item.timestamp_ms)
             if media_content:
