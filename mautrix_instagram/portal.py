@@ -983,7 +983,7 @@ class Portal(DBPortal, BasePortal):
                     formatted_body=(
                         f"<p><b>{content.formatted_body}</b></p>"
                         f"<p><i>{prefix.formatted_body}</p>"
-                        f"<p>{caption.formatted_body}</p>",
+                        f"<p>{caption.formatted_body}</p>"
                     ),
                     format=Format.HTML,
                     external_url=external_url,
