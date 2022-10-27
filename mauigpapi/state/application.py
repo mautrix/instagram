@@ -27,13 +27,8 @@ default_capabilities = json.loads(
 
 @dataclass
 class AndroidApplication(SerializableAttrs):
-    # TODO these newer versions make the iris subscribe stop working for some reason
-    # APP_VERSION: str = "168.0.0.40.355"
-    # APP_VERSION_CODE: str = "261079771"
-    # APP_VERSION: str = "167.1.0.25.120"
-    # APP_VERSION_CODE: str = "259829117"
-    APP_VERSION: str = "159.0.0.29.122"
-    APP_VERSION_CODE: str = "244390482"
+    APP_VERSION: str = "256.0.0.18.105"
+    APP_VERSION_CODE: str = "407842973"
     BREADCRUMB_KEY: str = "iN4$aGr0m"
     FACEBOOK_ANALYTICS_APPLICATION_ID: str = "567067343352427"
     FACEBOOK_OTA_FIELDS: str = (
@@ -44,8 +39,8 @@ class AndroidApplication(SerializableAttrs):
     )
     FACEBOOK_ORCA_APPLICATION_ID: str = "124024574287414"
 
-    BLOKS_VERSION_ID: str = "0e00f30ed0184b9c914a8baad3fe538aa36a9f0faad173486e76af5ee9310d0b"
-    CAPABILITIES: str = "3brTvx8="
+    BLOKS_VERSION_ID: str = "0928297a84f74885ff39fc1628f8a40da3ef1c467555d555bfd9f8fe1aaacafe"
+    CAPABILITIES: str = "3brTv10="
     SUPPORTED_CAPABILITIES: str = default_capabilities
 
     EXPERIMENTS: str = ",".join(

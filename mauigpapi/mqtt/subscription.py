@@ -55,12 +55,13 @@ class GraphQLQueryID(Enum):
 
 
 everclear_subscriptions = {
-    "async_ads_subscribe": GraphQLQueryID.ASYNC_AD_SUB.value,
-    "inapp_notification_subscribe_default": GraphQLQueryID.INAPP_NOTIFICATION.value,
     "inapp_notification_subscribe_comment": GraphQLQueryID.INAPP_NOTIFICATION.value,
     "inapp_notification_subscribe_comment_mention_and_reply": GraphQLQueryID.INAPP_NOTIFICATION.value,
-    "business_import_page_media_delivery_subscribe": GraphQLQueryID.BUSINESS_DELIVERY.value,
     "video_call_participant_state_delivery": GraphQLQueryID.VIDEO_CALL_PARTICIPANT_DELIVERY.value,
+    "inapp_notification_subscribe_story_emoji_reaction": GraphQLQueryID.INAPP_NOTIFICATION.value,
+    "inapp_notification_subscribe_prompt_sticker_reply": GraphQLQueryID.INAPP_NOTIFICATION.value,
+    "inapp_notification_subscribe_fundraiser_cohost_invited": GraphQLQueryID.INAPP_NOTIFICATION.value,
+    "inapp_notification_subscribe_watch_receipt": GraphQLQueryID.INAPP_NOTIFICATION.value,
 }
 
 
@@ -339,7 +340,10 @@ _topic_map: dict[str, str] = {
     "/graphql": "9",
     "/t_region_hint": "150",
     "/mqtt_health_stats": "/mqtt_health_stats",
-    "179": "179",  # also unknown
+    "/ls_resp": "179",
+    "/rs_req": "244",
+    "/rs_resp": "245",
+    "/t_rtc_log": "274",
 }
 
 _reverse_topic_map: dict[str, str] = {value: key for key, value in _topic_map.items()}
@@ -358,7 +362,10 @@ class RealtimeTopic(Enum):
     REGION_HINT = "/t_region_hint"
     MQTT_HEALTH_STATS = "/mqtt_health_stats"
     UNKNOWN_PP = "/pp"
-    UNKNOWN_179 = "179"
+    LIGHTSPEED_RESPONSE = "/ls_resp"
+    RS_REQ = "/rs_req"
+    RS_RESP = "/rs_resp"
+    T_RTC_LOG = "/t_rtc_log"
 
     @property
     def encoded(self) -> str:

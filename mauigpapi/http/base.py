@@ -101,6 +101,8 @@ class BaseAndroidAPI:
             "x-ig-www-claim": self.state.session.ig_www_claim or "0",
             "x-bloks-is-layout-rtl": str(self.state.device.is_layout_rtl).lower(),
             "x-bloks-is-panorama-enabled": "true",
+            "x-ig-timezone-offset": self.state.device.timezone_offset,
+            # "x-messenger": "1",
             "x-ig-device-id": self.state.device.uuid,
             "x-ig-android-id": self.state.device.id,
             "x-ig-connection-type": self.state.device.connection_type,
