@@ -77,6 +77,7 @@ class ThreadItemType(ExtensibleEnum):
     REACTION = "reaction"
     CLIP = "clip"
     GUIDE_SHARE = "guide_share"
+    XMA_MEDIA_SHARE = "xma_media_share"
 
 
 @dataclass(kw_only=True)
@@ -494,6 +495,22 @@ class DirectMediaShareItem(SerializableAttrs):
 
 
 @dataclass
+class XMAMediaShareItem(SerializableAttrs):
+    xma_layout_type: int
+
+    target_url: str
+
+    title_text: str
+    header_title_text: str
+    # subtitle_text: Optional[str]
+
+    preview_url: str
+    preview_url_mime_type: str
+    preview_width: int
+    preview_height: int
+
+
+@dataclass
 class ClipItem(SerializableAttrs):
     # TODO there are some additional fields in clips
     clip: MediaShareItem
@@ -532,6 +549,7 @@ class ThreadItem(SerializableAttrs):
     visual_media: Optional[VisualMedia] = None
     media_share: Optional[MediaShareItem] = None
     direct_media_share: Optional[DirectMediaShareItem] = None
+    xma_media_share: Optional[List[XMAMediaShareItem]] = None
     reel_share: Optional[ReelShareItem] = None
     story_share: Optional[StoryShareItem] = None
     location: Optional[Location] = None
