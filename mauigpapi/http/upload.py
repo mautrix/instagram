@@ -148,7 +148,7 @@ class UploadAPI(BaseAndroidAPI):
             "timezone_offset": self.state.device.timezone_offset,
             "_csrftoken": self.state.cookies.csrf_token,
             "source_type": source_type,
-            "_uid": self.state.cookies.user_id,
+            "_uid": self.state.session.ds_user_id,
             "device_id": self.state.device.id,
             "_uuid": self.state.device.uuid,
             "upload_id": upload_id,

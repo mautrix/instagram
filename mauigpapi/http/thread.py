@@ -121,7 +121,7 @@ class ThreadAPI(BaseAndroidAPI):
             data={
                 "_csrftoken": self.state.cookies.csrf_token,
                 "_uuid": self.state.device.uuid,
-                "_uid": self.state.cookies.user_id,
+                "_uid": self.state.session.ds_user_id,
                 "recipient_users": json.dumps(
                     [str(user) for user in recipient_users], separators=(",", ":")
                 ),

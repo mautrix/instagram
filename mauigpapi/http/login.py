@@ -137,7 +137,7 @@ class LoginAPI(BaseAndroidAPI):
     ):
         req = {
             "_csrftoken": self.state.cookies.csrf_token,
-            "_uid": self.state.cookies.user_id,
+            "_uid": self.state.session.ds_user_id,
             "_uuid": self.state.device.uuid,
             "enc_old_password": old_password,
             "enc_new_password1": new_password1,

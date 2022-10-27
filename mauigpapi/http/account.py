@@ -90,7 +90,7 @@ class AccountAPI(BaseAndroidAPI):
     ) -> T:
         req = {
             "_csrftoken": self.state.cookies.csrf_token,
-            "_uid": self.state.cookies.user_id,
+            "_uid": self.state.session.ds_user_id,
             "_uuid": self.state.device.uuid,
             **kwargs,
         }
@@ -135,7 +135,7 @@ class AccountAPI(BaseAndroidAPI):
         req = {
             "phone_id": self.state.device.phone_id,
             "_csrftoken": self.state.cookies.csrf_token,
-            "_uid": self.state.cookies.user_id,
+            "_uid": self.state.session.ds_user_id,
             "device_id": self.state.device.uuid,
             "_uuid": self.state.device.uuid,
             "google_tokens": json.dumps([]),

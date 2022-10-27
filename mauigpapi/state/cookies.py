@@ -59,14 +59,6 @@ class Cookies(Serializable):
         except IGCookieNotFoundError:
             return "missing"
 
-    @property
-    def user_id(self) -> str:
-        return self["ds_user_id"]
-
-    @property
-    def username(self) -> str:
-        return self["ds_username"]
-
     def get(self, key: str) -> Morsel:
         filtered = self.jar.filter_cookies(ig_url)
         return filtered.get(key)

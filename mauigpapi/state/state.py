@@ -22,7 +22,7 @@ from attr import dataclass
 
 from mautrix.types import SerializableAttrs, field
 
-from ..errors import IGCookieNotFoundError, IGNoChallengeError, IGUserIDNotFoundError
+from ..errors import IGNoChallengeError, IGUserIDNotFoundError
 from ..types import ChallengeStateResponse
 from .application import AndroidApplication
 from .cookies import Cookies
@@ -64,12 +64,12 @@ class AndroidState(SerializableAttrs):
 
     @property
     def user_id(self) -> str:
-        try:
-            return self.cookies.user_id
-        except IGCookieNotFoundError:
-            if not self.challenge or not self.challenge.user_id:
-                raise IGUserIDNotFoundError()
+        if self.session.ds_user_id:
+            return self.session.ds_user_id
+        elif self.challenge and self.challenge.user_id:
             return str(self.challenge.user_id)
+        else:
+            raise IGUserIDNotFoundError()
 
     @property
     def challenge_path(self) -> str:
