@@ -71,6 +71,7 @@ async def login(evt: CommandEvent) -> None:
         return
     username = evt.args[0]
     password = " ".join(evt.args[1:])
+    await evt.redact()
     api, state = await get_login_state(evt.sender, evt.config["instagram.device_seed"])
     try:
         resp = await api.login(username, password)
