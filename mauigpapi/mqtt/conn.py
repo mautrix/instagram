@@ -47,9 +47,11 @@ from ..types import (
     LiveVideoCommentPayload,
     MessageSyncEvent,
     MessageSyncMessage,
+    Operation,
     PubsubEvent,
     PubsubPayload,
     ReactionStatus,
+    ReactionType,
     RealtimeDirectEvent,
     RealtimeZeroProvisionPayload,
     ThreadAction,
@@ -314,12 +316,9 @@ class AndroidMQTT:
                 additional["has_seen"] = int(rest[1])
             elif subitem_key == "items":
                 additional["item_id"] = rest[1]
-                # TODO wtf is this?
-                #      it has something to do with reactions
-                if len(rest) > 4:
-                    additional[rest[2]] = {
-                        rest[3]: rest[4],
-                    }
+                if len(rest) > 4 and rest[2] == "reactions":
+                    additional["reaction_type"] = ReactionType(rest[3])
+                    additional["reaction_user_id"] = int(rest[4])
             elif subitem_key in "admin_user_ids":
                 additional["admin_user_id"] = int(rest[1])
             elif subitem_key == "activity_indicator_id":
@@ -335,10 +334,21 @@ class AndroidMQTT:
                 **self._parse_direct_thread_path(part.path),
             }
             try:
-                raw_message = {
-                    **raw_message,
-                    **json.loads(part.value),
-                }
+                json_value = json.loads(part.value)
+                if "reaction_type" in raw_message:
+                    self.log.trace("Treating %s as new reaction data", json_value)
+                    raw_message["new_reaction"] = json_value
+                    json_value["sender_id"] = raw_message.pop("reaction_user_id")
+                    json_value["type"] = raw_message.pop("reaction_type")
+                    json_value["client_context"] = parsed_item.mutation_token
+                    if part.op == Operation.REMOVE:
+                        json_value["emoji"] = None
+                        json_value["timestamp"] = None
+                else:
+                    raw_message = {
+                        **raw_message,
+                        **json_value,
+                    }
             except (json.JSONDecodeError, TypeError):
                 raw_message["value"] = part.value
             message = MessageSyncMessage.deserialize(raw_message)

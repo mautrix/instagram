@@ -81,6 +81,7 @@ from .thread_item import (
     MediaType,
     Reaction,
     Reactions,
+    ReactionType,
     ReelMediaShareItem,
     ReelShareItem,
     ReelShareReactionInfo,

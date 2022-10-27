@@ -379,13 +379,19 @@ class AnimatedMediaItem(SerializableAttrs):
     images: AnimatedMediaImages
 
 
+class ReactionType(SerializableEnum):
+    LIKES = "likes"
+    EMOJIS = "emojis"
+
+
 @dataclass
 class Reaction(SerializableAttrs):
     sender_id: int
-    timestamp: int
-    client_context: Optional[str]
-    emoji: str = "❤️"
+    timestamp: Optional[int]
+    emoji: Optional[str] = "❤️"
     super_react_type: Optional[str] = None
+    client_context: Optional[str] = None
+    type: Optional[ReactionType] = None
 
     @property
     def timestamp_ms(self) -> int:
@@ -511,6 +517,7 @@ class ThreadItem(SerializableAttrs):
     timestamp: int = 0
     item_type: Optional[ThreadItemType] = None
     is_shh_mode: bool = False
+    new_reaction: Optional[Reaction] = None
 
     text: Optional[str] = None
     client_context: Optional[str] = None
@@ -546,7 +553,7 @@ class ThreadItem(SerializableAttrs):
         try:
             return _dict_to_attrs(cls, data)
         except SerializerError:
-            log.debug("Failed to deserialize ThreadItem %s", data)
+            log.debug("Failed to deserialize ThreadItem %s", data, exc_info=True)
             return Obj(**data)
 
     @property

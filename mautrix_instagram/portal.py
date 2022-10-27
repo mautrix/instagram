@@ -131,7 +131,6 @@ class Portal(DBPortal, BasePortal):
     backfill_lock: SimpleLock
     _msgid_dedup: deque[str]
     _reqid_dedup: set[str]
-    _reaction_dedup: deque[tuple[str, int, str]]
 
     _last_participant_update: set[int]
     _reaction_lock: asyncio.Lock
@@ -166,7 +165,6 @@ class Portal(DBPortal, BasePortal):
         self._create_room_lock = asyncio.Lock()
         self.log = self.log.getChild(thread_id)
         self._msgid_dedup = deque(maxlen=100)
-        self._reaction_dedup = deque(maxlen=100)
         self._reqid_dedup = set()
         self._last_participant_update = set()
 
@@ -614,8 +612,6 @@ class Portal(DBPortal, BasePortal):
         if existing and existing.reaction == emoji:
             return
 
-        dedup_id = (message.item_id, sender.igpk, emoji)
-        self._reaction_dedup.appendleft(dedup_id)
         async with self._reaction_lock:
             resp = await sender.mqtt.send_reaction(
                 self.thread_id, item_id=message.item_id, emoji=emoji
@@ -1392,6 +1388,43 @@ class Portal(DBPortal, BasePortal):
             except MForbidden:
                 await self.main_intent.redact(self.mxid, message.mxid)
             self.log.debug(f"Redacted {message.mxid} after Instagram unsend")
+
+    async def handle_instagram_reaction(
+        self, source: u.User, sender: p.Puppet, item: ThreadItem, remove: bool
+    ) -> None:
+        message = await DBMessage.get_by_item_id(item.item_id, self.receiver)
+        if not message:
+            self.log.debug(f"Dropping reaction by {sender.pk} to unknown message {item.item_id}")
+            return
+        emoji = item.new_reaction.emoji
+        async with self._reaction_lock:
+            existing = await DBReaction.get_by_item_id(item.item_id, self.receiver, sender.pk)
+            if not existing and remove:
+                self.log.debug(
+                    f"Ignoring duplicate reaction removal by {sender.pk} to {item.item_id}"
+                )
+                return
+            elif not remove and existing and existing.reaction == emoji:
+                self.log.debug(f"Ignoring duplicate reaction by {sender.pk} to {item.item_id}")
+                return
+            intent = sender.intent_for(self)
+            if remove:
+                await existing.delete()
+                await intent.redact(self.mxid, existing.mxid)
+                self.log.debug(
+                    f"Removed {sender.pk}'s reaction to {item.item_id} (redacted {existing.mxid})"
+                )
+            else:
+                timestamp = item.new_reaction.timestamp_ms
+                reaction_event_id = await intent.react(
+                    self.mxid, message.mxid, key=emoji, timestamp=timestamp
+                )
+                await self._upsert_reaction(
+                    existing, intent, reaction_event_id, message, sender, emoji, timestamp
+                )
+                self.log.debug(
+                    f"Handled {sender.pk}'s reaction to {item.item_id} -> {reaction_event_id}"
+                )
 
     async def _handle_instagram_reactions(
         self, message: DBMessage, reactions: list[Reaction], is_backfill: bool = False
