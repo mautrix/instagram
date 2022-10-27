@@ -681,9 +681,8 @@ class User(DBUser, BaseUser):
         self.log.trace(f"Received message sync event {evt.message}")
         await portal.backfill_lock.wait(f"{evt.message.op} {evt.message.item_id}")
         if evt.message.new_reaction:
-            sender = await pu.Puppet.get_by_pk(evt.message.new_reaction.sender_id)
             await portal.handle_instagram_reaction(
-                self, sender, evt.message, remove=evt.message.op == Operation.REMOVE
+                evt.message, remove=evt.message.op == Operation.REMOVE
             )
             return
         sender = await pu.Puppet.get_by_pk(evt.message.user_id) if evt.message.user_id else None

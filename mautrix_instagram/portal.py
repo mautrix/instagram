@@ -1389,9 +1389,8 @@ class Portal(DBPortal, BasePortal):
                 await self.main_intent.redact(self.mxid, message.mxid)
             self.log.debug(f"Redacted {message.mxid} after Instagram unsend")
 
-    async def handle_instagram_reaction(
-        self, source: u.User, sender: p.Puppet, item: ThreadItem, remove: bool
-    ) -> None:
+    async def handle_instagram_reaction(self, item: ThreadItem, remove: bool) -> None:
+        sender = await p.Puppet.get_by_pk(item.new_reaction.sender_id)
         message = await DBMessage.get_by_item_id(item.item_id, self.receiver)
         if not message:
             self.log.debug(f"Dropping reaction by {sender.pk} to unknown message {item.item_id}")
