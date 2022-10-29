@@ -413,13 +413,18 @@ class Portal(DBPortal, BasePortal):
         width: int | None = None,
         height: int | None = None,
     ) -> CommandResponse:
-        if mime_type != "video/mp4":
-            data = await ffmpeg.convert_bytes(
-                data,
-                output_extension=".mp4",
-                output_args=("-c:v", "libx264", "-c:a", "aac"),
-                input_mime=mime_type,
-            )
+        self.log.trace(f"Encoding video from {event_id}")
+        data = await ffmpeg.convert_bytes(
+            data,
+            output_extension=".mp4",
+            output_args=(
+                "-c:v",
+                "libx264",
+                "-c:a",
+                "aac",
+            ),
+            input_mime=mime_type,
+        )
 
         self.log.trace(f"Uploading video from {event_id}")
         _, upload_id = await sender.client.upload_mp4(
