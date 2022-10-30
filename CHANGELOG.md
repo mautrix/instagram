@@ -1,3 +1,11 @@
+# v0.2.2 (unreleased)
+
+* Added option to send captions in the same message using [MSC2530].
+* Updated app version identifiers to bridge some new message types.
+* Fixed race condition when backfilling chat with incoming message.
+
+[MSC2530]: https://github.com/matrix-org/matrix-spec-proposals/pull/2530
+
 # v0.2.1 (2022-09-19)
 
 * Fixed login breaking due to an Instagram API change.
@@ -12,6 +20,9 @@
 * Moved environment variable overrides for config fields to mautrix-python.
   The new system also allows loading JSON values to enable overriding maps like
   `login_shared_secret_map`.
+
+[MSC2409]: https://github.com/matrix-org/matrix-spec-proposals/pull/2409
+[MSC3202]: https://github.com/matrix-org/matrix-spec-proposals/pull/3202
 
 # v0.2.0 (2022-08-26)
 
