@@ -872,17 +872,7 @@ class Portal(DBPortal, BasePortal):
     def _get_instagram_media_info(self, item: ThreadItem) -> tuple[MediaUploadFunc, MediaData]:
         # TODO maybe use a dict and item.item_type instead of a ton of ifs
         method = self._reupload_instagram_media
-        if item.media:
-            media_data = item.media
-        elif item.visual_media:
-            media_data = item.visual_media.media
-        elif item.animated_media:
-            media_data = item.animated_media
-            method = self._reupload_instagram_animated
-        elif item.voice_media:
-            media_data = item.voice_media
-            method = self._reupload_instagram_voice
-        elif (
+        if (
             item.xma_media_share
             or item.xma_story_share
             or item.xma_reel_share
@@ -895,6 +885,16 @@ class Portal(DBPortal, BasePortal):
                 or item.xma_reel_mention
             )[0]
             method = self._reupload_instagram_xma
+        elif item.media:
+            media_data = item.media
+        elif item.visual_media:
+            media_data = item.visual_media.media
+        elif item.animated_media:
+            media_data = item.animated_media
+            method = self._reupload_instagram_animated
+        elif item.voice_media:
+            media_data = item.voice_media
+            method = self._reupload_instagram_voice
         elif item.reel_share:
             media_data = item.reel_share.media
         elif item.story_share:
