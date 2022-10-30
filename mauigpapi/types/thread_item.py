@@ -78,6 +78,9 @@ class ThreadItemType(ExtensibleEnum):
     CLIP = "clip"
     GUIDE_SHARE = "guide_share"
     XMA_MEDIA_SHARE = "xma_media_share"
+    XMA_REEL_SHARE = "xma_reel_share"
+    XMA_STORY_SHARE = "xma_story_share"
+    XMA_REEL_MENTION = "xma_reel_mention"
 
 
 @dataclass(kw_only=True)
@@ -375,9 +378,10 @@ class AnimatedMediaImages(SerializableAttrs):
 @dataclass(kw_only=True)
 class AnimatedMediaItem(SerializableAttrs):
     id: str
-    is_random: str
-    is_sticker: str
     images: AnimatedMediaImages
+    # user: {is_verified: bool, username: str}
+    # is_random: str | None
+    # is_sticker: str | bool
 
 
 class ReactionType(SerializableEnum):
@@ -540,6 +544,9 @@ class ThreadItem(SerializableAttrs):
     client_context: Optional[str] = None
     show_forward_attribution: Optional[bool] = None
     action_log: Optional[ThreadItemActionLog] = None
+    auxiliary_text: Optional[str] = None
+    auxiliary_text_source_type: Optional[int] = None
+    message_item_type: Optional[str] = None
 
     replied_to_message: Optional["ThreadItem"] = None
 
@@ -550,6 +557,9 @@ class ThreadItem(SerializableAttrs):
     media_share: Optional[MediaShareItem] = None
     direct_media_share: Optional[DirectMediaShareItem] = None
     xma_media_share: Optional[List[XMAMediaShareItem]] = None
+    xma_story_share: Optional[List[XMAMediaShareItem]] = None
+    xma_reel_share: Optional[List[XMAMediaShareItem]] = None
+    xma_reel_mention: Optional[List[XMAMediaShareItem]] = None
     reel_share: Optional[ReelShareItem] = None
     story_share: Optional[StoryShareItem] = None
     location: Optional[Location] = None

@@ -806,6 +806,7 @@ class Portal(DBPortal, BasePortal):
         info: ImageInfo | VideoInfo | AudioInfo,
         intent: IntentAPI,
         convert_fn: Callable[[bytes, str], Awaitable[tuple[bytes, str]]] | None = None,
+        allow_encrypt: bool = True,
     ) -> MediaMessageEventContent:
         async with source.client.raw_http_get(url) as resp:
             try:
@@ -843,7 +844,7 @@ class Portal(DBPortal, BasePortal):
         upload_mime_type = info.mimetype
         upload_file_name = file_name
         decryption_info = None
-        if self.encrypted and encrypt_attachment:
+        if allow_encrypt and self.encrypted and encrypt_attachment:
             data, decryption_info = encrypt_attachment(data)
             upload_mime_type = "application/octet-stream"
             upload_file_name = None
@@ -881,8 +882,18 @@ class Portal(DBPortal, BasePortal):
         elif item.voice_media:
             media_data = item.voice_media
             method = self._reupload_instagram_voice
-        elif item.xma_media_share:
-            media_data = item.xma_media_share[0]
+        elif (
+            item.xma_media_share
+            or item.xma_story_share
+            or item.xma_reel_share
+            or item.xma_reel_mention
+        ):
+            media_data = (
+                item.xma_media_share
+                or item.xma_story_share
+                or item.xma_reel_share
+                or item.xma_reel_mention
+            )[0]
             method = self._reupload_instagram_xma
         elif item.reel_share:
             media_data = item.reel_share.media
@@ -924,6 +935,7 @@ class Portal(DBPortal, BasePortal):
         await self._add_instagram_reply(content, item.replied_to_message)
         return content
 
+    # TODO this might be unused
     async def _handle_instagram_media_share(
         self, source: u.User, intent: IntentAPI, item: ThreadItem
     ) -> EventID | None:
@@ -1032,26 +1044,66 @@ class Portal(DBPortal, BasePortal):
         self, source: u.User, intent: IntentAPI, item: ThreadItem
     ) -> EventID | None:
         # N.B. _get_instagram_media_info also only supports downloading the first xma item
-        media = item.xma_media_share[0]
-        if len(item.xma_media_share) != 1:
+        xma_list = (
+            item.xma_media_share
+            or item.xma_story_share
+            or item.xma_reel_share
+            or item.xma_reel_mention
+        )
+        media = xma_list[0]
+        if len(xma_list) != 1:
             self.log.warning(f"Item {item.item_id} has multiple xma media share parts")
-        if media.xma_layout_type != 0:
+        if media.xma_layout_type not in (0, 4):
             self.log.warning(f"Unrecognized xma layout type {media.xma_layout_type}")
         content = await self._convert_instagram_media(source, intent, item)
 
-        caption_body = f"> {media.title_text}\n\n" f"{media.target_url}"
-        target_url_pretty = str(URL(media.target_url).with_query(None)).replace("https://www.", "")
-        escaped_title_text = html.escape(media.title_text)
-        escaped_header_text = html.escape(media.header_title_text)
-        if escaped_title_text.startswith(escaped_header_text):
-            escaped_title_text = (
-                f"<strong>{escaped_header_text}</strong>"
-                f"{escaped_title_text[len(escaped_header_text):]}"
-            )
-        caption_formatted_body = (
-            f"<blockquote>{escaped_title_text}</blockquote>"
-            f'<a href="{media.target_url}">{target_url_pretty}</a>'
+        # Post shares (layout type 0): media title text
+        # Reel shares/replies/reactions (layout type 4): item text
+        caption_text = media.title_text or item.text or ""
+        caption_body = (
+            f"> {caption_text}\n\n{media.target_url}" if caption_text else media.target_url
         )
+        escaped_caption_text = html.escape(caption_text)
+        escaped_header_text = html.escape(media.header_title_text or "")
+        # For post shares, the media title starts with the username, which is also the header.
+        # That part should be bolded.
+        if (
+            escaped_header_text
+            and escaped_caption_text
+            and escaped_caption_text.startswith(escaped_header_text)
+        ):
+            escaped_caption_text = (
+                f"<strong>{escaped_header_text}</strong>"
+                f"{escaped_caption_text[len(escaped_header_text):]}"
+            )
+        if item.message_item_type == "animated_media":
+            anim = await self._reupload_instagram_file(
+                source,
+                url=item.animated_media.images.fixed_height.webp,
+                msgtype=MessageType.IMAGE,
+                info=ImageInfo(
+                    width=int(item.animated_media.images.fixed_height.width),
+                    height=int(item.animated_media.images.fixed_height.height),
+                ),
+                intent=intent,
+            )
+            inline_img = (
+                f'<img src="{anim.url}" width={anim.info.width} height={anim.info.height}/>'
+            )
+            escaped_caption_text = (
+                f"{escaped_caption_text}<br/>{inline_img}" if escaped_caption_text else inline_img
+            )
+        target_url_pretty = str(URL(media.target_url).with_query(None)).replace("https://www.", "")
+        caption_formatted_body = (
+            f"<blockquote>{escaped_caption_text}</blockquote>" if escaped_caption_text else ""
+        )
+        caption_formatted_body += f'<p><a href="{media.target_url}">{target_url_pretty}</a></p>'
+        # Add auxiliary text as prefix for caption
+        if item.auxiliary_text:
+            caption_formatted_body = (
+                f"<p>{html.escape(item.auxiliary_text)}</p>{caption_formatted_body}"
+            )
+            caption_body = f"{item.auxiliary_text}\n\n{caption_body}"
         content.external_url = media.target_url
         caption = TextMessageEventContent(
             msgtype=MessageType.TEXT,
@@ -1067,7 +1119,7 @@ class Portal(DBPortal, BasePortal):
                 caption.ensure_has_html()
                 content.body += f"\n\n{caption.body}"
                 content.formatted_body = (
-                    f"<p><b>{content.formatted_body}</b></p><p>{caption.formatted_body}</p>"
+                    f"<p><b>{content.formatted_body}</b></p>{caption.formatted_body}"
                 )
             else:
                 content["filename"] = content.body
@@ -1086,6 +1138,7 @@ class Portal(DBPortal, BasePortal):
 
         return event_id
 
+    # TODO this is probably unused
     async def _handle_instagram_reel_share(
         self, source: u.User, intent: IntentAPI, item: ThreadItem
     ) -> EventID | None:
@@ -1394,7 +1447,16 @@ class Portal(DBPortal, BasePortal):
             intent = sender.intent_for(self)
         event_id = None
         needs_handling = True
-        if item.media or item.animated_media or item.voice_media or item.visual_media:
+        allow_text_handle = True
+        if (
+            item.xma_media_share
+            or item.xma_reel_share
+            or item.xma_reel_mention
+            or item.xma_story_share
+        ):
+            event_id = await self._handle_instagram_xma_media_share(source, intent, item)
+            allow_text_handle = False
+        elif item.media or item.animated_media or item.voice_media or item.visual_media:
             content = await self._convert_instagram_media(source, intent, item)
             event_id = await self._send_message(intent, content, timestamp=item.timestamp_ms)
         elif item.location:
@@ -1411,14 +1473,12 @@ class Portal(DBPortal, BasePortal):
             or item.felix_share
         ):
             event_id = await self._handle_instagram_media_share(source, intent, item)
-        elif item.xma_media_share:
-            event_id = await self._handle_instagram_xma_media_share(source, intent, item)
         elif item.action_log:
             # These probably don't need to be bridged
             needs_handling = False
             self.log.debug(f"Ignoring action log message {item.item_id}")
         # TODO handle item.clip?
-        if item.text:
+        if item.text and allow_text_handle:
             event_id = await self._handle_instagram_text(intent, item, item.text)
         elif item.like:
             # We handle likes as text because Matrix clients do big emoji on their own.
