@@ -770,8 +770,6 @@ class Portal(DBPortal, BasePortal):
     ) -> MediaMessageEventContent:
         url = media.preview_url
         info = ImageInfo(
-            height=media.preview_height,
-            width=media.preview_width,
             mimetype=media.preview_url_mime_type,
         )
         return await self._reupload_instagram_file(source, url, MessageType.IMAGE, info, intent)
@@ -808,6 +806,7 @@ class Portal(DBPortal, BasePortal):
         convert_fn: Callable[[bytes, str], Awaitable[tuple[bytes, str]]] | None = None,
         allow_encrypt: bool = True,
     ) -> MediaMessageEventContent:
+        data = None
         async with source.client.raw_http_get(url) as resp:
             try:
                 length = int(resp.headers["Content-Length"])
@@ -825,11 +824,15 @@ class Portal(DBPortal, BasePortal):
                 raise ValueError("Attachment not available: too large")
             data = await resp.read()
             info.mimetype = resp.headers["Content-Type"] or magic.from_buffer(data, mime=True)
+        assert data is not None
 
         # Run the conversion function on the data.
         if convert_fn is not None:
             data, info.mimetype = await convert_fn(data, info.mimetype)
 
+        if not info.width and not info.height and info.mimetype.startswith("image/"):
+            with BytesIO(data) as inp, Image.open(inp) as img:
+                info.width, info.height = img.size
         info.size = len(data)
         extension = {
             "image/webp": ".webp",
