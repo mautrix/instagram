@@ -1,4 +1,4 @@
-# v0.2.2 (unreleased)
+# v0.2.2 (2022-11-01)
 
 * Added option to send captions in the same message using [MSC2530].
 * Updated app version identifiers to bridge some new message types.
