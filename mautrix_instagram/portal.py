@@ -880,12 +880,14 @@ class Portal(DBPortal, BasePortal):
             or item.xma_story_share
             or item.xma_reel_share
             or item.xma_reel_mention
+            or item.generic_xma
         ):
             media_data = (
                 item.xma_media_share
                 or item.xma_story_share
                 or item.xma_reel_share
                 or item.xma_reel_mention
+                or item.generic_xma
             )[0]
             method = self._reupload_instagram_xma
         elif item.media:
@@ -1052,6 +1054,7 @@ class Portal(DBPortal, BasePortal):
             or item.xma_story_share
             or item.xma_reel_share
             or item.xma_reel_mention
+            or item.generic_xma
         )
         media = xma_list[0]
         if len(xma_list) != 1:
@@ -1063,10 +1066,17 @@ class Portal(DBPortal, BasePortal):
         # Post shares (layout type 0): media title text
         # Reel shares/replies/reactions (layout type 4): item text
         caption_text = media.title_text or item.text or ""
-        caption_body = (
-            f"> {caption_text}\n\n{media.target_url}" if caption_text else media.target_url
-        )
-        escaped_caption_text = html.escape(caption_text)
+        if media.subtitle_text:
+            caption_text = (
+                f"{caption_text}\n{media.subtitle_text}" if caption_text else media.subtitle_text
+            )
+        if media.target_url:
+            caption_body = (
+                f"> {caption_text}\n\n{media.target_url}" if caption_text else media.target_url
+            )
+        else:
+            caption_body = f"> {caption_text}"
+        escaped_caption_text = html.escape(caption_text).replace("\n", "<br>")
         escaped_header_text = html.escape(media.header_title_text or "")
         # For post shares, the media title starts with the username, which is also the header.
         # That part should be bolded.
@@ -1096,25 +1106,31 @@ class Portal(DBPortal, BasePortal):
             escaped_caption_text = (
                 f"{escaped_caption_text}<br/>{inline_img}" if escaped_caption_text else inline_img
             )
-        target_url_pretty = str(URL(media.target_url).with_query(None)).replace("https://www.", "")
         caption_formatted_body = (
             f"<blockquote>{escaped_caption_text}</blockquote>" if escaped_caption_text else ""
         )
-        caption_formatted_body += f'<p><a href="{media.target_url}">{target_url_pretty}</a></p>'
+        if media.target_url:
+            target_url_pretty = str(URL(media.target_url).with_query(None)).replace(
+                "https://www.", ""
+            )
+            caption_formatted_body += (
+                f'<p><a href="{media.target_url}">{target_url_pretty}</a></p>'
+            )
         # Add auxiliary text as prefix for caption
         if item.auxiliary_text:
             caption_formatted_body = (
                 f"<p>{html.escape(item.auxiliary_text)}</p>{caption_formatted_body}"
             )
             caption_body = f"{item.auxiliary_text}\n\n{caption_body}"
-        content.external_url = media.target_url
         caption = TextMessageEventContent(
             msgtype=MessageType.TEXT,
             body=caption_body,
             formatted_body=caption_formatted_body,
             format=Format.HTML,
-            external_url=media.target_url,
         )
+        if media.target_url:
+            content.external_url = media.target_url
+            caption.external_url = media.target_url
 
         if self.bridge.config["bridge.caption_in_message"]:
             if isinstance(content, TextMessageEventContent):
@@ -1456,6 +1472,7 @@ class Portal(DBPortal, BasePortal):
             or item.xma_reel_share
             or item.xma_reel_mention
             or item.xma_story_share
+            or item.generic_xma
         ):
             event_id = await self._handle_instagram_xma_media_share(source, intent, item)
             allow_text_handle = False
