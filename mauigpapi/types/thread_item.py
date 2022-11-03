@@ -506,7 +506,7 @@ class XMAMediaShareItem(SerializableAttrs):
 
     title_text: str
     header_title_text: str
-    # subtitle_text: Optional[str]
+    subtitle_text: Optional[str]
 
     preview_url: str
     preview_url_mime_type: str
@@ -556,6 +556,7 @@ class ThreadItem(SerializableAttrs):
     visual_media: Optional[VisualMedia] = None
     media_share: Optional[MediaShareItem] = None
     direct_media_share: Optional[DirectMediaShareItem] = None
+    generic_xma: Optional[List[XMAMediaShareItem]] = None
     xma_media_share: Optional[List[XMAMediaShareItem]] = None
     xma_story_share: Optional[List[XMAMediaShareItem]] = None
     xma_reel_share: Optional[List[XMAMediaShareItem]] = None
