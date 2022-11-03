@@ -830,7 +830,7 @@ class Portal(DBPortal, BasePortal):
         if convert_fn is not None:
             data, info.mimetype = await convert_fn(data, info.mimetype)
 
-        if not info.width and not info.height and info.mimetype.startswith("image/"):
+        if info.mimetype.startswith("image/") and not info.width and not info.height:
             with BytesIO(data) as inp, Image.open(inp) as img:
                 info.width, info.height = img.size
         info.size = len(data)
