@@ -8,6 +8,10 @@ unpaddedbase64>=1,<3
 #/metrics
 prometheus_client>=0.6,<0.16
 
+#/proxy
+pysocks
+aiohttp-socks
+
 #/imageconvert
 pillow>=4,<10
 

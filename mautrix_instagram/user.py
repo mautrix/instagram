@@ -20,7 +20,7 @@ import asyncio
 import logging
 import time
 
-from mauigpapi import AndroidAPI, AndroidMQTT, AndroidState
+from mauigpapi import AndroidAPI, AndroidMQTT, AndroidState, ProxyHandler
 from mauigpapi.errors import (
     IGChallengeError,
     IGCheckpointError,
@@ -38,6 +38,7 @@ from mauigpapi.mqtt import (
     Disconnect,
     GraphQLSubscription,
     NewSequenceID,
+    ProxyUpdate,
     SkywalkerSubscription,
 )
 from mauigpapi.types import (
@@ -144,6 +145,10 @@ class User(DBUser, BaseUser):
         self.remote_typing_status = None
         self._seq_id_save_task = None
 
+        self.proxy_handler = ProxyHandler(
+            api_url=self.config["bridge.get_proxy_api_url"],
+        )
+
     @classmethod
     def init_cls(cls, bridge: "InstagramBridge") -> AsyncIterable[Awaitable[None]]:
         cls.bridge = bridge
@@ -197,7 +202,11 @@ class User(DBUser, BaseUser):
         if not self.state:
             await self.push_bridge_state(BridgeStateEvent.BAD_CREDENTIALS, error="logged-out")
             return
-        client = AndroidAPI(self.state, log=self.api_log)
+        client = AndroidAPI(
+            self.state,
+            log=self.api_log,
+            proxy_handler=self.proxy_handler,
+        )
 
         if not user:
             try:
@@ -222,7 +231,10 @@ class User(DBUser, BaseUser):
         self.by_igpk[self.igpk] = self
 
         self.mqtt = AndroidMQTT(
-            self.state, loop=self.loop, log=self.ig_base_log.getChild("mqtt").getChild(self.mxid)
+            self.state,
+            loop=self.loop,
+            log=self.ig_base_log.getChild("mqtt").getChild(self.mxid),
+            proxy_handler=self.proxy_handler,
         )
         self.mqtt.add_event_handler(Connect, self.on_connect)
         self.mqtt.add_event_handler(Disconnect, self.on_disconnect)
@@ -230,6 +242,7 @@ class User(DBUser, BaseUser):
         self.mqtt.add_event_handler(MessageSyncEvent, self.handle_message)
         self.mqtt.add_event_handler(ThreadSyncEvent, self.handle_thread_sync)
         self.mqtt.add_event_handler(RealtimeDirectEvent, self.handle_rtd)
+        self.mqtt.add_event_handler(ProxyUpdate, self.on_proxy_update)
 
         await self.update()
 
@@ -251,6 +264,10 @@ class User(DBUser, BaseUser):
         self.log.debug("Disconnected from Instagram")
         self._track_metric(METRIC_CONNECTED, False)
         self._is_connected = False
+
+    async def on_proxy_update(self, evt: ProxyUpdate | None = None) -> None:
+        if self.client:
+            self.client.setup_http(self.state.cookies.jar)
 
     # TODO this stuff could probably be moved to mautrix-python
     async def get_notice_room(self) -> RoomID:
@@ -395,6 +412,7 @@ class User(DBUser, BaseUser):
                 self.start_listen()
         finally:
             self._is_refreshing = False
+            self.proxy_handler.update_proxy_url()
 
     async def _handle_checkpoint(
         self,
@@ -531,6 +549,8 @@ class User(DBUser, BaseUser):
             return
         else:
             self.log.debug(f"Confirmed current user {resp.user.pk}")
+            self.proxy_handler.update_proxy_url()
+            await self.on_proxy_update()
             self.start_listen()
 
     async def _listen(self, seq_id: int, snapshot_at_ms: int, is_after_sync: bool) -> None:

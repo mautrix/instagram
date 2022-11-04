@@ -167,6 +167,10 @@ bridge:
         resync: true
         # Should even disconnected users be reconnected?
         always: false
+
+    # URL to call to retrieve a proxy URL from (defaults to the http_proxy environment variable).
+    get_proxy_api_url: null
+
     # End-to-bridge encryption support options.
     #
     # See https://docs.mau.fi/bridges/general/end-to-bridge-encryption.html for more info.

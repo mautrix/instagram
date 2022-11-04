@@ -11,6 +11,9 @@ RUN apk add --no-cache \
       py3-commonmark \
       #py3-prometheus-client \
       py3-paho-mqtt \
+      # proxy support
+      py3-aiohttp-socks \
+      py3-pysocks \
       # Other dependencies
       ca-certificates \
       su-exec \

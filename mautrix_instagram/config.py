@@ -89,6 +89,8 @@ class Config(BaseBridgeConfig):
 
         copy("bridge.command_prefix")
 
+        copy("bridge.get_proxy_api_url")
+
         copy_dict("bridge.permissions")
 
     def _get_permissions(self, key: str) -> Permissions:

@@ -37,6 +37,7 @@ from ..errors import (
     MQTTNotConnected,
     MQTTNotLoggedIn,
 )
+from ..proxy import ProxyHandler
 from ..state import AndroidState
 from ..types import (
     AppPresenceEventPayload,
@@ -59,7 +60,7 @@ from ..types import (
     ThreadSyncEvent,
     TypingStatus,
 )
-from .events import Connect, Disconnect, NewSequenceID
+from .events import Connect, Disconnect, NewSequenceID, ProxyUpdate
 from .otclient import MQTToTClient
 from .subscription import GraphQLQueryID, RealtimeTopic, everclear_subscriptions
 from .thrift import ForegroundStateConfig, IncomingMessage, RealtimeClientInfo, RealtimeConfig
@@ -103,6 +104,7 @@ class AndroidMQTT:
         state: AndroidState,
         loop: asyncio.AbstractEventLoop | None = None,
         log: TraceLogger | None = None,
+        proxy_handler: ProxyHandler | None = None,
     ) -> None:
         self._graphql_subs = set()
         self._skywalker_subs = set()
@@ -125,26 +127,8 @@ class AndroidMQTT:
             protocol=pmc.MQTTv31,
             transport="tcp",
         )
-        try:
-            http_proxy = urllib.request.getproxies()["http"]
-        except KeyError:
-            http_proxy = None
-        if http_proxy and socks and URL:
-            proxy_url = URL(http_proxy)
-            proxy_type = {
-                "http": socks.HTTP,
-                "https": socks.HTTP,
-                "socks": socks.SOCKS5,
-                "socks5": socks.SOCKS5,
-                "socks4": socks.SOCKS4,
-            }[proxy_url.scheme]
-            self._client.proxy_set(
-                proxy_type=proxy_type,
-                proxy_addr=proxy_url.host,
-                proxy_port=proxy_url.port,
-                proxy_username=proxy_url.user,
-                proxy_password=proxy_url.password,
-            )
+        self.proxy_handler = proxy_handler
+        self.setup_proxy()
         self._client.enable_logger()
         self._client.tls_set()
         # mqtt.max_inflight_messages_set(20)  # The rest will get queued
@@ -160,6 +144,28 @@ class AndroidMQTT:
         self._client.on_socket_close = self._on_socket_close
         self._client.on_socket_register_write = self._on_socket_register_write
         self._client.on_socket_unregister_write = self._on_socket_unregister_write
+
+    def setup_proxy(self):
+        http_proxy = self.proxy_handler.get_proxy_url()
+        if http_proxy:
+            if not socks:
+                self.log.warning("http_proxy is set, but pysocks is not installed")
+            else:
+                proxy_url = URL(http_proxy)
+                proxy_type = {
+                    "http": socks.HTTP,
+                    "https": socks.HTTP,
+                    "socks": socks.SOCKS5,
+                    "socks5": socks.SOCKS5,
+                    "socks4": socks.SOCKS4,
+                }[proxy_url.scheme]
+                self._client.proxy_set(
+                    proxy_type=proxy_type,
+                    proxy_addr=proxy_url.host,
+                    proxy_port=proxy_url.port,
+                    proxy_username=proxy_url.user,
+                    proxy_password=proxy_url.password,
+                )
 
     def _clear_response_waiters(self) -> None:
         for waiter in self._response_waiters.values():
@@ -572,6 +578,9 @@ class AndroidMQTT:
                 elif rc == pmc.MQTT_ERR_NO_CONN:
                     if connection_retries > retry_limit:
                         raise MQTTNotConnected(f"Connection failed {connection_retries} times")
+                    if self.proxy_handler.update_proxy_url():
+                        self.setup_proxy()
+                        await self._dispatch(ProxyUpdate())
                     sleep = connection_retries * 2
                     await self._dispatch(
                         Disconnect(
