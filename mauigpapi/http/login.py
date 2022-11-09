@@ -47,11 +47,10 @@ class LoginAPI(BaseAndroidAPI):
             "enc_password": encrypted_password,
             "guid": self.state.device.uuid,
             "phone_id": self.state.device.phone_id,
-            "_csrftoken": self.state.cookies.csrf_token,
             "device_id": self.state.device.id,
-            "adid": "",  # not set on pre-login
+            "adid": self.state.device.adid,
             "google_tokens": "[]",
-            "login_attempt_count": 0,  # TODO maybe cache this somewhere?
+            "login_attempt_count": "0",  # TODO maybe cache this somewhere?
             "country_codes": json.dumps([{"country_code": "1", "source": "default"}]),
             "jazoest": self._jazoest,
         }
@@ -62,7 +61,6 @@ class LoginAPI(BaseAndroidAPI):
     async def one_tap_app_login(self, user_id: str, nonce: str) -> LoginResponse:
         req = {
             "phone_id": self.state.device.phone_id,
-            "_csrftoken": self.state.cookies.csrf_token,
             "user_id": user_id,
             "adid": self.state.device.adid,
             "guid": self.state.device.uuid,
@@ -83,17 +81,19 @@ class LoginAPI(BaseAndroidAPI):
     ) -> LoginResponse:
         req = {
             "verification_code": code,
-            "_csrftoken": self.state.cookies.csrf_token,
             "two_factor_identifier": identifier,
             "username": username,
             "trust_this_device": "1" if trust_device else "0",
             "guid": self.state.device.uuid,
             "device_id": self.state.device.id,
-            "verification_method": "0" if is_totp else "1",
+            "verification_method": "3" if is_totp else "1",
         }
         return await self.std_http_post(
             "/api/v1/accounts/two_factor_login/", data=req, response_type=LoginResponse
         )
+
+    # async def two_factor_trusted_status(self, username: str, identifier: str, polling_nonce: str):
+    #     pass
 
     async def facebook_signup(self, fb_access_token: str) -> FacebookLoginResponse:
         req = {
@@ -116,7 +116,6 @@ class LoginAPI(BaseAndroidAPI):
         req = {
             "guid": self.state.device.uuid,
             "phone_id": self.state.device.phone_id,
-            "_csrftoken": self.state.cookies.csrf_token,
             "device_id": self.state.device.id,
             "_uuid": self.state.device.uuid,
             "one_tap_app_login": one_tap_app_login,

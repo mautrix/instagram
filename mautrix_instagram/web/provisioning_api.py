@@ -259,7 +259,17 @@ class ProvisioningAPI:
             resp = await api.login(username, password)
         except IGLoginTwoFactorRequiredError as e:
             track(user, "$login_2fa")
-            self.log.debug("%s logged in as %s, but needs 2-factor auth", user.mxid, username)
+            found_username = e.body.two_factor_info.username if e.body.two_factor_info else None
+            if found_username and found_username != username:
+                state.login_2fa_username = found_username
+            else:
+                state.login_2fa_username = None
+            self.log.debug(
+                "%s logged in as %s -> %s, but needs 2-factor auth",
+                user.mxid,
+                username,
+                found_username or "<no username?>",
+            )
             return web.json_response(
                 data={
                     "status": "two-factor",
@@ -348,6 +358,11 @@ class ProvisioningAPI:
 
         api: AndroidAPI = user.command_status["api"]
         state: AndroidState = user.command_status["state"]
+        if state.login_2fa_username and "@" in username or "+" in username:
+            self.log.debug(
+                "Replacing %s with %s in 2FA login request", username, state.login_2fa_username
+            )
+            username = state.login_2fa_username
         track(user, "$login_submit_2fa")
         try:
             resp = await api.two_factor_login(

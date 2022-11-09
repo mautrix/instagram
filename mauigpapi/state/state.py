@@ -42,6 +42,7 @@ class AndroidState(SerializableAttrs):
     challenge: Optional[ChallengeStateResponse] = None
     _challenge_path: Optional[str] = field(default=None, json="challenge_path")
     cookies: Cookies = field(factory=lambda: Cookies())
+    login_2fa_username: Optional[str] = field(default=None, hidden=True)
 
     def __attrs_post_init__(self) -> None:
         if self.application.APP_VERSION_CODE != AndroidApplication().APP_VERSION_CODE:

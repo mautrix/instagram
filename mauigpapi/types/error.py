@@ -113,7 +113,9 @@ class LoginTwoFactorInfo(SerializableAttrs):
     pending_trusted_notification: bool
     # TODO type
     # sms_not_allowed_reason: Any
+    pk: Optional[int] = None
     phone_verification_settings: Optional[LoginPhoneVerificationSettings] = None
+    trusted_notification_polling_nonce: Optional[str] = None
 
 
 @dataclass
