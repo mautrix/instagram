@@ -23,7 +23,7 @@ from attr import dataclass
 from mautrix.types import SerializableAttrs, field
 
 from ..errors import IGNoChallengeError, IGUserIDNotFoundError
-from ..types import ChallengeStateResponse
+from ..types import ChallengeContext, ChallengeStateResponse
 from .application import AndroidApplication
 from .cookies import Cookies
 from .device import AndroidDevice
@@ -40,6 +40,7 @@ class AndroidState(SerializableAttrs):
     client_session_id_lifetime: int = 1_200_000
     pigeon_session_id_lifetime: int = 1_200_000
     challenge: Optional[ChallengeStateResponse] = None
+    challenge_context: Optional[ChallengeContext] = None
     _challenge_path: Optional[str] = field(default=None, json="challenge_path")
     cookies: Cookies = field(factory=lambda: Cookies())
     login_2fa_username: Optional[str] = field(default=None, hidden=True)

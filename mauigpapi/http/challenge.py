@@ -30,6 +30,8 @@ class ChallengeAPI(BaseAndroidAPI):
             "guid": self.state.device.uuid,
             "device_id": self.state.device.id,
         }
+        if self.state.challenge_context:
+            query["challenge_context"] = self.state.challenge_context.json()
         self.log.debug("Fetching current challenge state")
         return self.__handle_resp(
             await self.std_http_get(self.__path, query=query, response_type=ChallengeStateResponse)
@@ -124,6 +126,7 @@ class ChallengeAPI(BaseAndroidAPI):
                 f"Challenge closed (step: {resp.step_name}, has user: {bool(resp.logged_in_user)})"
             )
             self.state.challenge = None
+            self.state.challenge_context = None
             self.state.challenge_path = None
         else:
             self.state.challenge = resp

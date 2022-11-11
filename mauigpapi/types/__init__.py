@@ -9,7 +9,7 @@ from .account import (
     ProfileEditParams,
     UserIdentifier,
 )
-from .challenge import ChallengeStateData, ChallengeStateResponse
+from .challenge import ChallengeContext, ChallengeStateData, ChallengeStateResponse
 from .direct_inbox import DMInbox, DMInboxCursor, DMInboxResponse, DMThreadResponse
 from .error import (
     ChallengeData,

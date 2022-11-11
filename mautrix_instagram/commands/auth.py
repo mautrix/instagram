@@ -97,7 +97,7 @@ async def login(evt: CommandEvent) -> None:
         }
         await evt.reply(msg)
     except IGChallengeError:
-        await api.challenge_auto(reset=True)
+        await api.challenge_auto()
         evt.sender.command_status = {
             **evt.sender.command_status,
             "next": enter_login_security_code,

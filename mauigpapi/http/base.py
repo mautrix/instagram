@@ -50,6 +50,7 @@ from ..errors import (
 )
 from ..proxy import ProxyHandler
 from ..state import AndroidState
+from ..types import ChallengeContext
 
 try:
     from aiohttp_socks import ProxyConnector
@@ -235,7 +236,17 @@ class BaseAndroidAPI:
         if isinstance(message, str):
             if message == "challenge_required":
                 err = IGChallengeError(resp, data)
+                self.log.debug(f"Storing challenge URL {err.url}")
                 self.state.challenge_path = err.url
+                try:
+                    self.state.challenge_context = ChallengeContext.parse_json(
+                        err.body.challenge.challenge_context
+                    )
+                except Exception:
+                    self.log.exception(
+                        "Failed to deserialize challenge_context %s",
+                        err.body.challenge.challenge_context,
+                    )
                 raise err
             elif message == "checkpoint_required":
                 raise IGCheckpointError(resp, data)

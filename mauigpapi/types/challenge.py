@@ -13,7 +13,7 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from typing import Optional
+from typing import Optional, Union
 
 from attr import dataclass
 
@@ -41,8 +41,10 @@ class ChallengeStateData(SerializableAttrs):
 @dataclass
 class ChallengeContext(SerializableAttrs):
     step_name: Optional[str] = None
+    nonce_code: Optional[str] = None
     challenge_type_enum: Optional[str] = None
     cni: Optional[int] = None
+    user_id: Optional[Union[str, int]] = None
     is_stateless: bool = False
     present_as_modal: bool = False
 

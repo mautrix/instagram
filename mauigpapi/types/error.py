@@ -42,6 +42,7 @@ class ChallengeData(SerializableAttrs):
     lock: bool
     logout: bool
     native_flow: bool
+    challenge_context: Optional[str] = None
 
 
 @dataclass

@@ -394,7 +394,7 @@ class ProvisioningAPI:
         self, user: u.User, state: AndroidState, api: AndroidAPI, err: IGChallengeError, after: str
     ) -> web.Response:
         try:
-            resp = await api.challenge_auto(reset=True)
+            resp = await api.challenge_auto(reset=after == "2fa")
         except Exception:
             # Most likely means that the user has to go and verify the login on their phone.
             # Return a 403 in this case so the client knows to show such verbiage.
