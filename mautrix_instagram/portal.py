@@ -558,7 +558,7 @@ class Portal(DBPortal, BasePortal):
         self.log.trace(f"Got response to message send {request_id}: {resp}")
         if resp.status != "ok":
             self.log.warning(f"Failed to handle {event_id}: {resp}")
-            raise Exception(f"Failed to handle event. Error: {resp.payload.message}")
+            raise Exception(f"Failed to handle event. Error: {resp.error_message}")
         else:
             self._msgid_dedup.appendleft(resp.payload.item_id)
             try:
@@ -621,7 +621,7 @@ class Portal(DBPortal, BasePortal):
                 self.thread_id, item_id=message.item_id, emoji=emoji
             )
             if resp.status != "ok":
-                if resp.payload.message == "invalid unicode emoji":
+                if resp.payload and resp.payload.message == "invalid unicode emoji":
                     # Instagram doesn't support this reaction. Notify the user, and redact it
                     # so that it doesn't get confusing.
                     await self.main_intent.redact(self.mxid, event_id, reason="Unsupported emoji")

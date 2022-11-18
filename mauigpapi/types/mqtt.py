@@ -62,10 +62,22 @@ class CommandResponsePayload(SerializableAttrs):
 
 @dataclass(kw_only=True)
 class CommandResponse(SerializableAttrs):
-    action: str
+    action: Optional[str] = None
     status: str
     status_code: Optional[str] = None
-    payload: CommandResponsePayload
+    message: Optional[str] = None
+    payload: Optional[CommandResponsePayload] = None
+
+    @property
+    def error_message(self) -> Optional[str]:
+        if self.status == "ok":
+            return None
+        if self.payload and self.payload.message:
+            return self.payload.message
+        elif self.message:
+            return self.message
+        else:
+            return "unknown response data"
 
 
 @dataclass(kw_only=True)
