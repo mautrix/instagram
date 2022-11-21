@@ -1,5 +1,5 @@
 # mautrix-instagram - A Matrix-Instagram puppeting bridge.
-# Copyright (C) 2020 Tulir Asokan
+# Copyright (C) 2022 Tulir Asokan, Sumner Evans
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as published by
@@ -13,15 +13,13 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from asyncpg import Connection
+from mautrix.util.async_db import Connection, Scheme
 
-from mautrix.util.async_db import UpgradeTable
-
-upgrade_table = UpgradeTable()
+from . import upgrade_table
 
 
-@upgrade_table.register(description="Latest revision", upgrades_to=8)
-async def upgrade_latest(conn: Connection) -> None:
+@upgrade_table.register(description="Latest revision", upgrades_to=9)
+async def upgrade_latest(conn: Connection, scheme: Scheme) -> None:
     await conn.execute(
         """CREATE TABLE portal (
             thread_id     TEXT,
@@ -103,41 +101,28 @@ async def upgrade_latest(conn: Connection) -> None:
         )"""
     )
 
+    gen = ""
+    if scheme in (Scheme.POSTGRES, Scheme.COCKROACH):
+        gen = "GENERATED ALWAYS AS IDENTITY"
+    await conn.execute(
+        f"""
+        CREATE TABLE backfill_queue (
+            queue_id            INTEGER PRIMARY KEY {gen},
+            user_mxid           TEXT,
+            priority            INTEGER NOT NULL,
+            portal_thread_id    BIGINT,
+            portal_receiver     BIGINT,
+            num_pages           INTEGER NOT NULL,
+            page_delay          INTEGER NOT NULL,
+            post_batch_delay    INTEGER NOT NULL,
+            max_total_pages     INTEGER NOT NULL,
+            dispatch_time       TIMESTAMP,
+            completed_at        TIMESTAMP,
+            cooldown_timeout    TIMESTAMP,
 
-@upgrade_table.register(description="Add name_set and avatar_set to portal table")
-async def upgrade_v2(conn: Connection) -> None:
-    await conn.execute("ALTER TABLE portal ADD COLUMN avatar_url TEXT")
-    await conn.execute("ALTER TABLE portal ADD COLUMN name_set BOOLEAN NOT NULL DEFAULT false")
-    await conn.execute("ALTER TABLE portal ADD COLUMN avatar_set BOOLEAN NOT NULL DEFAULT false")
-    await conn.execute("UPDATE portal SET name_set=true WHERE name<>''")
-
-
-@upgrade_table.register(description="Add relay user field to portal table")
-async def upgrade_v3(conn: Connection) -> None:
-    await conn.execute("ALTER TABLE portal ADD COLUMN relay_user_id TEXT")
-
-
-@upgrade_table.register(description="Add client context field to message table")
-async def upgrade_v4(conn: Connection) -> None:
-    await conn.execute("ALTER TABLE message ADD COLUMN client_context TEXT")
-
-
-@upgrade_table.register(description="Add ig_timestamp field to message table")
-async def upgrade_v5(conn: Connection) -> None:
-    await conn.execute("ALTER TABLE message ADD COLUMN ig_timestamp BIGINT")
-
-
-@upgrade_table.register(description="Allow hidden events in message table")
-async def upgrade_v6(conn: Connection) -> None:
-    await conn.execute("ALTER TABLE message ALTER COLUMN mxid DROP NOT NULL")
-
-
-@upgrade_table.register(description="Store reaction timestamps")
-async def upgrade_v7(conn: Connection) -> None:
-    await conn.execute("ALTER TABLE reaction ADD COLUMN mx_timestamp BIGINT")
-
-
-@upgrade_table.register(description="Store sync sequence ID in user table")
-async def upgrade_v8(conn: Connection) -> None:
-    await conn.execute('ALTER TABLE "user" ADD COLUMN seq_id BIGINT')
-    await conn.execute('ALTER TABLE "user" ADD COLUMN snapshot_at_ms BIGINT')
+            FOREIGN KEY (user_mxid) REFERENCES "user"(mxid) ON DELETE CASCADE ON UPDATE CASCADE,
+            FOREIGN KEY (portal_thread_id, portal_receiver)
+                REFERENCES portal(thread_id, received) ON DELETE CASCADE
+        )
+        """
+    )
