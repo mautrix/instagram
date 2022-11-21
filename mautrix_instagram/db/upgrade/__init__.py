@@ -26,4 +26,5 @@ from . import (
     v06_hidden_events,
     v07_reaction_timestamps,
     v08_sync_sequence_id,
+    v09_backfill_queue,
 )

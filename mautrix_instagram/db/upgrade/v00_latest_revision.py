@@ -110,7 +110,7 @@ async def upgrade_latest(conn: Connection, scheme: Scheme) -> None:
             queue_id            INTEGER PRIMARY KEY {gen},
             user_mxid           TEXT,
             priority            INTEGER NOT NULL,
-            portal_thread_id    BIGINT,
+            portal_thread_id    TEXT,
             portal_receiver     BIGINT,
             num_pages           INTEGER NOT NULL,
             page_delay          INTEGER NOT NULL,
@@ -122,7 +122,7 @@ async def upgrade_latest(conn: Connection, scheme: Scheme) -> None:
 
             FOREIGN KEY (user_mxid) REFERENCES "user"(mxid) ON DELETE CASCADE ON UPDATE CASCADE,
             FOREIGN KEY (portal_thread_id, portal_receiver)
-                REFERENCES portal(thread_id, received) ON DELETE CASCADE
+                REFERENCES portal(thread_id, receiver) ON DELETE CASCADE
         )
         """
     )
