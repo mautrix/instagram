@@ -109,15 +109,9 @@ bridge:
     # Maximum length of displayname
     displayname_max_length: 100
 
-    # Maximum number of seconds since the last activity in a chat to automatically create portals.
-    portal_create_max_age: 259200
-    # Maximum number of chats to fetch for startup sync
-    chat_sync_limit: 20
-    # Maximum number of chats to create during startup sync
-    chat_create_limit: 10
-    # Should the chat list be synced on startup?
-    # If false, the bridge will try to reconnect to MQTT directly and ask the server to send missed events.
-    resync_on_startup: true
+    # The maximum number of conversations that should be synced when we get a
+    # message sync error. In general, 1 page (20) is sufficient.
+    max_startup_thread_sync_count: 20
     # Whether or not to use /sync to get read receipts and typing notifications
     # when double puppeting is enabled
     sync_with_custom_puppets: false
@@ -144,20 +138,73 @@ bridge:
     federate_rooms: true
     # Settings for backfilling messages from Instagram.
     backfill:
-        # Whether or not the Instagram users of logged in Matrix users should be
-        # invited to private chats when backfilling history from Instagram. This is
-        # usually needed to prevent rate limits and to allow timestamp massaging.
-        invite_own_puppet: true
-        # Maximum number of messages to backfill initially.
-        # Set to 0 to disable backfilling when creating portal.
-        initial_limit: 0
-        # Maximum number of messages to backfill if messages were missed while
-        # the bridge was disconnected.
-        # Set to 0 to disable backfilling missed messages.
-        missed_limit: 1000
-        # If using double puppeting, should notifications be disabled
-        # while the initial backfill is in progress?
-        disable_notifications: false
+        # Whether to enable backfilling at all.
+        #
+        # This requires a server with MSC2716 support, which is currently an
+        # experimental feature in synapse. It can be enabled by setting
+        # experimental_features -> msc2716_enabled to true in homeserver.yaml.
+        #
+        # Note that prior to Synapse 1.49, there were some bugs with the
+        # implementation, especially if using event persistence workers. There
+        # are also still some issues in Synapse's federation implementation.
+        enable: false
+        # Use MSC2716 for backfilling? If this is disabled, backfilling only happens when syncing threads,
+        # and the incremental settings below don't apply.
+        #
+        # This requires a server with MSC2716 support, which is currently an experimental feature in Synapse.
+        # It can be enabled by setting experimental_features -> msc2716_enabled to true in homeserver.yaml.
+        msc2716: false
+        # Use double puppets for backfilling?
+        # In order to use this, the double puppets must be in the appservice's user ID namespace
+        # (because the bridge can't use the double puppet access token with batch sending).
+        # This only affects double puppets on the local server, double puppets on other servers will never be used.
+        double_puppet_backfill: false
+        # The maximum number of conversations that should be synced.
+        # Other conversations will be backfilled on demand when the start PM
+        # provisioning endpoint is used or when a message comes in from that
+        # chat.
+        # If set to -1, all conversations will by synced.
+        max_conversations: 20
+        # The minimum amount of time to wait between syncing each thread. This
+        # helps avoid situations where you sync too quickly.
+        min_sync_thread_delay: 5
+        # If this value is greater than 0, then if the conversation's last
+        # message was more than this number of hours ago, then the conversation
+        # will automatically be marked it as read.
+        # Conversations that have a last message that is less than this number
+        # of hours ago will have their unread status synced from Instagram.
+        unread_hours_threshold: 0
+
+        # Settings for how quickly to backoff when rate-limits are encountered
+        # while backfilling.
+        backoff:
+            # How many seconds to wait after getting rate limited during a
+            # thread list fetch.
+            thread_list: 300
+            # How many seconds to wait after getting rate limited during a
+            # message history fetch.
+            message_history: 300
+
+        # Settings for backfills.
+        #
+        # During initial/incremental sync, the entirety of the thread that is
+        # available will be backfilled. For example, on initial sync, about 20
+        # messages are included for each thread in the thread list returned by
+        # the server. After that, incremental backfills will be run for each of
+        # the portals in a round-robin fashion until all portals have been
+        # backfilled as configured below.
+        incremental:
+            # The maximum number of pages to backfill per batch.
+            max_pages: 10
+            # The maximum number of total pages to backfill per portal.
+            # If set to -1, infinite pages will be synced.
+            max_total_pages: -1
+            # The number of seconds to wait between backfilling each page.
+            page_delay: 5
+            # The number of seconds to wait after backfilling the batch of
+            # messages.
+            post_batch_delay: 20
+
     periodic_reconnect:
         # Interval in seconds in which to automatically reconnect all users.
         # This can be used to automatically mitigate the bug where Instagram stops sending messages.

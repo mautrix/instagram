@@ -258,7 +258,7 @@ class User(DBUser, BaseUser):
         await self.update()
 
         self.loop.create_task(self._try_sync_puppet(user))
-        if not self.seq_id or self.config["bridge.resync_on_startup"]:
+        if not self.seq_id or self.config["bridge.max_startup_thread_sync_count"]:
             self.loop.create_task(self._try_sync())
         else:
             self.log.debug("Connecting to MQTT directly as resync_on_startup is false")
@@ -534,8 +534,8 @@ class User(DBUser, BaseUser):
             self.start_listen(is_after_sync=True)
 
         max_age = self.config["bridge.portal_create_max_age"] * 1_000_000
-        limit = self.config["bridge.chat_sync_limit"]
-        create_limit = self.config["bridge.chat_create_limit"]
+        limit = self.config["bridge.backfill.max_conversations"]  # TODO
+        create_limit = self.config["bridge.backfill.max_conversations"]  # TODO
         min_active_at = (time.time() * 1_000_000) - max_age
         i = 0
         await self.push_bridge_state(BridgeStateEvent.BACKFILLING)
