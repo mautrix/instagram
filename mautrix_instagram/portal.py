@@ -153,6 +153,9 @@ class Portal(DBPortal, BasePortal):
         name_set: bool = False,
         avatar_set: bool = False,
         relay_user_id: UserID | None = None,
+        first_event_id: EventID | None = None,
+        next_batch_id: BatchID | None = None,
+        historical_base_insertion_event_id: EventID | None = None,
     ) -> None:
         super().__init__(
             thread_id,
@@ -165,6 +168,9 @@ class Portal(DBPortal, BasePortal):
             name_set,
             avatar_set,
             relay_user_id,
+            first_event_id,
+            next_batch_id,
+            historical_base_insertion_event_id,
         )
         self._create_room_lock = asyncio.Lock()
         self.log = self.log.getChild(thread_id)
