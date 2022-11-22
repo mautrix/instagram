@@ -16,6 +16,7 @@
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
+import sys
 
 from mautrix.bridge import BaseMatrixHandler
 from mautrix.types import (
@@ -50,6 +51,21 @@ class MatrixHandler(BaseMatrixHandler):
         self.user_id_suffix = f"{suffix}:{homeserver}"
 
         super().__init__(bridge=bridge)
+
+    async def check_versions(self) -> None:
+        await super().check_versions()
+        if self.config["bridge.backfill.enable"] and not (
+            support := self.versions.supports("org.matrix.msc2716")
+        ):
+            self.log.fatal(
+                "Backfilling is enabled in bridge config, but "
+                + (
+                    "MSC2716 batch sending is not enabled on homeserver"
+                    if support is False
+                    else "homeserver does not support MSC2716 batch sending"
+                )
+            )
+            sys.exit(18)
 
     async def send_welcome_message(self, room_id: RoomID, inviter: u.User) -> None:
         await super().send_welcome_message(room_id, inviter)
