@@ -13,19 +13,14 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from mautrix.util.async_db import UpgradeTable
+from mautrix.util.async_db import Connection
 
-upgrade_table = UpgradeTable()
+from . import upgrade_table
 
-from . import (
-    v00_latest_revision,
-    v02_name_avatar_set,
-    v03_relay_portal,
-    v04_message_client_content,
-    v05_message_ig_timestamp,
-    v06_hidden_events,
-    v07_reaction_timestamps,
-    v08_sync_sequence_id,
-    v09_backfill_queue,
-    v10_portal_infinite_backfill,
-)
+
+@upgrade_table.register(description="Add columns to store infinite backfill pointers for portals")
+async def upgrade_v10(conn: Connection) -> None:
+    await conn.execute("ALTER TABLE portal ADD COLUMN first_event_id TEXT")
+    await conn.execute("ALTER TABLE portal ADD COLUMN next_batch_id TEXT")
+    await conn.execute("ALTER TABLE portal ADD COLUMN historical_base_insertion_event_id TEXT")
+    await conn.execute("ALTER TABLE portal ADD COLUMN cursor TEXT")
