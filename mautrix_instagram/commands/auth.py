@@ -93,6 +93,7 @@ async def login(evt: CommandEvent) -> None:
             "next": enter_login_2fa,
             "username": tfa_info.username,
             "is_totp": tfa_info.totp_two_factor_on,
+            "has_sms": tfa_info.sms_two_factor_on,
             "2fa_identifier": tfa_info.two_factor_identifier,
         }
         await evt.reply(msg)
@@ -123,9 +124,26 @@ async def enter_login_2fa(evt: CommandEvent) -> None:
     identifier = evt.sender.command_status["2fa_identifier"]
     username = evt.sender.command_status["username"]
     is_totp = evt.sender.command_status["is_totp"]
+    has_sms = evt.sender.command_status["has_sms"]
+    code = "".join(evt.args).lower()
+    if has_sms and code == "resend-sms":
+        try:
+            resp = await api.send_two_factor_login_sms(username, identifier=identifier)
+        except Exception as e:
+            evt.log.exception("Failed to re-request SMS code")
+            await evt.reply(f"Failed to re-request SMS code: {e}")
+        else:
+            await evt.reply(
+                f"Re-requested SMS code to {resp.two_factor_info.obfuscated_phone_number}"
+            )
+            evt.sender.command_status[
+                "2fa_identifier"
+            ] = resp.two_factor_info.two_factor_identifier
+            evt.sender.command_status["is_totp"] = False
+        return
     try:
         resp = await api.two_factor_login(
-            username, code="".join(evt.args), identifier=identifier, is_totp=is_totp
+            username, code=code, identifier=identifier, is_totp=is_totp
         )
     except IGBad2FACodeError:
         await evt.reply(

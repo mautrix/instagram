@@ -25,7 +25,7 @@ from Crypto.Cipher import AES, PKCS1_v1_5
 from Crypto.PublicKey import RSA
 from Crypto.Random import get_random_bytes
 
-from ..types import FacebookLoginResponse, LoginResponse, LogoutResponse
+from ..types import FacebookLoginResponse, LoginErrorResponse, LoginResponse, LogoutResponse
 from .base import BaseAndroidAPI
 
 
@@ -71,6 +71,21 @@ class LoginAPI(BaseAndroidAPI):
             "/api/v1/accounts/one_tap_app_login/", data=req, response_type=LoginResponse
         )
 
+    async def send_two_factor_login_sms(
+        self, username: str, identifier: str
+    ) -> LoginErrorResponse:
+        req = {
+            "two_factor_identifier": identifier,
+            "username": username,
+            "guid": self.state.device.uuid,
+            "device_id": self.state.device.id,
+        }
+        return await self.std_http_post(
+            "/api/v1/accounts/send_two_factor_login_sms/",
+            data=req,
+            response_type=LoginErrorResponse,
+        )
+
     async def two_factor_login(
         self,
         username: str,
@@ -86,6 +101,7 @@ class LoginAPI(BaseAndroidAPI):
             "trust_this_device": "1" if trust_device else "0",
             "guid": self.state.device.uuid,
             "device_id": self.state.device.id,
+            # TOTP = 3, Backup code = 2, SMS = 1
             "verification_method": "3" if is_totp else "1",
         }
         return await self.std_http_post(

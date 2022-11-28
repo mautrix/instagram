@@ -64,11 +64,13 @@ class ProvisioningAPI:
         self.app.router.add_get("/api/whoami", self.status)
         self.app.router.add_options("/api/login", self.login_options)
         self.app.router.add_options("/api/login/2fa", self.login_options)
+        self.app.router.add_options("/api/login/resend_2fa_sms", self.login_options)
         self.app.router.add_options("/api/login/checkpoint", self.login_options)
         self.app.router.add_options("/api/login/fb", self.login_options)
         self.app.router.add_options("/api/logout", self.login_options)
         self.app.router.add_post("/api/login", self.login)
         self.app.router.add_post("/api/login/2fa", self.login_2fa)
+        self.app.router.add_post("/api/login/resend_2fa_sms", self.login_resend_2fa_sms)
         self.app.router.add_post("/api/login/checkpoint", self.login_checkpoint)
         self.app.router.add_get("/api/login/fb", self.get_fb_login_url)
         self.app.router.add_post("/api/login/fb", self.post_fb_login_token)
@@ -338,6 +340,36 @@ class ProvisioningAPI:
         else:
             data = None
         return user, data
+
+    async def login_resend_2fa_sms(self, request: web.Request) -> web.Response:
+        user, data = await self._get_user(request, check_state=True)
+
+        try:
+            username = data["username"]
+            identifier = data["2fa_identifier"]
+        except KeyError as e:
+            raise self._missing_key_error(e)
+
+        api: AndroidAPI = user.command_status["api"]
+        state: AndroidState = user.command_status["state"]
+        if state.login_2fa_username and "@" in username or "+" in username:
+            self.log.debug(
+                "Replacing %s with %s in 2FA SMS re-request", username, state.login_2fa_username
+            )
+            username = state.login_2fa_username
+        track(user, "$login_resend_2fa_sms")
+        try:
+            resp = await api.send_two_factor_login_sms(username, identifier=identifier)
+        except Exception as e:
+            return self._unknown_error(user, username, e, after="2fa sms request")
+        return web.json_response(
+            data={
+                "status": "two-factor",
+                "response": resp.serialize(),
+            },
+            status=202,
+            headers=self._acao_headers,
+        )
 
     async def login_2fa(self, request: web.Request) -> web.Response:
         user, data = await self._get_user(request, check_state=True)
