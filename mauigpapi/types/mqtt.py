@@ -67,15 +67,19 @@ class CommandResponse(SerializableAttrs):
     status_code: Optional[str] = None
     message: Optional[str] = None
     payload: Optional[CommandResponsePayload] = None
+    exception: Optional[str] = None
+    content: Optional[str] = None
 
     @property
     def error_message(self) -> Optional[str]:
-        if self.status == "ok":
-            return None
         if self.payload and self.payload.message:
             return self.payload.message
         elif self.message:
             return self.message
+        elif self.exception:
+            if self.content:
+                return f"{self.exception}: {self.content}"
+            return self.exception
         else:
             return "unknown response data"
 

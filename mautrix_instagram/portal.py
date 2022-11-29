@@ -558,9 +558,9 @@ class Portal(DBPortal, BasePortal):
             raise NotImplementedError(f"Unknown message type {message.msgtype}")
 
         self.log.trace(f"Got response to message send {request_id}: {resp}")
-        if resp.status != "ok":
+        if resp.status != "ok" or not resp.payload:
             self.log.warning(f"Failed to handle {event_id}: {resp}")
-            raise Exception(f"Failed to handle event. Error: {resp.error_message}")
+            raise Exception(f"Sending message failed: {resp.error_message}")
         else:
             self._msgid_dedup.appendleft(resp.payload.item_id)
             try:
