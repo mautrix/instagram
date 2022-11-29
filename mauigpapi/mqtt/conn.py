@@ -182,6 +182,12 @@ class AndroidMQTT:
                 waiter.set_exception(
                     MQTTNotConnected("MQTT disconnected before request was published")
                 )
+        if self._message_response_waiter and not self._message_response_waiter.done():
+            self._message_response_waiter.set_exception(
+                MQTTNotConnected("MQTT disconnected before message send returned response")
+            )
+            self._message_response_waiter = None
+            self._message_response_waiter_id = None
         self._response_waiters = {}
         self._publish_waiters = {}
 
@@ -474,6 +480,7 @@ class AndroidMQTT:
             self.log.debug("Got response to %s: %s", ccid, message.payload)
             self._message_response_waiter.set_result(message)
             self._message_response_waiter = None
+            self._message_response_waiter_id = None
         else:
             self.log.warning("Didn't find task waiting for response %s", message.payload)
 
