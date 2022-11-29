@@ -42,6 +42,7 @@ from mauigpapi.errors import (
     IGLoginTwoFactorRequiredError,
     IGLoginUnusablePasswordError,
     IGNotLoggedInError,
+    IGRateLimitError,
     IGResponseError,
 )
 from mauigpapi.types import ChallengeStateResponse, LoginResponse
@@ -215,7 +216,7 @@ class ProvisioningAPI:
         )
 
     def _unknown_error(
-        self, user: u.User, username: str, e: Exception, after: str
+        self, user: u.User, username: str, e: Exception, after: str, track_error: bool = True
     ) -> web.Response:
         self.log.exception(
             "Unknown error while %s was trying to log in as %s (after %s)",
@@ -228,7 +229,8 @@ class ProvisioningAPI:
                 "Login error body: %s",
                 e.body.serialize() if isinstance(e.body, Serializable) else e.body,
             )
-        track(user, "$login_failed", {"error": "unknown-error"})
+        if track_error:
+            track(user, "$login_failed", {"error": "unknown-error"})
         return web.json_response(
             data={"error": "Unknown error while logging in", "status": "unknown-error"},
             status=500,
@@ -362,8 +364,29 @@ class ProvisioningAPI:
         track(user, "$login_resend_2fa_sms")
         try:
             resp = await api.send_two_factor_login_sms(username, identifier=identifier)
+        except IGRateLimitError as e:
+            track(user, "$login_resend_2fa_sms_fail", {"error": "ratelimit"})
+            try:
+                message = e.body["message"]
+            except (KeyError, TypeError, AttributeError):
+                message = "Please wait a few minutes before you try again."
+            self.log.debug("%s got a ratelimit error trying to request new SMS code", user.mxid)
+            self.log.debug(
+                "Login error body: %s",
+                e.body.serialize() if isinstance(e.body, Serializable) else e.body,
+            )
+            return web.json_response(
+                data={
+                    "status": "2fa-resend-ratelimit",
+                    "error": message,
+                },
+                status=429,
+            )
         except Exception as e:
-            return self._unknown_error(user, username, e, after="2fa sms request")
+            track(user, "$login_resend_2fa_sms_fail", {"error": "unknown"})
+            return self._unknown_error(
+                user, username, e, after="2fa sms request", track_error=False
+            )
         return web.json_response(
             data={
                 "status": "two-factor",

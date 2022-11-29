@@ -280,6 +280,8 @@ class BaseAndroidAPI:
             raise IGFBEmailTaken(resp, data)
         elif error_type == "sso_disabled":
             raise IGFBSSODisabled(resp, data)
+        elif error_type == "rate_limit_error":
+            raise IGRateLimitError(resp, data)
 
         raise IGResponseError(resp, data)
 
