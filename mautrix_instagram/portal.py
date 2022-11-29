@@ -330,6 +330,8 @@ class Portal(DBPortal, BasePortal):
     def _status_from_exception(e: Exception) -> MessageSendCheckpointStatus:
         if isinstance(e, NotImplementedError):
             return MessageSendCheckpointStatus.UNSUPPORTED
+        elif isinstance(e, asyncio.TimeoutError):
+            return MessageSendCheckpointStatus.TIMEOUT
         return MessageSendCheckpointStatus.PERM_FAILURE
 
     async def handle_matrix_message(
