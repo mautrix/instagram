@@ -33,7 +33,9 @@ from ..errors import (
     IGChallengeError,
     IGCheckpointError,
     IGConsentRequiredError,
+    IGFBEmailTaken,
     IGFBNoContactPointFoundError,
+    IGFBSSODisabled,
     IGInactiveUserError,
     IGLoginBadPasswordError,
     IGLoginInvalidUserError,
@@ -274,6 +276,10 @@ class BaseAndroidAPI:
             raise IGBad2FACodeError(resp, data)
         elif error_type == "fb_no_contact_point_found":
             raise IGFBNoContactPointFoundError(resp, data)
+        elif error_type == "fb_email_taken":
+            raise IGFBEmailTaken(resp, data)
+        elif error_type == "sso_disabled":
+            raise IGFBSSODisabled(resp, data)
 
         raise IGResponseError(resp, data)
 

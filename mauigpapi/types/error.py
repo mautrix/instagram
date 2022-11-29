@@ -90,6 +90,7 @@ class LoginRequiredResponse(SerializableAttrs):
 class LoginErrorResponseButton(SerializableAttrs):
     title: str
     action: str
+    username: Optional[str] = None
 
 
 @dataclass
@@ -134,3 +135,4 @@ class LoginErrorResponse(SerializableAttrs):
     # FB login error fields
     account_created: Optional[bool] = None
     dryrun_passed: Optional[bool] = None
+    username: Optional[str] = None

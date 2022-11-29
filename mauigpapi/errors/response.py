@@ -54,6 +54,9 @@ class IGResponseError(IGError):
         self.response = response
         if "message" in json:
             message = json["message"]
+        if "error_type" in json:
+            error_type = json["error_type"]
+            message = f"{error_type}: {message}"
         type_hint = get_type_hints(type(self)).get("body", JSON)
         if type_hint is not JSON and issubclass(type_hint, Serializable):
             self.body = type_hint.deserialize(json)
@@ -149,9 +152,17 @@ class IGLoginInvalidUserError(IGLoginError):
     pass
 
 
+class IGBad2FACodeError(IGResponseError):
+    pass
+
+
 class IGFBNoContactPointFoundError(IGLoginError):
     pass
 
 
-class IGBad2FACodeError(IGResponseError):
+class IGFBEmailTaken(IGLoginError):
+    pass
+
+
+class IGFBSSODisabled(IGLoginError):
     pass

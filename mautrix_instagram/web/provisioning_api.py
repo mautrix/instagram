@@ -33,7 +33,9 @@ from mauigpapi.errors import (
     IGChallengeWrongCodeError,
     IGCheckpointError,
     IGConsentRequiredError,
+    IGFBEmailTaken,
     IGFBNoContactPointFoundError,
+    IGFBSSODisabled,
     IGLoginBadPasswordError,
     IGLoginInvalidUserError,
     IGLoginRequiredError,
@@ -630,9 +632,12 @@ class ProvisioningAPI:
         except IGFBNoContactPointFoundError as e:
             self.log.debug(
                 "%s sent a valid Facebook token, "
-                "but it didn't seem to have an Instagram account linked (%s)",
+                "but it didn't seem to have an Instagram account linked",
                 user.mxid,
-                e.body.serialize(),
+            )
+            self.log.debug("Login error body: %s", e.body.serialize())
+            track(
+                user, "$login_failed", {"error": "fb-no-account-found", "after": "facebook auth"}
             )
             return web.json_response(
                 data={
@@ -642,8 +647,57 @@ class ProvisioningAPI:
                 status=403,
                 headers=self._acao_headers,
             )
+        except IGFBEmailTaken as e:
+            maybe_username = None
+            for button in e.body.buttons or []:
+                if button.title == "username_log_in":
+                    maybe_username = button.username
+                    break
+            self.log.debug(
+                "%s sent a valid Facebook token, but it didn't seem to have an Instagram account "
+                "linked, and the email is already taken by %s",
+                user.mxid,
+                maybe_username,
+            )
+            self.log.debug("Login error body: %s", e.body.serialize())
+            track(
+                user,
+                "$login_failed",
+                {"error": "fb-no-account-found-email-taken", "after": "facebook auth"},
+            )
+            return web.json_response(
+                data={
+                    "error": "You don't have an Instagram account linked to that Facebook account",
+                    "username": maybe_username,
+                    "status": e.body.error_type,
+                },
+                status=403,
+                headers=self._acao_headers,
+            )
+        except IGFBSSODisabled as e:
+            self.log.debug(
+                "%s sent a valid Facebook token for %s, but it doesn't have SSO enabled",
+                user.mxid,
+                e.body.username,
+            )
+            self.log.debug("Login error body: %s", e.body.serialize())
+            track(user, "$login_failed", {"error": "fb-sso-disabled", "after": "facebook auth"})
+            return web.json_response(
+                data={
+                    "error": (
+                        "You haven't enabled sign-in using Facebook "
+                        f"in your Instagram account ({e.body.username})"
+                    ),
+                    "username": e.body.username,
+                    "status": e.body.error_type,
+                },
+                status=403,
+                headers=self._acao_headers,
+            )
         except IGCheckpointError as e:
             return self._checkpoint_error(user, "<facebook credentials>", e, after="facebook auth")
         except IGConsentRequiredError as e:
             return self._consent_error(user, "<facebook credentials>", e, after="facebook auth")
+        except Exception as e:
+            return self._unknown_error(user, "<facebook credentials>", e, after="facebook auth")
         return await self._finish_login(user, state, api, login_resp=resp, after="facebook auth")
