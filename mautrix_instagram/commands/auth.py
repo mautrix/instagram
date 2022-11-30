@@ -80,8 +80,13 @@ async def login(evt: CommandEvent) -> None:
         msg = "Username and password accepted, but you have two-factor authentication enabled.\n"
         if tfa_info.totp_two_factor_on:
             msg += "Send the code from your authenticator app here."
+            if tfa_info.sms_two_factor_on:
+                msg += f" Alternatively, send `resend-sms` to get an SMS code to •••{tfa_info.obfuscated_phone_number}"
         elif tfa_info.sms_two_factor_on:
-            msg += f"Send the code sent to {tfa_info.obfuscated_phone_number} here."
+            msg += (
+                f"Send the code sent to •••{tfa_info.obfuscated_phone_number} here."
+                " You can also send `resend-sms` if you didn't receive the code."
+            )
         else:
             msg += (
                 "Unfortunately, none of your two-factor authentication methods are currently "
@@ -98,6 +103,10 @@ async def login(evt: CommandEvent) -> None:
         }
         await evt.reply(msg)
     except IGChallengeError:
+        await evt.reply(
+            "Login challenges aren't currently supported. "
+            "Please set up real two-factor authentication."
+        )
         await api.challenge_auto()
         evt.sender.command_status = {
             **evt.sender.command_status,
