@@ -94,27 +94,6 @@ class ThreadAPI(BaseAndroidAPI):
             f"/api/v1/direct_v2/threads/{thread_id}/", query=query, response_type=DMThreadResponse
         )
 
-    async def iter_thread(
-        self,
-        thread_id: str,
-        seq_id: int | None = None,
-        cursor: str | None = None,
-        start_at: Thread | None = None,
-    ) -> AsyncIterable[ThreadItem]:
-        if start_at:
-            for item in start_at.items:
-                yield item
-            cursor = start_at.oldest_cursor
-            has_more = start_at.has_older
-        else:
-            has_more = True
-        while has_more:
-            resp = await self.get_thread(thread_id, seq_id=seq_id, cursor=cursor)
-            cursor = resp.thread.oldest_cursor
-            has_more = resp.thread.has_older
-            for item in resp.thread.items:
-                yield item
-
     async def create_group_thread(self, recipient_users: list[int | str]) -> Thread:
         return await self.std_http_post(
             "/api/v1/direct_v2/create_group_thread/",
