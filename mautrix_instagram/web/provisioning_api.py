@@ -266,7 +266,7 @@ class ProvisioningAPI:
             )
 
         self.log.debug("%s is attempting to log in as %s", user.mxid, username)
-        track(user, "$login_start")
+        track(user, "$login_start", {"type": "instagram"})
         api, state = await get_login_state(user, self.device_seed)
         try:
             resp = await api.login(username, password)
@@ -646,6 +646,7 @@ class ProvisioningAPI:
             "return_scopes": "true",
         }
         self.log.debug("%s requested a Facebook login URL (logger ID %s)", user.mxid, logger_id)
+        track(user, "$login_get_fb_url")
         return web.json_response(
             {
                 "url": str(URL("https://m.facebook.com/v2.3/dialog/oauth").with_query(query)),
@@ -671,6 +672,7 @@ class ProvisioningAPI:
         self.log.debug(
             "%s is attempting to log in with Facebook token (logger ID %s)", user.mxid, logger_id
         )
+        track(user, "$login_start", {"type": "facebook"})
         api, state = await get_login_state(user, self.device_seed)
         try:
             resp = await api.facebook_signup(fb_access_token)
