@@ -264,26 +264,7 @@ class ProvisioningAPI:
         try:
             resp = await api.login(username, password)
         except IGLoginTwoFactorRequiredError as e:
-            track(user, "$login_2fa")
-            found_username = e.body.two_factor_info.username if e.body.two_factor_info else None
-            if found_username and found_username != username:
-                state.login_2fa_username = found_username
-            else:
-                state.login_2fa_username = None
-            self.log.debug(
-                "%s logged in as %s -> %s, but needs 2-factor auth",
-                user.mxid,
-                username,
-                found_username or "<no username?>",
-            )
-            return web.json_response(
-                data={
-                    "status": "two-factor",
-                    "response": e.body.serialize(),
-                },
-                status=202,
-                headers=self._acao_headers,
-            )
+            return self._2fa_required(user, username, state, e)
         except IGChallengeError as e:
             self.log.debug("%s logged in as %s, but got a challenge", user.mxid, username)
             return await self.start_checkpoint(user, state, api, e, after="password")
@@ -326,6 +307,30 @@ class ProvisioningAPI:
         except Exception as e:
             return self._unknown_error(user, username, e, after="password")
         return await self._finish_login(user, state, api, login_resp=resp, after="password")
+
+    def _2fa_required(
+        self, user: u.User, username: str, state: AndroidState, err: IGLoginTwoFactorRequiredError
+    ) -> web.Response:
+        track(user, "$login_2fa")
+        found_username = err.body.two_factor_info.username if err.body.two_factor_info else None
+        if found_username and found_username != username:
+            state.login_2fa_username = found_username
+        else:
+            state.login_2fa_username = None
+        self.log.debug(
+            "%s logged in as %s -> %s, but needs 2-factor auth",
+            user.mxid,
+            username,
+            found_username or "<no username?>",
+        )
+        return web.json_response(
+            data={
+                "status": "two-factor",
+                "response": err.body.serialize(),
+            },
+            status=202,
+            headers=self._acao_headers,
+        )
 
     async def _get_user(
         self, request: web.Request, check_state: bool = False, read_body: bool = True
@@ -717,6 +722,8 @@ class ProvisioningAPI:
                 status=403,
                 headers=self._acao_headers,
             )
+        except IGLoginTwoFactorRequiredError as e:
+            return self._2fa_required(user, "<facebook credentials>", state, e)
         except IGCheckpointError as e:
             return self._checkpoint_error(user, "<facebook credentials>", e, after="facebook auth")
         except IGConsentRequiredError as e:
