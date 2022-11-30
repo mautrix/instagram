@@ -465,8 +465,6 @@ class ProvisioningAPI:
         try:
             resp = await api.challenge_auto(reset=after == "2fa")
         except Exception:
-            # Most likely means that the user has to go and verify the login on their phone.
-            # Return a 403 in this case so the client knows to show such verbiage.
             self.log.exception("Challenge reset failed for %s", user.mxid)
             track(user, "$login_failed", {"error": "challenge-reset-fail", "after": after})
             return web.json_response(
@@ -488,6 +486,18 @@ class ProvisioningAPI:
             f"{liu.pk}/{liu.username}" if liu else "null",
         )
         if resp.action == "close" and resp.status == "ok":
+            if not liu and after == "password":
+                self.log.debug("Assuming login failed due to lack of 2FA")
+                track(user, "$login_failed", {"error": "2fa-not-enabled", "after": after})
+                return web.json_response(
+                    data={
+                        "status": "2fa-not-enabled",
+                        "response": err.body.serialize(),
+                        "error": "You must enable two-factor authentication before logging in",
+                    },
+                    status=403,
+                    headers=self._acao_headers,
+                )
             return await self._finish_login(
                 user, state, api, resp, after=f"{after}/challenge-auto"
             )
