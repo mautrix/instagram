@@ -224,15 +224,22 @@ class ProvisioningAPI:
             username,
             after,
         )
+        error_code = "unknown-error"
         if isinstance(e, IGResponseError):
             self.log.debug(
                 "Login error body: %s",
                 e.body.serialize() if isinstance(e.body, Serializable) else e.body,
             )
+            if "error_type" in e.body:
+                error_code = e.body["error_type"]
         if track_error:
-            track(user, "$login_failed", {"error": "unknown-error"})
+            track(user, "$login_failed", {"error": error_code})
         return web.json_response(
-            data={"error": "Unknown error while logging in", "status": "unknown-error"},
+            data={
+                "error": "Unknown error while logging in",
+                "status": "unknown-error",
+                "ig_error_code": error_code,
+            },
             status=500,
             headers=self._acao_headers,
         )
