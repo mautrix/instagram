@@ -55,25 +55,34 @@ class ThreadAPI(BaseAndroidAPI):
         )
 
     async def iter_inbox(
-        self, start_at: DMInboxResponse | None = None, message_limit: int = 10
+        self,
+        start_at: DMInboxResponse | None = None,
+        local_limit: int | None = None,
     ) -> AsyncIterable[Thread]:
+        thread_counter = 0
         if start_at:
             cursor = start_at.inbox.oldest_cursor
             seq_id = start_at.seq_id
             has_more = start_at.inbox.has_older
             for thread in start_at.inbox.threads:
                 yield thread
+                thread_counter += 1
+                if local_limit and thread_counter >= local_limit:
+                    return
         else:
             cursor = None
             seq_id = None
             has_more = True
         while has_more:
-            resp = await self.get_inbox(message_limit=message_limit, cursor=cursor, seq_id=seq_id)
+            resp = await self.get_inbox(message_limit=10, cursor=cursor, seq_id=seq_id)
             seq_id = resp.seq_id
             cursor = resp.inbox.oldest_cursor
             has_more = resp.inbox.has_older
             for thread in resp.inbox.threads:
                 yield thread
+                thread_counter += 1
+                if local_limit and thread_counter >= local_limit:
+                    return
 
     async def get_thread(
         self,
