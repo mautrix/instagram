@@ -13,20 +13,17 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-from mautrix.util.async_db import UpgradeTable
+from mautrix.util.async_db import Connection
 
-upgrade_table = UpgradeTable()
+from . import upgrade_table
 
-from . import (
-    v00_latest_revision,
-    v02_name_avatar_set,
-    v03_relay_portal,
-    v04_message_client_content,
-    v05_message_ig_timestamp,
-    v06_hidden_events,
-    v07_reaction_timestamps,
-    v08_sync_sequence_id,
-    v09_backfill_queue,
-    v10_portal_infinite_backfill,
-    v11_per_user_thread_sync_status,
+
+@upgrade_table.register(
+    description="Add columns to the user table to track thread sync status for backfill"
 )
+async def upgrade_v12(conn: Connection) -> None:
+    await conn.execute('ALTER TABLE "user" ADD COLUMN oldest_cursor TEXT')
+    await conn.execute('ALTER TABLE "user" ADD COLUMN total_backfilled_portals INTEGER')
+    await conn.execute(
+        'ALTER TABLE "user" ADD COLUMN thread_sync_completed BOOLEAN NOT NULL DEFAULT false'
+    )

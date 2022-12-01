@@ -37,6 +37,9 @@ class User:
     notice_room: RoomID | None
     seq_id: int | None
     snapshot_at_ms: int | None
+    oldest_cursor: str | None
+    total_backfilled_portals: int | None
+    thread_sync_completed: bool
 
     @property
     def _values(self):
@@ -47,18 +50,37 @@ class User:
             self.notice_room,
             self.seq_id,
             self.snapshot_at_ms,
+            self.oldest_cursor,
+            self.total_backfilled_portals,
+            self.thread_sync_completed,
         )
 
+    _columns = ",".join(
+        (
+            "mxid",
+            "igpk",
+            "state",
+            "notice_room",
+            "seq_id",
+            "snapshot_at_ms",
+            "oldest_cursor",
+            "total_backfilled_portals",
+            "thread_sync_completed",
+        )
+    )
+
     async def insert(self) -> None:
-        q = """
-        INSERT INTO "user" (mxid, igpk, state, notice_room, seq_id, snapshot_at_ms)
-        VALUES ($1, $2, $3, $4, $5, $6)
+        q = f"""
+        INSERT INTO "user" ({self._columns})
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
         """
         await self.db.execute(q, *self._values)
 
     async def update(self) -> None:
         q = """
-        UPDATE "user" SET igpk=$2, state=$3, notice_room=$4, seq_id=$5, snapshot_at_ms=$6
+        UPDATE "user"
+        SET igpk=$2, state=$3, notice_room=$4, seq_id=$5, snapshot_at_ms=$6,
+            oldest_cursor=$7, total_backfilled_portals=$8, thread_sync_completed=$9
         WHERE mxid=$1
         """
         await self.db.execute(q, *self._values)
@@ -72,8 +94,6 @@ class User:
         data = {**row}
         state_str = data.pop("state")
         return cls(state=AndroidState.parse_json(state_str) if state_str else None, **data)
-
-    _columns = "mxid, igpk, state, notice_room, seq_id, snapshot_at_ms"
 
     @classmethod
     async def get_by_mxid(cls, mxid: UserID) -> User | None:
