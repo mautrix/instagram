@@ -1458,7 +1458,7 @@ class Portal(DBPortal, BasePortal):
             client_context=item.client_context,
             receiver=self.receiver,
             sender=sender.igpk,
-            ig_timestamp=item.timestamp_ms,
+            ig_timestamp=item.timestamp,
         ).insert()
         await self._send_delivery_receipt(event_ids[-1])
 
@@ -1781,9 +1781,9 @@ class Portal(DBPortal, BasePortal):
 
     async def backfill(self, source: u.User, backfill_request: Backfill) -> None:
         try:
-            last_message_timestamp = await self._backfill(source, backfill_request)
-            if last_message_timestamp is not None:
-                await self.send_post_backfill_dummy(last_message_timestamp)
+            last_message_ig_timestamp = await self._backfill(source, backfill_request)
+            if last_message_ig_timestamp is not None:
+                await self.send_post_backfill_dummy(last_message_ig_timestamp)
         finally:
             # Always sleep after the backfill request is finished processing, even if it errors.
             await asyncio.sleep(backfill_request.post_batch_delay)
@@ -1827,7 +1827,7 @@ class Portal(DBPortal, BasePortal):
             self.log.debug("No messages to backfill.")
             return None
 
-        last_message_timestamp = messages[-1].timestamp
+        last_message_timestamp = messages[-1].timestamp_ms
 
         pages_to_backfill = backfill_request.num_pages
         if backfill_request.max_total_pages > -1:
@@ -2094,7 +2094,7 @@ class Portal(DBPortal, BasePortal):
                 client_context=message.client_context,
                 receiver=self.receiver,
                 sender=message.user_id,
-                ig_timestamp=message.timestamp_ms,
+                ig_timestamp=message.timestamp,
             )
 
         if current_message:
@@ -2107,7 +2107,7 @@ class Portal(DBPortal, BasePortal):
 
     async def send_post_backfill_dummy(
         self,
-        last_message_timestamp: int,
+        last_message_ig_timestamp: int,
         base_insertion_event_id: EventID | None = None,
     ):
         assert self.mxid
@@ -2137,7 +2137,7 @@ class Portal(DBPortal, BasePortal):
             client_context=None,
             receiver=self.receiver,
             sender=0,
-            ig_timestamp=last_message_timestamp,
+            ig_timestamp=last_message_ig_timestamp,
         ).insert()
 
     # endregion
