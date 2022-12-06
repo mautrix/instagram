@@ -1435,7 +1435,8 @@ class Portal(DBPortal, BasePortal):
                 return
 
             if self.config["bridge.backfill.enable"]:
-                await self.enqueue_immediate_backfill(source, 0)
+                if self.config["bridge.backfill.msc2716"]:
+                    await self.enqueue_immediate_backfill(source, 0)
 
         intent = sender.intent_for(self)
         asyncio.create_task(intent.set_typing(self.mxid, is_typing=False))
@@ -1771,8 +1772,8 @@ class Portal(DBPortal, BasePortal):
             await Backfill.new(
                 source.mxid,
                 priority,
-                self.fbid,
-                self.fb_receiver,
+                self.thread_id,
+                self.receiver,
                 self.config["bridge.backfill.incremental.max_pages"],
                 self.config["bridge.backfill.incremental.page_delay"],
                 self.config["bridge.backfill.incremental.post_batch_delay"],
@@ -1835,7 +1836,9 @@ class Portal(DBPortal, BasePortal):
 
         pages_backfilled = 0
         for i in range(pages_to_backfill):
-            base_insertion_event_id = await self.backfill_message_page(source, messages)
+            base_insertion_event_id = await self.backfill_message_page(
+                source, list(reversed(messages))
+            )
             self.cursor = cursor
             await self.save()
             pages_backfilled += 1
@@ -1881,8 +1884,8 @@ class Portal(DBPortal, BasePortal):
                 source.mxid,
                 # Always enqueue subsequent backfills at the lowest priority
                 2,
-                self.fbid,
-                self.fb_receiver,
+                self.thread_id,
+                self.receiver,
                 backfill_request.num_pages,
                 backfill_request.page_delay,
                 backfill_request.post_batch_delay,

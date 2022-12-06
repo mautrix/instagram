@@ -16,7 +16,10 @@
 from __future__ import annotations
 
 from typing import AsyncIterable, Type
+import asyncio
 import json
+
+from mauigpapi.errors.response import IGRateLimitError
 
 from ..types import (
     CommandResponse,
@@ -24,7 +27,6 @@ from ..types import (
     DMThreadResponse,
     Thread,
     ThreadAction,
-    ThreadItem,
     ThreadItemType,
 )
 from .base import BaseAndroidAPI, T
@@ -58,14 +60,16 @@ class ThreadAPI(BaseAndroidAPI):
         self,
         start_at: DMInboxResponse | None = None,
         local_limit: int | None = None,
-    ) -> AsyncIterable[Thread]:
+        rate_limit_exceeded_backoff: float = 60.0,
+    ) -> AsyncIterable[tuple[Thread, int | None, str | None]]:
+        print("ITER INBOX")
         thread_counter = 0
         if start_at:
             cursor = start_at.inbox.oldest_cursor
             seq_id = start_at.seq_id
             has_more = start_at.inbox.has_older
             for thread in start_at.inbox.threads:
-                yield thread
+                yield thread, seq_id, cursor
                 thread_counter += 1
                 if local_limit and thread_counter >= local_limit:
                     return
@@ -74,12 +78,21 @@ class ThreadAPI(BaseAndroidAPI):
             seq_id = None
             has_more = True
         while has_more:
-            resp = await self.get_inbox(message_limit=10, cursor=cursor, seq_id=seq_id)
+            try:
+                resp = await self.get_inbox(message_limit=10, cursor=cursor, seq_id=seq_id)
+            except IGRateLimitError:
+                self.log.warning(
+                    "Fetching more threads failed due to rate limit. Waiting for "
+                    f"{rate_limit_exceeded_backoff} seconds before resuming."
+                )
+                await asyncio.sleep(rate_limit_exceeded_backoff)
+                continue
+
             seq_id = resp.seq_id
             cursor = resp.inbox.oldest_cursor
             has_more = resp.inbox.has_older
             for thread in resp.inbox.threads:
-                yield thread
+                yield thread, seq_id, cursor
                 thread_counter += 1
                 if local_limit and thread_counter >= local_limit:
                     return
