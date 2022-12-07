@@ -536,6 +536,7 @@ class User(DBUser, BaseUser):
             await portal.update_matrix_room(self, thread)
 
         last_message = await DBMessage.get_last(portal.mxid)
+        cursor = thread.oldest_cursor
         if last_message:
             original_number_of_messages = len(thread.items)
             new_messages = [
@@ -549,7 +550,6 @@ class User(DBUser, BaseUser):
             )
 
             # Fetch more messages until we get back to messages that have been bridged already.
-            cursor = thread.prev_cursor
             while len(new_messages) > 0 and len(new_messages) == original_number_of_messages:
                 await asyncio.sleep(self.config["bridge.backfill.incremental.page_delay"])
 
@@ -562,13 +562,11 @@ class User(DBUser, BaseUser):
                     m for m in resp.thread.items if last_message.ig_timestamp_ms < m.timestamp_ms
                 ]
                 forward_messages = new_messages + forward_messages
-                cursor = resp.thread.prev_cursor
+                cursor = resp.thread.oldest_cursor
                 portal.log.debug(
                     f"{len(new_messages)}/{original_number_of_messages} messages are after most "
                     "recent message."
                 )
-            portal.cursor = cursor
-            await portal.update()
         elif not portal.first_event_id:
             self.log.debug(
                 f"Skipping backfilling {portal.thread_id} as the first event ID is not known"
@@ -576,6 +574,9 @@ class User(DBUser, BaseUser):
             return False
 
         if forward_messages:
+            portal.cursor = cursor
+            await portal.update()
+
             mark_read = thread.read_state == 0 or (
                 (hours := self.config["bridge.backfill.unread_hours_threshold"]) > 0
                 and (
