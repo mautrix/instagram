@@ -62,7 +62,6 @@ class ThreadAPI(BaseAndroidAPI):
         local_limit: int | None = None,
         rate_limit_exceeded_backoff: float = 60.0,
     ) -> AsyncIterable[tuple[Thread, int | None, str | None]]:
-        print("ITER INBOX")
         thread_counter = 0
         if start_at:
             cursor = start_at.inbox.oldest_cursor
@@ -87,6 +86,9 @@ class ThreadAPI(BaseAndroidAPI):
                 )
                 await asyncio.sleep(rate_limit_exceeded_backoff)
                 continue
+            except Exception:
+                self.log.exception("Failed to fetch more threads")
+                raise
 
             seq_id = resp.seq_id
             cursor = resp.inbox.oldest_cursor
