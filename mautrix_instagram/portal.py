@@ -203,6 +203,7 @@ class Portal(DBPortal, BasePortal):
 
     @classmethod
     def init_cls(cls, bridge: "InstagramBridge") -> None:
+        BasePortal.bridge = bridge
         cls.config = bridge.config
         cls.matrix = bridge.matrix
         cls.az = bridge.az
