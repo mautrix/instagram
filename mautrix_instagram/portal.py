@@ -1972,11 +1972,8 @@ class Portal(DBPortal, BasePortal):
 
         message_infos: list[tuple[ThreadItem, int]] = []
         intents: list[IntentAPI] = []
-        last_message_timestamp = 0
 
         for message in message_page:
-            last_message_timestamp = max(last_message_timestamp, message.timestamp_ms)
-
             puppet: p.Puppet = await p.Puppet.get_by_pk(message.user_id)
             if puppet:
                 intent = puppet.intent_for(self)
@@ -2011,7 +2008,7 @@ class Portal(DBPortal, BasePortal):
                         content=content,
                         type=event_type,
                         sender=intent.mxid,
-                        timestamp=message.timestamp,
+                        timestamp=message.timestamp_ms,
                     )
                 )
                 intents.append(intent)
