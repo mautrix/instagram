@@ -15,7 +15,7 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from __future__ import annotations
 
-from typing import AsyncIterable, Type
+from typing import AsyncIterable, Callable, Type
 import asyncio
 import json
 
@@ -58,20 +58,22 @@ class ThreadAPI(BaseAndroidAPI):
 
     async def iter_inbox(
         self,
+        update_seq_id_and_cursor: Callable[[int, str | None], None],
         start_at: DMInboxResponse | None = None,
         local_limit: int | None = None,
         rate_limit_exceeded_backoff: float = 60.0,
-    ) -> AsyncIterable[tuple[Thread, int | None, str | None]]:
+    ) -> AsyncIterable[Thread]:
         thread_counter = 0
         if start_at:
             cursor = start_at.inbox.oldest_cursor
             seq_id = start_at.seq_id
             has_more = start_at.inbox.has_older
             for thread in start_at.inbox.threads:
-                yield thread, seq_id, cursor
+                yield thread
                 thread_counter += 1
                 if local_limit and thread_counter >= local_limit:
                     return
+            update_seq_id_and_cursor(seq_id, cursor)
         else:
             cursor = None
             seq_id = None
@@ -94,10 +96,11 @@ class ThreadAPI(BaseAndroidAPI):
             cursor = resp.inbox.oldest_cursor
             has_more = resp.inbox.has_older
             for thread in resp.inbox.threads:
-                yield thread, seq_id, cursor
+                yield thread
                 thread_counter += 1
                 if local_limit and thread_counter >= local_limit:
                     return
+            update_seq_id_and_cursor(seq_id, cursor)
 
     async def get_thread(
         self,
