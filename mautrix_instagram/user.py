@@ -760,12 +760,12 @@ class User(DBUser, BaseUser):
         async for thread, seq_id, cursor in threads:
             found_thread_count += 1
             now = time.monotonic()
-            if last_thread_sync_ts is not None and now < last_thread_sync_ts + sync_delay:
+            if now < last_thread_sync_ts + sync_delay:
                 delay = last_thread_sync_ts + sync_delay - now
                 self.log.debug("Thread sync is happening too quickly. Waiting for %ds", delay)
                 await asyncio.sleep(delay)
 
-            last_thread_sync_ts = now
+            last_thread_sync_ts = time.monotonic()
             had_new_messages = await self._sync_thread(thread)
             if not had_new_messages and stop_when_threads_have_no_messages_to_backfill:
                 self.log.debug("Got to threads with no new messages. Stopping sync.")
