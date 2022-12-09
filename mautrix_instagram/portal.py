@@ -1808,7 +1808,9 @@ class Portal(DBPortal, BasePortal):
 
         try:
             if self.cursor:
-                self.log.debug("There is a cursor for the chat, fetching messages before it")
+                self.log.debug(
+                    f"There is a cursor for the chat, fetching messages before {self.cursor}"
+                )
                 resp = await source.client.get_thread(
                     self.thread_id, seq_id=source.seq_id, cursor=self.cursor
                 )
