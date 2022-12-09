@@ -1595,24 +1595,20 @@ class Portal(DBPortal, BasePortal):
                 )
 
     async def _handle_instagram_reactions(
-        self, message: DBMessage, reactions: list[Reaction], is_backfill: bool = False
+        self, message: DBMessage, reactions: list[Reaction]
     ) -> None:
         old_reactions: dict[int, DBReaction]
         old_reactions = {
             reaction.ig_sender: reaction
             for reaction in await DBReaction.get_all_by_item_id(message.item_id, self.receiver)
         }
-        timestamp_deduplicator = 1
         for new_reaction in reactions:
             old_reaction = old_reactions.pop(new_reaction.sender_id, None)
             if old_reaction and old_reaction.reaction == new_reaction.emoji:
                 continue
             puppet = await p.Puppet.get_by_pk(new_reaction.sender_id)
             intent = puppet.intent_for(self)
-            timestamp = new_reaction.timestamp_ms if is_backfill else int(time.time() * 1000)
-            if is_backfill:
-                timestamp += timestamp_deduplicator
-                timestamp_deduplicator += 1
+            timestamp = int(time.time() * 1000)
             reaction_event_id = await intent.react(
                 self.mxid, message.mxid, new_reaction.emoji, timestamp=timestamp
             )
