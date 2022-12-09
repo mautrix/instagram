@@ -1831,7 +1831,7 @@ class Portal(DBPortal, BasePortal):
         # and over again.
         for item in resp.thread.items:
             # Check in-memory queues for duplicates
-            if item.item_id not in self._msgid_dedup:
+            if item.item_id in self._msgid_dedup:
                 self.log.debug(
                     f"Ignoring message {item.item_id} ({item.client_context}) by {item.user_id}"
                     " as it was already handled (message.id in dedup queue)"
