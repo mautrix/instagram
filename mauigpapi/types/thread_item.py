@@ -81,6 +81,7 @@ class ThreadItemType(ExtensibleEnum):
     XMA_REEL_SHARE = "xma_reel_share"
     XMA_STORY_SHARE = "xma_story_share"
     XMA_REEL_MENTION = "xma_reel_mention"
+    EXPIRED_PLACEHOLDER = "expired_placeholder"
 
 
 @dataclass(kw_only=True)

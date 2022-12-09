@@ -1303,6 +1303,22 @@ class Portal(DBPortal, BasePortal):
         await self._add_instagram_reply(content, item.replied_to_message)
         return EventType.ROOM_MESSAGE, content
 
+    async def _convert_expired_placeholder(
+        self, source: u.User, item: ThreadItem, action: str
+    ) -> ConvertedMessage:
+        if item.user_id == source.igpk:
+            prefix = f"{action} your story"
+        elif item.user_id == source.igpk:
+            prefix = f"You {action.lower()} their story"
+        else:
+            prefix = f"{action} a story"
+        body = f"{prefix}\n\nNo longer available"
+        html = f"<p>{prefix}</p><p><i>No longer available</i></p>"
+        content = TextMessageEventContent(
+            msgtype=MessageType.NOTICE, body=body, format=Format.HTML, formatted_body=html
+        )
+        return EventType.ROOM_MESSAGE, content
+
     async def _convert_instagram_text(self, item: ThreadItem, text: str) -> ConvertedMessage:
         content = TextMessageEventContent(msgtype=MessageType.TEXT, body=text)
         content["com.beeper.linkpreviews"] = []
@@ -1495,6 +1511,7 @@ class Portal(DBPortal, BasePortal):
             return await self._convert_instagram_xma_media_share(source, intent, item)
 
         converted: list[ConvertedMessage] = []
+        handle_text = True
 
         if item.media or item.animated_media or item.voice_media or item.visual_media:
             converted.append(await self._convert_instagram_media(source, intent, item))
@@ -1513,6 +1530,26 @@ class Portal(DBPortal, BasePortal):
             or item.felix_share
         ):
             converted.extend(await self._convert_instagram_media_share(source, intent, item))
+        elif item.item_type == ThreadItemType.EXPIRED_PLACEHOLDER:
+            if item.message_item_type == "reaction":
+                action = "Reacted to"
+            else:
+                action = "Shared"
+            msg_type, expired = await self._convert_expired_placeholder(source, item, action)
+            if self.bridge.config["bridge.caption_in_message"] and item.text:
+                _, text = await self._convert_instagram_text(item, item.text)
+                expired.ensure_has_html()
+                text.ensure_has_html()
+                combined = TextMessageEventContent(
+                    msgtype=MessageType.TEXT,
+                    body="\n".join((expired.body, text.body)),
+                    formatted_body=f"{expired.formatted_body}<p>{text.formatted_body}</p>",
+                    format=Format.HTML,
+                )
+                handle_text = False
+                converted.append((msg_type, combined))
+            else:
+                converted.append((msg_type, expired))
         elif item.action_log:
             # These probably don't need to be bridged
             self.log.debug(f"Ignoring action log message {item.item_id}")
@@ -1520,7 +1557,7 @@ class Portal(DBPortal, BasePortal):
 
         # TODO handle item.clip?
         # TODO should these be put into a caption?
-        if item.text:
+        if handle_text and item.text:
             converted.append(await self._convert_instagram_text(item, item.text))
         elif item.like:
             # We handle likes as text because Matrix clients do big emoji on their own.
