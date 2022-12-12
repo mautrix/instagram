@@ -1,3 +1,11 @@
+# unreleased
+
+* Added support for "mentioned in comment" messages.
+* Added support for re-requesting 2FA SMS when logging in.
+* Updated Docker image to Alpine 3.17.
+* Fixed error in image bridging.
+* Fixed logging in with phone/email in provisioning API.
+
 # v0.2.2 (2022-11-01)
 
 * Added option to send captions in the same message using [MSC2530].
