@@ -66,12 +66,12 @@ class BaseFullResponseUser(BaseResponseUser, SerializableAttrs):
     national_number: Optional[int] = None
 
     # TODO enum?
-    allowed_commenter_type: str
+    allowed_commenter_type: Optional[str] = None
 
     # These are at least in login and current_user, might not be in other places though
-    is_business: bool
+    # is_business: bool
     # TODO enum?
-    account_type: int
+    # account_type: int
 
 
 @dataclass
