@@ -28,6 +28,7 @@ from yarl import URL
 
 from mauigpapi import AndroidAPI, AndroidState
 from mauigpapi.errors import (
+    IG2FACodeExpiredError,
     IGBad2FACodeError,
     IGChallengeError,
     IGChallengeWrongCodeError,
@@ -444,6 +445,18 @@ class ProvisioningAPI:
                 data={
                     "error": "Incorrect 2-factor authentication code",
                     "status": "incorrect-2fa-code",
+                },
+                status=403,
+                headers=self._acao_headers,
+            )
+        except IG2FACodeExpiredError as e:
+            self.log.debug("%s submitted an expired 2-factor auth code", user.mxid)
+            self.log.debug("Login error body: %s", e.body.serialize())
+            track(user, "$login_failed", {"error": "expired-2fa-code"})
+            return web.json_response(
+                data={
+                    "error": e.body.get("message") or str(e),
+                    "status": "expired-2fa-code",
                 },
                 status=403,
                 headers=self._acao_headers,

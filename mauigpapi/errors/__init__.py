@@ -7,6 +7,7 @@ from .mqtt import (
     MQTTNotLoggedIn,
 )
 from .response import (
+    IG2FACodeExpiredError,
     IGActionSpamError,
     IGBad2FACodeError,
     IGChallengeError,

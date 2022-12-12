@@ -156,6 +156,10 @@ class IGBad2FACodeError(IGResponseError):
     pass
 
 
+class IG2FACodeExpiredError(IGResponseError):
+    pass
+
+
 class IGFBNoContactPointFoundError(IGLoginError):
     pass
 

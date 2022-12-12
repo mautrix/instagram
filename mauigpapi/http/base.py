@@ -28,6 +28,7 @@ from mautrix.types import JSON, Serializable
 from mautrix.util.logging import TraceLogger
 
 from ..errors import (
+    IG2FACodeExpiredError,
     IGActionSpamError,
     IGBad2FACodeError,
     IGChallengeError,
@@ -274,6 +275,8 @@ class BaseAndroidAPI:
             raise IGLoginInvalidUserError(resp, data)
         elif error_type == "sms_code_validation_code_invalid":
             raise IGBad2FACodeError(resp, data)
+        elif error_type == "invalid_nonce":
+            raise IG2FACodeExpiredError(resp, data)
         elif error_type == "fb_no_contact_point_found":
             raise IGFBNoContactPointFoundError(resp, data)
         elif error_type == "fb_email_taken":
