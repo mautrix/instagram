@@ -1577,7 +1577,6 @@ class Portal(DBPortal, BasePortal):
         hash_content = f"{self.mxid}/instagram/{sender.igpk}/{item_id}"
         if part_name:
             hash_content += f"/{part_name}"
-        print("HASH CONTENT:", hash_content)
         hashed = hashlib.sha256(hash_content.encode("utf-8")).digest()
         b64hash = base64.urlsafe_b64encode(hashed).decode("utf-8").rstrip("=")
         return EventID(f"${b64hash}:telegram.org")
@@ -2088,6 +2087,8 @@ class Portal(DBPortal, BasePortal):
                     reaction_event.relates_to = RelatesTo(
                         rel_type=RelationType.ANNOTATION, event_id=d_event_id, key=reaction.emoji
                     )
+                    if intent.api.is_real_user and intent.api.bridge_name is not None:
+                        reaction_event[DOUBLE_PUPPET_SOURCE_KEY] = intent.api.bridge_name
 
                     message_infos.append((reaction, 0))
                     batch_messages.append(
