@@ -29,6 +29,7 @@ from mauigpapi.errors import (
     IGChallengeError,
     IGCheckpointError,
     IGConsentRequiredError,
+    IGLoginRequiredError,
     IGNotLoggedInError,
     IGRateLimitError,
     IGUserIDNotFoundError,
@@ -276,7 +277,9 @@ class User(DBUser, BaseUser):
         await self.update()
 
         self.loop.create_task(self._try_sync_puppet(user))
+        self.loop.create_task(self._post_connect())
 
+    async def _post_connect(self):
         # Backfill requests are handled synchronously so as not to overload the homeserver.
         # Users can configure their backfill stages to be more or less aggressive with backfilling
         # to try and avoid getting banned.
@@ -310,6 +313,9 @@ class User(DBUser, BaseUser):
                 await req.mark_dispatched()
                 await portal.backfill(self, req)
                 await req.mark_done()
+            except IGLoginRequiredError as e:
+                self.log.exception("User is logged out. Stopping backfill requests loop.")
+                return
             except Exception as e:
                 self.log.exception("Failed to backfill portal %s: %s", req.portal_thread_id, e)
 
