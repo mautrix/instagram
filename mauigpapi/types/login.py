@@ -36,7 +36,6 @@ class LoginResponseUser(BaseFullResponseUser, SerializableAttrs):
     can_boost_post: bool
     can_see_organic_insights: bool
     show_insights_terms: bool
-    has_placed_orders: bool
     nametag: LoginResponseNametag
     allow_contacts_sync: bool
 
