@@ -1,4 +1,4 @@
-# unreleased
+# v0.2.3 (2022-12-14)
 
 * Added support for "mentioned in comment" messages.
 * Added support for re-requesting 2FA SMS when logging in.
