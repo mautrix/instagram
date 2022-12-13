@@ -1957,6 +1957,7 @@ class Portal(DBPortal, BasePortal):
         else:
             self.log.debug("No more messages to backfill")
 
+        await self._update_read_receipts(resp.thread.last_seen_at)
         return last_message_timestamp
 
     async def backfill_message_page(
@@ -2414,8 +2415,6 @@ class Portal(DBPortal, BasePortal):
             self.mxid, PortalCreateDummy, {}
         )
         await self.update()
-
-        await self._update_read_receipts(info.last_seen_at)
         return self.mxid
 
     # endregion
