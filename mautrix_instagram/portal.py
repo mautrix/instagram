@@ -1405,7 +1405,9 @@ class Portal(DBPortal, BasePortal):
 
         content.set_reply(evt)
 
-    async def handle_instagram_item(self, source: u.User, sender: p.Puppet, item: ThreadItem):
+    async def handle_instagram_item(
+        self, source: u.User, sender: p.Puppet, item: MessageSyncMessage
+    ):
         client_context = item.client_context
         link_client_context = item.link.client_context if item.link else None
         cc = client_context
@@ -1448,8 +1450,8 @@ class Portal(DBPortal, BasePortal):
             f"Handling Instagram message {item.item_id} ({item.client_context}) by {item.user_id}"
         )
         if not self.mxid:
-            # TODO figure out where to get the info from
-            mxid = await self.create_matrix_room(source)
+            thread = await source.client.get_thread(item.thread_id)
+            mxid = await self.create_matrix_room(source, thread.thread)
             if not mxid:
                 # Failed to create
                 return
