@@ -14,4 +14,4 @@ def init(db: Database) -> None:
         table.db = db
 
 
-__all__ = ["upgrade_table", "User", "Puppet", "Portal", "Message", "Reaction", "init", "Backfill"]
+__all__ = ["upgrade_table", "User", "Puppet", "Portal", "Message", "Reaction", "Backfill", "init"]
