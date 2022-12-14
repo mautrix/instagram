@@ -40,7 +40,7 @@ class UserIdentifier(SerializableAttrs):
 
 @dataclass(kw_only=True)
 class BaseResponseUser(UserIdentifier, SerializableAttrs):
-    full_name: str
+    full_name: Optional[str] = None
     is_private: bool = False
     is_verified: bool = False
     profile_pic_url: str

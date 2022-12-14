@@ -1645,7 +1645,9 @@ class Portal(DBPortal, BasePortal):
             elif len(thread.users) == 1:
                 tpl = self.config["bridge.private_chat_name_template"]
                 ui = thread.users[0]
-                return tpl.format(displayname=ui.full_name, id=ui.pk, username=ui.username)
+                return tpl.format(
+                    displayname=ui.full_name or ui.username, id=ui.pk, username=ui.username
+                )
             pass
         elif thread.thread_title:
             return self.config["bridge.group_chat_name_template"].format(name=thread.thread_title)
