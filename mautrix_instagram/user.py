@@ -314,13 +314,24 @@ class User(DBUser, BaseUser):
                 await portal.backfill(self, req)
                 await req.mark_done()
             except IGLoginRequiredError as e:
-                self.log.exception("User is logged out. Stopping backfill requests loop.")
-                return
+                self.log.exception(
+                    "User is logged out. Stopping backfill requests loop and forcing refresh."
+                )
+                await self.refresh(resync=False)
+                break
+            except IGChallengeError as e:
+                self.log.exception(
+                    "User received a challenge. Stopping backfill requests loop and "
+                    "forcing refresh."
+                )
+                await self.refresh(resync=False)
+                break
             except Exception as e:
                 self.log.exception("Failed to backfill portal %s: %s", req.portal_thread_id, e)
 
                 # Don't try again to backfill this portal for a minute.
                 await req.set_cooldown_timeout(60)
+        self._backfill_loop_task = None
 
     async def on_connect(self, evt: Connect) -> None:
         self.log.debug("Connected to Instagram")
