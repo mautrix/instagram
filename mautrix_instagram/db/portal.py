@@ -43,7 +43,8 @@ class Portal:
     first_event_id: EventID | None
     next_batch_id: BatchID | None
     historical_base_insertion_event_id: EventID | None
-    cursor: str | none
+    cursor: str | None
+    thread_image_id: int | None
 
     @property
     def _values(self):
@@ -62,6 +63,7 @@ class Portal:
             self.next_batch_id,
             self.historical_base_insertion_event_id,
             self.cursor,
+            self.thread_image_id,
         )
 
     column_names = ",".join(
@@ -80,13 +82,14 @@ class Portal:
             "next_batch_id",
             "historical_base_insertion_event_id",
             "cursor",
+            "thread_image_id",
         )
     )
 
     async def insert(self) -> None:
         q = (
             f"INSERT INTO portal ({self.column_names}) "
-            "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)"
+            "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)"
         )
         await self.db.execute(q, *self._values)
 
@@ -95,7 +98,7 @@ class Portal:
             "UPDATE portal SET other_user_pk=$3, mxid=$4, name=$5, avatar_url=$6, encrypted=$7,"
             "                  name_set=$8, avatar_set=$9, relay_user_id=$10, first_event_id=$11,"
             "                  next_batch_id=$12, historical_base_insertion_event_id=$13,"
-            "                  cursor=$14 "
+            "                  cursor=$14, thread_image_id=$15 "
             "WHERE thread_id=$1 AND receiver=$2"
         )
         await self.db.execute(q, *self._values)

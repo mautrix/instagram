@@ -15,7 +15,7 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, AsyncGenerator, Awaitable, Callable, Union, cast
+from typing import TYPE_CHECKING, Any, AsyncGenerator, Awaitable, Callable, Optional, Union, cast
 from collections import deque
 from io import BytesIO
 import asyncio
@@ -46,6 +46,7 @@ from mauigpapi.types import (
     ReelShareType,
     RegularMediaItem,
     Thread,
+    ThreadImageCandidate,
     ThreadItem,
     ThreadItemType,
     ThreadUser,
@@ -166,6 +167,7 @@ class Portal(DBPortal, BasePortal):
         next_batch_id: BatchID | None = None,
         historical_base_insertion_event_id: EventID | None = None,
         cursor: str | None = None,
+        thread_image_id: int | None = None,
     ) -> None:
         super().__init__(
             thread_id,
@@ -182,6 +184,7 @@ class Portal(DBPortal, BasePortal):
             next_batch_id,
             historical_base_insertion_event_id,
             cursor,
+            thread_image_id,
         )
         self._create_room_lock = asyncio.Lock()
         self.log = self.log.getChild(thread_id)
@@ -810,17 +813,9 @@ class Portal(DBPortal, BasePortal):
         content["org.matrix.msc3245.voice"] = {}
         return content
 
-    async def _reupload_instagram_file(
-        self,
-        source: u.User,
-        url: str,
-        msgtype: MessageType | None,
-        info: ImageInfo | VideoInfo | AudioInfo,
-        intent: IntentAPI,
-        convert_fn: Callable[[bytes, str], Awaitable[tuple[bytes, str]]] | None = None,
-        allow_encrypt: bool = True,
-    ) -> MediaMessageEventContent:
-        data = None
+    async def _download_instagram_file(
+        self, source: u.User, url: str
+    ) -> tuple[Optional[bytes], str]:
         async with source.client.raw_http_get(url) as resp:
             try:
                 length = int(resp.headers["Content-Length"])
@@ -837,8 +832,24 @@ class Portal(DBPortal, BasePortal):
                 )
                 raise ValueError("Attachment not available: too large")
             data = await resp.read()
-            info.mimetype = resp.headers["Content-Type"] or magic.from_buffer(data, mime=True)
+            if not data:
+                return None, ""
+            mimetype = resp.headers["Content-Type"] or magic.from_buffer(data, mime=True)
+            return data, mimetype
+
+    async def _reupload_instagram_file(
+        self,
+        source: u.User,
+        url: str,
+        msgtype: MessageType | None,
+        info: ImageInfo | VideoInfo | AudioInfo,
+        intent: IntentAPI,
+        convert_fn: Callable[[bytes, str], Awaitable[tuple[bytes, str]]] | None = None,
+        allow_encrypt: bool = True,
+    ) -> MediaMessageEventContent:
+        data, mimetype = await self._download_instagram_file(source, url)
         assert data is not None
+        info.mimetype = mimetype
 
         # Run the conversion function on the data.
         if convert_fn is not None:
@@ -1691,14 +1702,38 @@ class Portal(DBPortal, BasePortal):
                 return tpl.format(
                     displayname=ui.full_name or ui.username, id=ui.pk, username=ui.username
                 )
-            pass
         elif thread.thread_title:
             return self.config["bridge.group_chat_name_template"].format(name=thread.thread_title)
-        else:
-            return ""
+
+        return ""
+
+    async def _get_thread_avatar(self, source: u.User, thread: Thread) -> Optional[ContentURI]:
+        if self.is_direct or not thread.thread_image:
+            return None
+        if self.thread_image_id == thread.thread_image.id:
+            return self.avatar_url
+        best: Optional[ThreadImageCandidate] = None
+        for candidate in thread.thread_image.image_versions2.candidates:
+            if best is None or candidate.width > best.width:
+                best = candidate
+        if not best:
+            return None
+        data, mimetype = await self._download_instagram_file(source, best.url)
+        if not data:
+            return None
+        mxc = await self.main_intent.upload_media(
+            data=data,
+            mime_type=mimetype,
+            filename=thread.thread_image.id,
+            async_upload=self.config["homeserver.async_media"],
+        )
+        self.thread_image_id = thread.thread_image.id
+        return mxc
 
     async def update_info(self, thread: Thread, source: u.User) -> None:
         changed = await self._update_name(self._get_thread_name(thread))
+        if thread_avatar := await self._get_thread_avatar(source, thread):
+            changed = await self._update_photo(thread_avatar)
         changed = await self._update_participants(thread.users, source) or changed
         if changed:
             await self.update_bridge_info()
@@ -1730,12 +1765,15 @@ class Portal(DBPortal, BasePortal):
     async def _update_photo_from_puppet(self, puppet: p.Puppet) -> bool:
         if not self.private_chat_portal_meta and not self.encrypted:
             return False
-        if self.avatar_set and self.avatar_url == puppet.photo_mxc:
+        return await self._update_photo(puppet.photo_mxc)
+
+    async def _update_photo(self, photo_mxc: ContentURI) -> bool:
+        if self.avatar_set and self.avatar_url == photo_mxc:
             return False
-        self.avatar_url = puppet.photo_mxc
+        self.avatar_url = photo_mxc
         if self.mxid:
             try:
-                await self.main_intent.set_room_avatar(self.mxid, puppet.photo_mxc)
+                await self.main_intent.set_room_avatar(self.mxid, photo_mxc)
                 self.avatar_set = True
             except Exception:
                 self.log.exception("Failed to set room avatar")
