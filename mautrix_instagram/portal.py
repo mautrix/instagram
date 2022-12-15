@@ -2249,7 +2249,7 @@ class Portal(DBPortal, BasePortal):
         await DBMessage(
             mxid=event_id,
             mx_room=self.mxid,
-            item_id="",
+            item_id=f"fi.mau.instagram.post_backfill_dummy.{last_message_ig_timestamp}",
             client_context=None,
             receiver=self.receiver,
             sender=0,
