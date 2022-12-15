@@ -19,6 +19,8 @@ from typing import TYPE_CHECKING, Any, AsyncGenerator, Awaitable, Callable, Unio
 from collections import deque
 from io import BytesIO
 import asyncio
+import base64
+import hashlib
 import html
 import json
 import mimetypes
@@ -30,6 +32,7 @@ from yarl import URL
 import asyncpg
 import magic
 
+from mauigpapi.errors import IGRateLimitError
 from mauigpapi.types import (
     AnimatedMediaItem,
     CommandResponse,
@@ -51,11 +54,14 @@ from mauigpapi.types import (
     VoiceMediaItem,
     XMAMediaShareItem,
 )
-from mautrix.appservice import AppService, IntentAPI
-from mautrix.bridge import BasePortal, NotificationDisabler, async_getter_lock
+from mautrix.appservice import DOUBLE_PUPPET_SOURCE_KEY, IntentAPI
+from mautrix.bridge import BasePortal, async_getter_lock
 from mautrix.errors import MatrixError, MForbidden, MNotFound, SessionNotFound
 from mautrix.types import (
     AudioInfo,
+    BatchID,
+    BatchSendEvent,
+    BatchSendStateEvent,
     BeeperMessageStatusEventContent,
     ContentURI,
     EventID,
@@ -64,10 +70,13 @@ from mautrix.types import (
     ImageInfo,
     LocationMessageEventContent,
     MediaMessageEventContent,
+    Membership,
+    MemberStateEventContent,
     MessageEventContent,
     MessageStatus,
     MessageStatusReason,
     MessageType,
+    ReactionEventContent,
     RelatesTo,
     RelationType,
     RoomID,
@@ -77,11 +86,10 @@ from mautrix.types import (
 )
 from mautrix.util import ffmpeg
 from mautrix.util.message_send_checkpoint import MessageSendCheckpointStatus
-from mautrix.util.simple_lock import SimpleLock
 
 from . import matrix as m, puppet as p, user as u
 from .config import Config
-from .db import Message as DBMessage, Portal as DBPortal, Reaction as DBReaction
+from .db import Backfill, Message as DBMessage, Portal as DBPortal, Reaction as DBReaction
 
 if TYPE_CHECKING:
     from .__main__ import InstagramBridge
@@ -110,6 +118,10 @@ MediaData = Union[
 ]
 MediaUploadFunc = Callable[["u.User", MediaData, IntentAPI], Awaitable[MediaMessageEventContent]]
 
+PortalCreateDummy = EventType.find("fi.mau.dummy.portal_created", EventType.Class.MESSAGE)
+HistorySyncMarkerMessage = EventType.find("org.matrix.msc2716.marker", EventType.Class.MESSAGE)
+ConvertedMessage = tuple[EventType, MessageEventContent]
+
 # This doesn't need to capture all valid URLs, it's enough to catch most of them.
 # False negatives simply mean the link won't be linkified on Instagram,
 # but false positives will cause the message to fail to send.
@@ -127,18 +139,15 @@ class Portal(DBPortal, BasePortal):
     by_thread_id: dict[tuple[str, int], Portal] = {}
     config: Config
     matrix: m.MatrixHandler
-    az: AppService
     private_chat_portal_meta: bool
 
     _main_intent: IntentAPI | None
     _create_room_lock: asyncio.Lock
-    backfill_lock: SimpleLock
     _msgid_dedup: deque[str]
     _reqid_dedup: set[str]
 
     _last_participant_update: set[int]
     _reaction_lock: asyncio.Lock
-    _backfill_leave: set[IntentAPI] | None
     _typing: set[UserID]
 
     def __init__(
@@ -153,6 +162,10 @@ class Portal(DBPortal, BasePortal):
         name_set: bool = False,
         avatar_set: bool = False,
         relay_user_id: UserID | None = None,
+        first_event_id: EventID | None = None,
+        next_batch_id: BatchID | None = None,
+        historical_base_insertion_event_id: EventID | None = None,
+        cursor: str | None = None,
     ) -> None:
         super().__init__(
             thread_id,
@@ -165,6 +178,10 @@ class Portal(DBPortal, BasePortal):
             name_set,
             avatar_set,
             relay_user_id,
+            first_event_id,
+            next_batch_id,
+            historical_base_insertion_event_id,
+            cursor,
         )
         self._create_room_lock = asyncio.Lock()
         self.log = self.log.getChild(thread_id)
@@ -172,10 +189,6 @@ class Portal(DBPortal, BasePortal):
         self._reqid_dedup = set()
         self._last_participant_update = set()
 
-        self.backfill_lock = SimpleLock(
-            "Waiting for backfilling to finish before handling %s", log=self.log
-        )
-        self._backfill_leave = None
         self._main_intent = None
         self._reaction_lock = asyncio.Lock()
         self._typing = set()
@@ -193,14 +206,13 @@ class Portal(DBPortal, BasePortal):
 
     @classmethod
     def init_cls(cls, bridge: "InstagramBridge") -> None:
+        BasePortal.bridge = bridge
         cls.config = bridge.config
         cls.matrix = bridge.matrix
         cls.az = bridge.az
         cls.loop = bridge.loop
         cls.bridge = bridge
         cls.private_chat_portal_meta = cls.config["bridge.private_chat_portal_meta"]
-        NotificationDisabler.puppet_cls = p.Puppet
-        NotificationDisabler.config_enabled = cls.config["bridge.backfill.disable_notifications"]
 
     # region Misc
 
@@ -927,7 +939,7 @@ class Portal(DBPortal, BasePortal):
 
     async def _convert_instagram_media(
         self, source: u.User, intent: IntentAPI, item: ThreadItem
-    ) -> MessageEventContent:
+    ) -> ConvertedMessage:
         try:
             reupload_func, media_data = self._get_instagram_media_info(item)
             content = await reupload_func(source, media_data, intent)
@@ -940,12 +952,12 @@ class Portal(DBPortal, BasePortal):
             )
 
         await self._add_instagram_reply(content, item.replied_to_message)
-        return content
+        return EventType.ROOM_MESSAGE, content
 
     # TODO this might be unused
-    async def _handle_instagram_media_share(
+    async def _convert_instagram_media_share(
         self, source: u.User, intent: IntentAPI, item: ThreadItem
-    ) -> EventID | None:
+    ) -> list[ConvertedMessage]:
         item_type_name = None
         if item.media_share:
             share_item = item.media_share
@@ -960,7 +972,8 @@ class Portal(DBPortal, BasePortal):
         elif item.direct_media_share:
             share_item = item.direct_media_share.media
         else:
-            return None
+            self.log.debug("No media share to bridge")
+            return []
         item_type_name = item_type_name or share_item.media_type.human_name
         user_text = f"@{share_item.user.username}"
         user_link = (
@@ -979,7 +992,7 @@ class Portal(DBPortal, BasePortal):
             elif share_item.user.pk == source.igpk and tagged_user_id == self.other_user_pk:
                 prefix.body = prefix.formatted_body = "Tagged them in your post"
 
-        content = await self._convert_instagram_media(source, intent, item)
+        _, content = await self._convert_instagram_media(source, intent, item)
 
         external_url = f"https://www.instagram.com/p/{share_item.code}/"
         if share_item.caption:
@@ -1039,17 +1052,17 @@ class Portal(DBPortal, BasePortal):
                 }
                 combined["formatted_body"] = combined_formatted_body
 
-            event_id = await self._send_message(intent, combined, timestamp=item.timestamp_ms)
+            return [(EventType.ROOM_MESSAGE, combined)]
         else:
-            await self._send_message(intent, prefix, timestamp=item.timestamp_ms)
-            event_id = await self._send_message(intent, content, timestamp=item.timestamp_ms)
-            await self._send_message(intent, caption, timestamp=item.timestamp_ms)
+            return [
+                (EventType.ROOM_MESSAGE, prefix),
+                (EventType.ROOM_MESSAGE, content),
+                (EventType.ROOM_MESSAGE, caption),
+            ]
 
-        return event_id
-
-    async def _handle_instagram_xma_media_share(
+    async def _convert_instagram_xma_media_share(
         self, source: u.User, intent: IntentAPI, item: ThreadItem
-    ) -> EventID | None:
+    ) -> list[ConvertedMessage]:
         # N.B. _get_instagram_media_info also only supports downloading the first xma item
         xma_list = (
             item.xma_media_share
@@ -1063,7 +1076,7 @@ class Portal(DBPortal, BasePortal):
             self.log.warning(f"Item {item.item_id} has multiple xma media share parts")
         if media.xma_layout_type not in (0, 4):
             self.log.warning(f"Unrecognized xma layout type {media.xma_layout_type}")
-        content = await self._convert_instagram_media(source, intent, item)
+        _, content = await self._convert_instagram_media(source, intent, item)
 
         # Post shares (layout type 0): media title text
         # Reel shares/replies/reactions (layout type 4): item text
@@ -1152,17 +1165,14 @@ class Portal(DBPortal, BasePortal):
                     "org.matrix.msc1767.html": content["formatted_body"],
                 }
 
-            event_id = await self._send_message(intent, content, timestamp=item.timestamp_ms)
+            return [(EventType.ROOM_MESSAGE, content)]
         else:
-            event_id = await self._send_message(intent, content, timestamp=item.timestamp_ms)
-            await self._send_message(intent, caption, timestamp=item.timestamp_ms)
-
-        return event_id
+            return [(EventType.ROOM_MESSAGE, content), (EventType.ROOM_MESSAGE, caption)]
 
     # TODO this is probably unused
-    async def _handle_instagram_reel_share(
+    async def _convert_instagram_reel_share(
         self, source: u.User, intent: IntentAPI, item: ThreadItem
-    ) -> EventID | None:
+    ) -> list[ConvertedMessage]:
         assert item.reel_share
         media = item.reel_share.media
         prefix_html = None
@@ -1188,7 +1198,7 @@ class Portal(DBPortal, BasePortal):
                 prefix = "You mentioned them in your story"
         else:
             self.log.debug(f"Unsupported reel share type {item.reel_share.type}")
-            return None
+            return []
         prefix_content = TextMessageEventContent(msgtype=MessageType.NOTICE, body=prefix)
         if prefix_html:
             prefix_content.format = Format.HTML
@@ -1214,7 +1224,7 @@ class Portal(DBPortal, BasePortal):
                 # use a Matrix reply instead of reposting the image.
                 caption_content.set_reply(existing.mxid)
             else:
-                media_content = await self._convert_instagram_media(source, intent, item)
+                _, media_content = await self._convert_instagram_media(source, intent, item)
 
         if self.bridge.config["bridge.caption_in_message"]:
             if media_content:
@@ -1255,33 +1265,21 @@ class Portal(DBPortal, BasePortal):
             else:
                 combined = caption_content
 
-            event_id = await self._send_message(intent, combined, timestamp=item.timestamp_ms)
+            return [(EventType.ROOM_MESSAGE, combined)]
         else:
             await self._send_message(intent, prefix_content, timestamp=item.timestamp_ms)
+            converted: list[ConvertedMessage] = []
             if media_content:
-                media_event_id = await self._send_message(
-                    intent, media_content, timestamp=item.timestamp_ms
-                )
-                await DBMessage(
-                    mxid=media_event_id,
-                    mx_room=self.mxid,
-                    item_id=fake_item_id,
-                    client_context=None,
-                    receiver=self.receiver,
-                    sender=media.user.pk,
-                    ig_timestamp=None,
-                ).insert()
-            event_id = await self._send_message(
-                intent, caption_content, timestamp=item.timestamp_ms
-            )
-        return event_id
+                converted.append((EventType.ROOM_MESSAGE, media_content))
+            converted.append((EventType.ROOM_MESSAGE, caption_content))
+            return converted
 
-    async def _handle_instagram_link(
+    async def _convert_instagram_link(
         self,
         source: u.User,
         intent: IntentAPI,
         item: ThreadItem,
-    ) -> EventID:
+    ) -> ConvertedMessage:
         content = TextMessageEventContent(msgtype=MessageType.TEXT, body=item.link.text)
         link = item.link.link_context
         preview = {
@@ -1303,28 +1301,40 @@ class Portal(DBPortal, BasePortal):
         preview = {k: v for k, v in preview.items() if v}
         content["com.beeper.linkpreviews"] = [preview] if "og:title" in preview else []
         await self._add_instagram_reply(content, item.replied_to_message)
-        return await self._send_message(intent, content, timestamp=item.timestamp_ms)
+        return EventType.ROOM_MESSAGE, content
 
-    async def _handle_instagram_text(
-        self, intent: IntentAPI, item: ThreadItem, text: str
-    ) -> EventID:
+    async def _convert_expired_placeholder(
+        self, source: u.User, item: ThreadItem, action: str
+    ) -> ConvertedMessage:
+        if item.user_id == source.igpk:
+            prefix = f"{action} your story"
+        elif item.user_id == source.igpk:
+            prefix = f"You {action.lower()} their story"
+        else:
+            prefix = f"{action} a story"
+        body = f"{prefix}\n\nNo longer available"
+        html = f"<p>{prefix}</p><p><i>No longer available</i></p>"
+        content = TextMessageEventContent(
+            msgtype=MessageType.NOTICE, body=body, format=Format.HTML, formatted_body=html
+        )
+        return EventType.ROOM_MESSAGE, content
+
+    async def _convert_instagram_text(self, item: ThreadItem, text: str) -> ConvertedMessage:
         content = TextMessageEventContent(msgtype=MessageType.TEXT, body=text)
         content["com.beeper.linkpreviews"] = []
         await self._add_instagram_reply(content, item.replied_to_message)
-        return await self._send_message(intent, content, timestamp=item.timestamp_ms)
+        return EventType.ROOM_MESSAGE, content
 
-    async def _send_instagram_unhandled(self, intent: IntentAPI, item: ThreadItem) -> EventID:
+    async def _convert_instagram_unhandled(self, item: ThreadItem) -> ConvertedMessage:
         content = TextMessageEventContent(
             msgtype=MessageType.NOTICE, body=f"Unsupported message type {item.item_type.value}"
         )
         await self._add_instagram_reply(content, item.replied_to_message)
-        return await self._send_message(intent, content, timestamp=item.timestamp_ms)
+        return EventType.ROOM_MESSAGE, content
 
-    async def _handle_instagram_location(
-        self, intent: IntentAPI, item: ThreadItem
-    ) -> EventID | None:
+    async def _convert_instagram_location(self, item: ThreadItem) -> ConvertedMessage | None:
         loc = item.location
-        if not loc.lng or not loc.lat:
+        if not loc or not loc.lng or not loc.lat:
             # TODO handle somehow
             return None
         long_char = "E" if loc.lng > 0 else "W"
@@ -1350,12 +1360,9 @@ class Portal(DBPortal, BasePortal):
         content["formatted_body"] = f"Location: <a href='{url}'>{body}</a>"
 
         await self._add_instagram_reply(content, item.replied_to_message)
+        return EventType.ROOM_MESSAGE, content
 
-        return await self._send_message(intent, content, timestamp=item.timestamp_ms)
-
-    async def _handle_instagram_profile(
-        self, intent: IntentAPI, item: ThreadItem
-    ) -> EventID | None:
+    async def _convert_instagram_profile(self, item: ThreadItem) -> ConvertedMessage:
         username = item.profile.username
         user_link = f'<a href="https://www.instagram.com/{username}/">@{username}</a>'
         text = f"Shared @{username}'s profile"
@@ -1364,16 +1371,7 @@ class Portal(DBPortal, BasePortal):
             msgtype=MessageType.TEXT, format=Format.HTML, body=text, formatted_body=html
         )
         await self._add_instagram_reply(content, item.replied_to_message)
-        return await self._send_message(intent, content, timestamp=item.timestamp_ms)
-
-    async def handle_instagram_item(
-        self, source: u.User, sender: p.Puppet, item: ThreadItem, is_backfill: bool = False
-    ) -> None:
-        try:
-            await self._handle_instagram_item(source, sender, item, is_backfill)
-        except Exception:
-            self.log.exception("Fatal error handling Instagram item")
-            self.log.trace("Item content: %s", item.serialize())
+        return EventType.ROOM_MESSAGE, content
 
     async def _add_instagram_reply(
         self, content: MessageEventContent, reply_to: ThreadItem | None
@@ -1407,13 +1405,9 @@ class Portal(DBPortal, BasePortal):
 
         content.set_reply(evt)
 
-    async def _handle_instagram_item(
-        self, source: u.User, sender: p.Puppet, item: ThreadItem, is_backfill: bool = False
-    ) -> None:
-        if not isinstance(item, ThreadItem):
-            # Parsing these items failed, they should have been logged already
-            return
-
+    async def handle_instagram_item(
+        self, source: u.User, sender: p.Puppet, item: MessageSyncMessage
+    ):
         client_context = item.client_context
         link_client_context = item.link.client_context if item.link else None
         cc = client_context
@@ -1427,48 +1421,88 @@ class Portal(DBPortal, BasePortal):
                 f"Ignoring message {item.item_id} ({cc}) by {item.user_id}"
                 " as it was sent by us (client_context in dedup queue)"
             )
-            return
+            return []
         elif link_client_context and link_client_context in self._reqid_dedup:
             self.log.debug(
                 f"Ignoring message {item.item_id} ({cc}) by {item.user_id}"
                 " as it was sent by us (link.client_context in dedup queue)"
             )
-            return
+            return []
 
+        # Check in-memory queues for duplicates
         if item.item_id in self._msgid_dedup:
             self.log.debug(
-                f"Ignoring message {item.item_id} ({cc}) by {item.user_id}"
+                f"Ignoring message {item.item_id} ({item.client_context}) by {item.user_id}"
                 " as it was already handled (message.id in dedup queue)"
             )
             return
         self._msgid_dedup.appendleft(item.item_id)
 
+        # Check database for duplicates
         if await DBMessage.get_by_item_id(item.item_id, self.receiver) is not None:
             self.log.debug(
-                f"Ignoring message {item.item_id} ({cc}) by {item.user_id}"
+                f"Ignoring message {item.item_id} ({item.client_context}) by {item.user_id}"
                 " as it was already handled (message.id in database)"
             )
             return
 
-        self.log.debug(f"Starting handling of message {item.item_id} ({cc}) by {item.user_id}")
-        asyncio.create_task(sender.intent_for(self).set_typing(self.mxid, is_typing=False))
-        await self._handle_deduplicated_instagram_item(source, sender, item, is_backfill)
+        self.log.debug(
+            f"Handling Instagram message {item.item_id} ({item.client_context}) by {item.user_id}"
+        )
+        if not self.mxid:
+            thread = await source.client.get_thread(item.thread_id)
+            mxid = await self.create_matrix_room(source, thread.thread)
+            if not mxid:
+                # Failed to create
+                return
 
-    async def _handle_deduplicated_instagram_item(
-        self, source: u.User, sender: p.Puppet, item: ThreadItem, is_backfill: bool = False
-    ) -> None:
-        if self.backfill_lock.locked and sender.need_backfill_invite(self):
-            self.log.debug("Adding %s's default puppet to room for backfilling", sender.mxid)
-            if self.is_direct:
-                await self.main_intent.invite_user(self.mxid, sender.default_mxid)
-            intent = sender.default_mxid_intent
-            await intent.ensure_joined(self.mxid)
-            self._backfill_leave.add(intent)
-        else:
-            intent = sender.intent_for(self)
-        event_id = None
-        needs_handling = True
-        allow_text_handle = True
+            if self.config["bridge.backfill.enable"]:
+                if self.config["bridge.backfill.msc2716"]:
+                    await self.enqueue_immediate_backfill(source, 0)
+
+        intent = sender.intent_for(self)
+        asyncio.create_task(intent.set_typing(self.mxid, is_typing=False))
+        event_ids = []
+        for event_type, content in await self.convert_instagram_item(source, sender, item):
+            event_ids.append(
+                await self._send_message(
+                    intent, content, event_type=event_type, timestamp=item.timestamp_ms
+                )
+            )
+        event_ids = [event_id for event_id in event_ids if event_id]
+        if not event_ids:
+            self.log.warning(f"Unhandled Instagram message {item.item_id}")
+            return
+        self.log.debug(f"Handled Instagram message {item.item_id} -> {event_ids}")
+        await DBMessage(
+            mxid=event_ids[-1],
+            mx_room=self.mxid,
+            item_id=item.item_id,
+            client_context=item.client_context,
+            receiver=self.receiver,
+            sender=sender.igpk,
+            ig_timestamp=item.timestamp,
+        ).insert()
+        await self._send_delivery_receipt(event_ids[-1])
+
+    async def convert_instagram_item(
+        self, source: u.User, sender: p.Puppet, item: ThreadItem
+    ) -> list[ConvertedMessage]:
+        if not isinstance(item, ThreadItem):
+            # Parsing these items failed, they should have been logged already
+            return []
+
+        try:
+            return await self._convert_instagram_item(source, sender, item)
+        except Exception:
+            self.log.exception("Fatal error converting Instagram item")
+            self.log.trace("Item content: %s", item.serialize())
+            return []
+
+    async def _convert_instagram_item(
+        self, source: u.User, sender: p.Puppet, item: ThreadItem
+    ) -> list[ConvertedMessage]:
+        intent = sender.intent_for(self)
         if (
             item.xma_media_share
             or item.xma_reel_share
@@ -1476,17 +1510,20 @@ class Portal(DBPortal, BasePortal):
             or item.xma_story_share
             or item.generic_xma
         ):
-            event_id = await self._handle_instagram_xma_media_share(source, intent, item)
-            allow_text_handle = False
-        elif item.media or item.animated_media or item.voice_media or item.visual_media:
-            content = await self._convert_instagram_media(source, intent, item)
-            event_id = await self._send_message(intent, content, timestamp=item.timestamp_ms)
+            return await self._convert_instagram_xma_media_share(source, intent, item)
+
+        converted: list[ConvertedMessage] = []
+        handle_text = True
+
+        if item.media or item.animated_media or item.voice_media or item.visual_media:
+            converted.append(await self._convert_instagram_media(source, intent, item))
         elif item.location:
-            event_id = await self._handle_instagram_location(intent, item)
+            if loc_content := await self._convert_instagram_location(item):
+                converted.append(loc_content)
         elif item.profile:
-            event_id = await self._handle_instagram_profile(intent, item)
+            converted.append(await self._convert_instagram_profile(item))
         elif item.reel_share:
-            event_id = await self._handle_instagram_reel_share(source, intent, item)
+            converted.extend(await self._convert_instagram_reel_share(source, intent, item))
         elif (
             item.media_share
             or item.direct_media_share
@@ -1494,47 +1531,57 @@ class Portal(DBPortal, BasePortal):
             or item.clip
             or item.felix_share
         ):
-            event_id = await self._handle_instagram_media_share(source, intent, item)
+            converted.extend(await self._convert_instagram_media_share(source, intent, item))
+        elif item.item_type == ThreadItemType.EXPIRED_PLACEHOLDER:
+            if item.message_item_type == "reaction":
+                action = "Reacted to"
+            else:
+                action = "Shared"
+            msg_type, expired = await self._convert_expired_placeholder(source, item, action)
+            if self.bridge.config["bridge.caption_in_message"] and item.text:
+                _, text = await self._convert_instagram_text(item, item.text)
+                expired.ensure_has_html()
+                text.ensure_has_html()
+                combined = TextMessageEventContent(
+                    msgtype=MessageType.TEXT,
+                    body="\n".join((expired.body, text.body)),
+                    formatted_body=f"{expired.formatted_body}<p>{text.formatted_body}</p>",
+                    format=Format.HTML,
+                )
+                handle_text = False
+                converted.append((msg_type, combined))
+            else:
+                converted.append((msg_type, expired))
         elif item.action_log:
             # These probably don't need to be bridged
-            needs_handling = False
             self.log.debug(f"Ignoring action log message {item.item_id}")
+            return []
+
         # TODO handle item.clip?
-        if item.text and allow_text_handle:
-            event_id = await self._handle_instagram_text(intent, item, item.text)
+        # TODO should these be put into a caption?
+        if handle_text and item.text:
+            converted.append(await self._convert_instagram_text(item, item.text))
         elif item.like:
             # We handle likes as text because Matrix clients do big emoji on their own.
-            event_id = await self._handle_instagram_text(intent, item, item.like)
+            converted.append(await self._convert_instagram_text(item, item.like))
         elif item.link:
-            event_id = await self._handle_instagram_link(source, intent, item)
-        handled = bool(event_id)
-        if not event_id and needs_handling:
-            self.log.debug(f"Unhandled Instagram message {item.item_id}")
-            event_id = await self._send_instagram_unhandled(intent, item)
+            converted.append(await self._convert_instagram_link(source, intent, item))
 
-        cc = item.client_context
-        if not cc and item.link and item.link.client_context:
-            cc = item.link.client_context
-        msg = DBMessage(
-            mxid=event_id,
-            mx_room=self.mxid,
-            item_id=item.item_id,
-            client_context=cc,
-            receiver=self.receiver,
-            sender=sender.pk,
-            ig_timestamp=item.timestamp,
-        )
-        await msg.insert()
-        await self._send_delivery_receipt(event_id)
-        if handled:
-            self.log.debug(f"Handled Instagram message {item.item_id} -> {event_id}")
-        elif needs_handling:
-            self.log.debug(
-                f"Unhandled Instagram message {item.item_id} "
-                f"(type {item.item_type} -> fallback error {event_id})"
-            )
-        if is_backfill and item.reactions:
-            await self._handle_instagram_reactions(msg, item.reactions.emojis, is_backfill=True)
+        if len(converted) == 0:
+            self.log.debug(f"Unhandled Instagram message {item.item_id}")
+            converted.append(await self._convert_instagram_unhandled(item))
+
+        return converted
+
+    def _deterministic_event_id(
+        self, sender: p.Puppet, item_id: str, part_name: int | None = None
+    ) -> EventID:
+        hash_content = f"{self.mxid}/instagram/{sender.igpk}/{item_id}"
+        if part_name:
+            hash_content += f"/{part_name}"
+        hashed = hashlib.sha256(hash_content.encode("utf-8")).digest()
+        b64hash = base64.urlsafe_b64encode(hashed).decode("utf-8").rstrip("=")
+        return EventID(f"${b64hash}:telegram.org")
 
     async def handle_instagram_remove(self, item_id: str) -> None:
         message = await DBMessage.get_by_item_id(item_id, self.receiver)
@@ -1586,24 +1633,20 @@ class Portal(DBPortal, BasePortal):
                 )
 
     async def _handle_instagram_reactions(
-        self, message: DBMessage, reactions: list[Reaction], is_backfill: bool = False
+        self, message: DBMessage, reactions: list[Reaction]
     ) -> None:
         old_reactions: dict[int, DBReaction]
         old_reactions = {
             reaction.ig_sender: reaction
             for reaction in await DBReaction.get_all_by_item_id(message.item_id, self.receiver)
         }
-        timestamp_deduplicator = 1
         for new_reaction in reactions:
             old_reaction = old_reactions.pop(new_reaction.sender_id, None)
             if old_reaction and old_reaction.reaction == new_reaction.emoji:
                 continue
             puppet = await p.Puppet.get_by_pk(new_reaction.sender_id)
             intent = puppet.intent_for(self)
-            timestamp = new_reaction.timestamp_ms if is_backfill else int(time.time() * 1000)
-            if is_backfill:
-                timestamp += timestamp_deduplicator
-                timestamp_deduplicator += 1
+            timestamp = int(time.time() * 1000)
             reaction_event_id = await intent.react(
                 self.mxid, message.mxid, new_reaction.emoji, timestamp=timestamp
             )
@@ -1760,70 +1803,458 @@ class Portal(DBPortal, BasePortal):
         return await p.Puppet.get_by_pk(self.other_user_pk)
 
     # endregion
-    # region Backfilling
+    # region Backfill
 
-    async def backfill(self, source: u.User, thread: Thread, is_initial: bool = False) -> None:
-        limit = (
-            self.config["bridge.backfill.initial_limit"]
-            if is_initial
-            else self.config["bridge.backfill.missed_limit"]
+    async def enqueue_immediate_backfill(self, source: u.User, priority: int) -> None:
+        assert self.config["bridge.backfill.msc2716"]
+        if not await Backfill.get(source.mxid, self.thread_id, self.receiver):
+            await Backfill.new(
+                source.mxid,
+                priority,
+                self.thread_id,
+                self.receiver,
+                self.config["bridge.backfill.incremental.max_pages"],
+                self.config["bridge.backfill.incremental.page_delay"],
+                self.config["bridge.backfill.incremental.post_batch_delay"],
+                self.config["bridge.backfill.incremental.max_total_pages"],
+            ).insert()
+
+    async def backfill(self, source: u.User, backfill_request: Backfill) -> None:
+        try:
+            last_message_ig_timestamp = await self._backfill(source, backfill_request)
+            if last_message_ig_timestamp is not None:
+                await self.send_post_backfill_dummy(last_message_ig_timestamp)
+        finally:
+            # Always sleep after the backfill request is finished processing, even if it errors.
+            await asyncio.sleep(backfill_request.post_batch_delay)
+
+    async def _backfill(self, source: u.User, backfill_request: Backfill) -> int | None:
+        assert source.client
+        self.log.debug("Backfill request: %s", backfill_request)
+
+        num_pages = backfill_request.num_pages
+        self.log.debug(
+            "Backfilling up to %d pages of history in %s through %s",
+            num_pages,
+            self.mxid,
+            source.mxid,
         )
-        if limit == 0:
-            return
-        elif limit < 0:
-            limit = None
-        with self.backfill_lock:
-            await self._backfill(source, thread, is_initial, limit)
 
-    async def _backfill(
-        self, source: u.User, thread: Thread, is_initial: bool, limit: int
-    ) -> None:
-        self.log.debug("Backfilling history through %s", source.mxid)
-
-        entries = await self._fetch_backfill_items(source, thread, is_initial, limit)
-        if not entries:
-            self.log.debug("Didn't get any items to backfill from server")
-            return
-
-        self.log.debug("Got %d entries from server", len(entries))
-
-        self._backfill_leave = set()
-        async with NotificationDisabler(self.mxid, source):
-            for entry in reversed(entries):
-                sender = await p.Puppet.get_by_pk(int(entry.user_id))
-                await self.handle_instagram_item(source, sender, entry, is_backfill=True)
-        for intent in self._backfill_leave:
-            self.log.trace("Leaving room with %s post-backfill", intent.mxid)
-            await intent.leave_room(self.mxid)
-        self._backfill_leave = None
-        self.log.info("Backfilled %d messages through %s", len(entries), source.mxid)
-
-    async def _fetch_backfill_items(
-        self, source: u.User, thread: Thread, is_initial: bool, limit: int
-    ) -> list[ThreadItem]:
-        items = []
-        excluded_count = 0
-        self.log.debug("Fetching up to %d messages through %s", limit, source.igpk)
-        async for item in source.client.iter_thread(self.thread_id, start_at=thread):
-            if len(items) - excluded_count >= limit:
-                self.log.debug(f"Fetched {len(items)} messages (the limit)")
-                break
-            elif not is_initial:
-                msg = await DBMessage.get_by_item_id(item.item_id, receiver=self.receiver)
-                if msg is not None:
-                    self.log.debug(
-                        f"Fetched {len(items)} messages and hit a message"
-                        " that's already in the database."
-                    )
-                    break
-            elif not item.is_handleable:
+        try:
+            if self.cursor:
                 self.log.debug(
-                    f"Not counting {item.unhandleable_type} item {item.item_id}"
-                    " against backfill limit"
+                    f"There is a cursor for the chat, fetching messages before {self.cursor}"
                 )
-                excluded_count += 1
-            items.append(item)
-        return items
+                resp = await source.client.get_thread(
+                    self.thread_id, seq_id=source.seq_id, cursor=self.cursor
+                )
+            else:
+                self.log.debug(
+                    "There is no first message in the chat, starting with the most recent messages"
+                )
+                resp = await source.client.get_thread(self.thread_id, seq_id=source.seq_id)
+        except IGRateLimitError as e:
+            backoff = self.config.get("bridge.backfill.backoff.message_history", 300)
+            self.log.warning(
+                f"Backfilling failed due to rate limit. Waiting for {backoff} seconds before "
+                f"resuming. Error: {e}"
+            )
+            await asyncio.sleep(backoff)
+            raise
+
+        messages = []
+        # Sometimes (seems like on Facebook chats) it fetches the first message in the chat over
+        # and over again.
+        for item in resp.thread.items:
+            # Check in-memory queues for duplicates
+            if item.item_id in self._msgid_dedup:
+                self.log.debug(
+                    f"Ignoring message {item.item_id} ({item.client_context}) by {item.user_id}"
+                    " as it was already handled (message.id in dedup queue)"
+                )
+                continue
+            self._msgid_dedup.appendleft(item.item_id)
+
+            # Check database for duplicates
+            if await DBMessage.get_by_item_id(item.item_id, self.receiver) is not None:
+                self.log.debug(
+                    f"Ignoring message {item.item_id} ({item.client_context}) by {item.user_id}"
+                    " as it was already handled (message.id in database)"
+                )
+                continue
+
+            messages.append(item)
+
+        cursor = resp.thread.oldest_cursor
+        backfill_more = resp.thread.has_older
+        if len(messages) == 0:
+            self.log.debug("No messages to backfill.")
+            return None
+
+        last_message_timestamp = messages[-1].timestamp_ms
+
+        pages_to_backfill = backfill_request.num_pages
+        if backfill_request.max_total_pages > -1:
+            pages_to_backfill = min(pages_to_backfill, backfill_request.max_total_pages)
+
+        pages_backfilled = 0
+        for i in range(pages_to_backfill):
+            base_insertion_event_id = await self.backfill_message_page(
+                source, list(reversed(messages))
+            )
+            self.cursor = cursor
+            await self.save()
+            pages_backfilled += 1
+
+            if base_insertion_event_id:
+                self.historical_base_insertion_event_id = base_insertion_event_id
+                await self.save()
+
+            if backfill_more and i < pages_to_backfill - 1:
+                # Sleep before fetching another page of messages.
+                await asyncio.sleep(backfill_request.page_delay)
+
+                # Fetch more messages
+                try:
+                    resp = await source.client.get_thread(
+                        self.thread_id, seq_id=source.seq_id, cursor=self.cursor
+                    )
+                    messages = resp.thread.items
+                    cursor = resp.thread.oldest_cursor
+                    backfill_more &= resp.thread.has_older
+                except IGRateLimitError as e:
+                    backoff = self.config.get("bridge.backfill.backoff.message_history", 300)
+                    self.log.warning(
+                        f"Backfilling failed due to rate limit. Waiting for {backoff} seconds "
+                        "before resuming."
+                    )
+                    await asyncio.sleep(backoff)
+
+                    # If we hit the rate limit, then we will want to give up for now, but enqueue
+                    # additional backfill to do later.
+                    break
+
+        if backfill_request.max_total_pages == -1:
+            new_max_total_pages = -1
+        else:
+            new_max_total_pages = backfill_request.max_total_pages - pages_backfilled
+            if new_max_total_pages <= 0:
+                backfill_more = False
+
+        if backfill_more:
+            self.log.debug("Enqueueing more backfill")
+            await Backfill.new(
+                source.mxid,
+                # Always enqueue subsequent backfills at the lowest priority
+                2,
+                self.thread_id,
+                self.receiver,
+                backfill_request.num_pages,
+                backfill_request.page_delay,
+                backfill_request.post_batch_delay,
+                new_max_total_pages,
+            ).insert()
+        else:
+            self.log.debug("No more messages to backfill")
+
+        await self._update_read_receipts(resp.thread.last_seen_at)
+        return last_message_timestamp
+
+    async def backfill_message_page(
+        self,
+        source: u.User,
+        message_page: list[ThreadItem],
+        forward: bool = False,
+        last_message: DBMessage | None = None,
+        mark_read: bool = False,
+    ) -> EventID | None:
+        """
+        Backfills a page of messages to Matrix. The messages should be in order from oldest to
+        newest.
+
+        Returns: a tuple containing the number of messages that were actually bridged, the
+            timestamp of the oldest bridged message and the base insertion event ID if it exists.
+        """
+        assert source.client
+        if len(message_page) == 0:
+            return None
+
+        if forward:
+            assert (last_message and last_message.mxid) or self.first_event_id
+            prev_event_id = last_message.mxid if last_message else self.first_event_id
+        else:
+            assert self.config["bridge.backfill.msc2716"]
+            assert self.first_event_id
+            prev_event_id = self.first_event_id
+
+        assert self.mxid
+
+        oldest_message_in_page = message_page[0]
+        oldest_msg_timestamp = oldest_message_in_page.timestamp_ms
+
+        batch_messages: list[BatchSendEvent] = []
+        state_events_at_start: list[BatchSendStateEvent] = []
+
+        added_members = set()
+        current_members = await self.main_intent.state_store.get_members(
+            self.mxid, memberships=(Membership.JOIN,)
+        )
+
+        def add_member(puppet: p.Puppet, mxid: UserID):
+            assert self.mxid
+            if mxid in added_members:
+                return
+            if (
+                self.bridge.homeserver_software.is_hungry
+                or not self.config["bridge.backfill.msc2716"]
+            ):
+                # Hungryserv doesn't expect or check state events at start.
+                added_members.add(mxid)
+                return
+
+            content_args = {"avatar_url": puppet.photo_mxc, "displayname": puppet.name}
+            state_events_at_start.extend(
+                [
+                    BatchSendStateEvent(
+                        content=MemberStateEventContent(Membership.INVITE, **content_args),
+                        type=EventType.ROOM_MEMBER,
+                        sender=self.main_intent.mxid,
+                        state_key=mxid,
+                        timestamp=oldest_msg_timestamp,
+                    ),
+                    BatchSendStateEvent(
+                        content=MemberStateEventContent(Membership.JOIN, **content_args),
+                        type=EventType.ROOM_MEMBER,
+                        sender=mxid,
+                        state_key=mxid,
+                        timestamp=oldest_msg_timestamp,
+                    ),
+                ]
+            )
+            added_members.add(mxid)
+
+        async def intent_for(user_id: int) -> tuple[p.Puppet, IntentAPI]:
+            puppet: p.Puppet = await p.Puppet.get_by_pk(user_id)
+            if puppet:
+                intent = puppet.intent_for(self)
+            else:
+                intent = self.main_intent
+            if puppet.is_real_user and not self._can_double_puppet_backfill(intent.mxid):
+                intent = puppet.default_mxid_intent
+            return puppet, intent
+
+        message_infos: list[tuple[ThreadItem | Reaction, int]] = []
+        intents: list[IntentAPI] = []
+
+        for message in message_page:
+            puppet, intent = await intent_for(message.user_id)
+
+            # Convert the message
+            converted = await self.convert_instagram_item(source, puppet, message)
+            if not converted:
+                self.log.debug(f"Skipping unsupported message in backfill {message.item_id}")
+                continue
+
+            if intent.mxid not in current_members:
+                add_member(puppet, intent.mxid)
+
+            d_event_id = None
+            for index, (event_type, content) in enumerate(converted):
+                if self.encrypted and self.matrix.e2ee:
+                    event_type, content = await self.matrix.e2ee.encrypt(
+                        self.mxid, event_type, content
+                    )
+                if intent.api.is_real_user and intent.api.bridge_name is not None:
+                    content[DOUBLE_PUPPET_SOURCE_KEY] = intent.api.bridge_name
+
+                if self.bridge.homeserver_software.is_hungry:
+                    d_event_id = self._deterministic_event_id(puppet, message.item_id, index)
+
+                message_infos.append((message, index))
+                batch_messages.append(
+                    BatchSendEvent(
+                        content=content,
+                        type=event_type,
+                        sender=intent.mxid,
+                        timestamp=message.timestamp_ms,
+                        event_id=d_event_id,
+                    )
+                )
+                intents.append(intent)
+
+            if self.bridge.homeserver_software.is_hungry and message.reactions:
+                for reaction in message.reactions.emojis:
+                    puppet, intent = await intent_for(reaction.sender_id)
+
+                    reaction_event = ReactionEventContent()
+                    reaction_event.relates_to = RelatesTo(
+                        rel_type=RelationType.ANNOTATION, event_id=d_event_id, key=reaction.emoji
+                    )
+                    if intent.api.is_real_user and intent.api.bridge_name is not None:
+                        reaction_event[DOUBLE_PUPPET_SOURCE_KEY] = intent.api.bridge_name
+
+                    message_infos.append((reaction, 0))
+                    batch_messages.append(
+                        BatchSendEvent(
+                            content=reaction_event,
+                            type=EventType.REACTION,
+                            sender=intent.mxid,
+                            timestamp=reaction.timestamp_ms,
+                        )
+                    )
+
+        if not batch_messages:
+            return None
+
+        if not self.bridge.homeserver_software.is_hungry and (
+            forward or self.next_batch_id is None
+        ):
+            self.log.debug("Sending dummy event to avoid forward extremity errors")
+            await self.az.intent.send_message_event(
+                self.mxid, EventType("fi.mau.dummy.pre_backfill", EventType.Class.MESSAGE), {}
+            )
+
+        self.log.info(
+            "Sending %d %s messages to %s with batch ID %s and previous event ID %s",
+            len(batch_messages),
+            "new" if forward else "historical",
+            self.mxid,
+            self.next_batch_id,
+            prev_event_id,
+        )
+
+        base_insertion_event_id = None
+        if self.config["bridge.backfill.msc2716"]:
+            batch_send_resp = await self.main_intent.batch_send(
+                self.mxid,
+                prev_event_id,
+                batch_id=self.next_batch_id,
+                events=batch_messages,
+                state_events_at_start=state_events_at_start,
+                beeper_new_messages=forward,
+                beeper_mark_read_by=source.mxid if mark_read else None,
+            )
+            base_insertion_event_id = batch_send_resp.base_insertion_event_id
+            event_ids = batch_send_resp.event_ids
+        else:
+            batch_send_resp = None
+            event_ids = [
+                await intent.send_message_event(
+                    self.mxid, evt.type, evt.content, timestamp=evt.timestamp
+                )
+                for evt, intent in zip(reversed(batch_messages), reversed(intents))
+            ]
+        await self._finish_batch(event_ids, message_infos)
+        if not forward:
+            assert batch_send_resp
+            self.log.debug("Got next batch ID %s for %s", batch_send_resp.next_batch_id, self.mxid)
+            self.next_batch_id = batch_send_resp.next_batch_id
+        await self.save()
+
+        return base_insertion_event_id
+
+    def _can_double_puppet_backfill(self, custom_mxid: UserID) -> bool:
+        return self.config["bridge.backfill.double_puppet_backfill"] and (
+            # Hungryserv can batch send any users
+            self.bridge.homeserver_software.is_hungry
+            # Non-MSC2716 backfill can use any double puppet
+            or not self.config["bridge.backfill.msc2716"]
+            # Local users can be double puppeted even with MSC2716
+            or (custom_mxid[custom_mxid.index(":") + 1 :] == self.config["homeserver.domain"])
+        )
+
+    async def _finish_batch(
+        self, event_ids: list[EventID], message_infos: list[tuple[ThreadItem | Reaction, int]]
+    ):
+        # We have to do this slightly annoying processing of the event IDs and message infos so
+        # that we only map the last event ID to the message.
+        # When inline captions are enabled, this will have no effect since index will always be 0
+        # since there's only ever one event per message.
+        current_message = None
+        messages = []
+        reactions = []
+        message_id = None
+        for event_id, (message_or_reaction, index) in zip(event_ids, message_infos):
+            if isinstance(message_or_reaction, ThreadItem):
+                message = message_or_reaction
+                if index == 0 and current_message:
+                    # This means that all of the events for the previous message have been processed,
+                    # and the current_message is the most recent event for that message.
+                    messages.append(current_message)
+
+                current_message = DBMessage(
+                    mxid=event_id,
+                    mx_room=self.mxid,
+                    item_id=message.item_id,
+                    client_context=message.client_context,
+                    receiver=self.receiver,
+                    sender=message.user_id,
+                    ig_timestamp=message.timestamp,
+                )
+                message_id = message.item_id
+            else:
+                assert message_id
+                reaction = message_or_reaction
+                reactions.append(
+                    DBReaction(
+                        mxid=event_id,
+                        mx_room=self.mxid,
+                        ig_item_id=message_id,
+                        ig_receiver=self.receiver,
+                        ig_sender=reaction.sender_id,
+                        reaction=reaction.emoji,
+                        mx_timestamp=reaction.timestamp_ms,
+                    )
+                )
+
+        if current_message:
+            messages.append(current_message)
+
+        try:
+            await DBMessage.bulk_insert(messages)
+        except Exception:
+            self.log.exception("Failed to store batch message IDs")
+
+        try:
+            for reaction in reactions:
+                await reaction.insert()
+        except Exception:
+            self.log.exception("Failed to store backfilled reactions")
+
+    async def send_post_backfill_dummy(
+        self,
+        last_message_ig_timestamp: int,
+        base_insertion_event_id: EventID | None = None,
+    ):
+        assert self.mxid
+
+        if not base_insertion_event_id:
+            base_insertion_event_id = self.historical_base_insertion_event_id
+
+        if not base_insertion_event_id:
+            self.log.debug(
+                "No base insertion event ID in database or from batch send response. Not sending"
+                " dummy event."
+            )
+            return
+
+        event_id = await self.main_intent.send_message_event(
+            self.mxid,
+            event_type=HistorySyncMarkerMessage,
+            content={
+                "org.matrix.msc2716.marker.insertion": base_insertion_event_id,
+                "m.marker.insertion": base_insertion_event_id,
+            },
+        )
+        await DBMessage(
+            mxid=event_id,
+            mx_room=self.mxid,
+            item_id="",
+            client_context=None,
+            receiver=self.receiver,
+            sender=0,
+            ig_timestamp=last_message_ig_timestamp,
+        ).insert()
 
     # endregion
     # region Bridge info state event
@@ -1876,7 +2307,11 @@ class Portal(DBPortal, BasePortal):
                 self.log.exception("Failed to update portal")
             return self.mxid
         async with self._create_room_lock:
-            return await self._create_matrix_room(source, info)
+            try:
+                return await self._create_matrix_room(source, info)
+            except Exception:
+                self.log.exception("Failed to create portal")
+                return None
 
     def _get_invite_content(self, double_puppet: p.Puppet | None) -> dict[str, bool]:
         invite_content = {}
@@ -1886,9 +2321,7 @@ class Portal(DBPortal, BasePortal):
             invite_content["is_direct"] = True
         return invite_content
 
-    async def update_matrix_room(
-        self, source: u.User, info: Thread, backfill: bool = False
-    ) -> None:
+    async def update_matrix_room(self, source: u.User, info: Thread) -> None:
         puppet = await p.Puppet.get_by_custom_mxid(source.mxid)
         await self.main_intent.invite_user(
             self.mxid,
@@ -1902,17 +2335,6 @@ class Portal(DBPortal, BasePortal):
                 await source.update_direct_chats({self.main_intent.mxid: [self.mxid]})
 
         await self.update_info(info, source)
-
-        if backfill:
-            last_msg = await DBMessage.get_by_item_id(
-                info.last_permanent_item.item_id, receiver=self.receiver
-            )
-            if last_msg is None:
-                self.log.debug(
-                    f"Last permanent item ({info.last_permanent_item.item_id})"
-                    " not found in database, starting backfilling"
-                )
-                await self.backfill(source, thread=info, is_initial=False)
         await self._update_read_receipts(info.last_seen_at)
 
     async def _create_matrix_room(self, source: u.User, info: Thread) -> RoomID | None:
@@ -1949,54 +2371,50 @@ class Portal(DBPortal, BasePortal):
         if self.encrypted or self.private_chat_portal_meta or not self.is_direct:
             name = self.name
 
-        # We lock backfill lock here so any messages that come between the room being created
-        # and the initial backfill finishing wouldn't be bridged before the backfill messages.
-        with self.backfill_lock:
-            creation_content = {}
-            if not self.config["bridge.federate_rooms"]:
-                creation_content["m.federate"] = False
-            self.mxid = await self.main_intent.create_room(
-                name=name,
-                is_direct=self.is_direct,
-                initial_state=initial_state,
-                invitees=invites,
-                creation_content=creation_content,
-            )
-            if not self.mxid:
-                raise Exception("Failed to create room: no mxid returned")
+        creation_content = {}
+        if not self.config["bridge.federate_rooms"]:
+            creation_content["m.federate"] = False
+        self.mxid = await self.main_intent.create_room(
+            name=name,
+            is_direct=self.is_direct,
+            initial_state=initial_state,
+            invitees=invites,
+            creation_content=creation_content,
+        )
+        if not self.mxid:
+            raise Exception("Failed to create room: no mxid returned")
 
-            if self.encrypted and self.matrix.e2ee and self.is_direct:
-                try:
-                    await self.az.intent.ensure_joined(self.mxid)
-                except Exception:
-                    self.log.warning(f"Failed to add bridge bot to new private chat {self.mxid}")
-
-            await self.update()
-            self.log.debug(f"Matrix room created: {self.mxid}")
-            self.by_mxid[self.mxid] = self
-
-            puppet = await p.Puppet.get_by_custom_mxid(source.mxid)
-            await self.main_intent.invite_user(
-                self.mxid, source.mxid, extra_content=self._get_invite_content(puppet)
-            )
-            if puppet:
-                try:
-                    if self.is_direct:
-                        await source.update_direct_chats({self.main_intent.mxid: [self.mxid]})
-                    await puppet.intent.join_room_by_id(self.mxid)
-                except MatrixError:
-                    self.log.debug(
-                        "Failed to join custom puppet into newly created portal", exc_info=True
-                    )
-
-            await self._update_participants(info.users, source)
-
+        if self.encrypted and self.matrix.e2ee and self.is_direct:
             try:
-                await self.backfill(source, thread=info, is_initial=True)
+                await self.az.intent.ensure_joined(self.mxid)
             except Exception:
-                self.log.exception("Failed to backfill new portal")
-            await self._update_read_receipts(info.last_seen_at)
+                self.log.warning(f"Failed to add bridge bot to new private chat {self.mxid}")
 
+        await self.update()
+        self.log.debug(f"Matrix room created: {self.mxid}")
+        self.by_mxid[self.mxid] = self
+
+        puppet = await p.Puppet.get_by_custom_mxid(source.mxid)
+        await self.main_intent.invite_user(
+            self.mxid, source.mxid, extra_content=self._get_invite_content(puppet)
+        )
+        if puppet:
+            try:
+                if self.is_direct:
+                    await source.update_direct_chats({self.main_intent.mxid: [self.mxid]})
+                await puppet.intent.join_room_by_id(self.mxid)
+            except MatrixError:
+                self.log.debug(
+                    "Failed to join custom puppet into newly created portal", exc_info=True
+                )
+
+        await self._update_participants(info.users, source)
+
+        self.log.trace("Sending portal post-create dummy event")
+        self.first_event_id = await self.az.intent.send_message_event(
+            self.mxid, PortalCreateDummy, {}
+        )
+        await self.update()
         return self.mxid
 
     # endregion

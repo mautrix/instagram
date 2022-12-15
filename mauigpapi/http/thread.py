@@ -15,8 +15,11 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from __future__ import annotations
 
-from typing import AsyncIterable, Type
+from typing import AsyncIterable, Callable, Type
+import asyncio
 import json
+
+from mauigpapi.errors.response import IGRateLimitError
 
 from ..types import (
     CommandResponse,
@@ -24,7 +27,6 @@ from ..types import (
     DMThreadResponse,
     Thread,
     ThreadAction,
-    ThreadItem,
     ThreadItemType,
 )
 from .base import BaseAndroidAPI, T
@@ -55,25 +57,50 @@ class ThreadAPI(BaseAndroidAPI):
         )
 
     async def iter_inbox(
-        self, start_at: DMInboxResponse | None = None, message_limit: int = 10
+        self,
+        update_seq_id_and_cursor: Callable[[int, str | None], None],
+        start_at: DMInboxResponse | None = None,
+        local_limit: int | None = None,
+        rate_limit_exceeded_backoff: float = 60.0,
     ) -> AsyncIterable[Thread]:
+        thread_counter = 0
         if start_at:
             cursor = start_at.inbox.oldest_cursor
             seq_id = start_at.seq_id
             has_more = start_at.inbox.has_older
             for thread in start_at.inbox.threads:
                 yield thread
+                thread_counter += 1
+                if local_limit and thread_counter >= local_limit:
+                    return
+            update_seq_id_and_cursor(seq_id, cursor)
         else:
             cursor = None
             seq_id = None
             has_more = True
         while has_more:
-            resp = await self.get_inbox(message_limit=message_limit, cursor=cursor, seq_id=seq_id)
+            try:
+                resp = await self.get_inbox(message_limit=10, cursor=cursor, seq_id=seq_id)
+            except IGRateLimitError:
+                self.log.warning(
+                    "Fetching more threads failed due to rate limit. Waiting for "
+                    f"{rate_limit_exceeded_backoff} seconds before resuming."
+                )
+                await asyncio.sleep(rate_limit_exceeded_backoff)
+                continue
+            except Exception:
+                self.log.exception("Failed to fetch more threads")
+                raise
+
             seq_id = resp.seq_id
             cursor = resp.inbox.oldest_cursor
             has_more = resp.inbox.has_older
             for thread in resp.inbox.threads:
                 yield thread
+                thread_counter += 1
+                if local_limit and thread_counter >= local_limit:
+                    return
+            update_seq_id_and_cursor(seq_id, cursor)
 
     async def get_thread(
         self,
@@ -93,27 +120,6 @@ class ThreadAPI(BaseAndroidAPI):
         return await self.std_http_get(
             f"/api/v1/direct_v2/threads/{thread_id}/", query=query, response_type=DMThreadResponse
         )
-
-    async def iter_thread(
-        self,
-        thread_id: str,
-        seq_id: int | None = None,
-        cursor: str | None = None,
-        start_at: Thread | None = None,
-    ) -> AsyncIterable[ThreadItem]:
-        if start_at:
-            for item in start_at.items:
-                yield item
-            cursor = start_at.oldest_cursor
-            has_more = start_at.has_older
-        else:
-            has_more = True
-        while has_more:
-            resp = await self.get_thread(thread_id, seq_id=seq_id, cursor=cursor)
-            cursor = resp.thread.oldest_cursor
-            has_more = resp.thread.has_older
-            for item in resp.thread.items:
-                yield item
 
     async def create_group_thread(self, recipient_users: list[int | str]) -> Thread:
         return await self.std_http_post(
