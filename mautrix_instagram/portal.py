@@ -1384,6 +1384,23 @@ class Portal(DBPortal, BasePortal):
         await self._add_instagram_reply(content, item.replied_to_message)
         return EventType.ROOM_MESSAGE, content
 
+    async def _convert_instagram_xma_profile_share(
+        self, item: ThreadItem
+    ) -> list[ConvertedMessage]:
+        assert item.xma_profile
+        profile_messages = []
+        for profile in item.xma_profile:
+            username = profile.header_title_text
+            user_link = f'<a href="{profile.target_url}">@{username}</a>'
+            text = f"Shared @{username}'s profile"
+            html = f"Shared {user_link}'s profile"
+            content = TextMessageEventContent(
+                msgtype=MessageType.TEXT, format=Format.HTML, body=text, formatted_body=html
+            )
+            await self._add_instagram_reply(content, item.replied_to_message)
+            profile_messages.append((EventType.ROOM_MESSAGE, content))
+        return profile_messages
+
     async def _add_instagram_reply(
         self, content: MessageEventContent, reply_to: ThreadItem | None
     ) -> None:
@@ -1533,6 +1550,8 @@ class Portal(DBPortal, BasePortal):
                 converted.append(loc_content)
         elif item.profile:
             converted.append(await self._convert_instagram_profile(item))
+        elif item.xma_profile:
+            converted.extend(await self._convert_instagram_xma_profile_share(item))
         elif item.reel_share:
             converted.extend(await self._convert_instagram_reel_share(source, intent, item))
         elif (

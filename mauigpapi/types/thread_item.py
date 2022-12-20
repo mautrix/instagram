@@ -516,6 +516,15 @@ class XMAMediaShareItem(SerializableAttrs):
 
 
 @dataclass
+class XMAMediaProfileShareItem(SerializableAttrs):
+    xma_layout_type: int
+
+    header_title_text: str
+    header_subtitle_text: Optional[str]
+    target_url: str
+
+
+@dataclass
 class ClipItem(SerializableAttrs):
     # TODO there are some additional fields in clips
     clip: MediaShareItem
@@ -562,6 +571,7 @@ class ThreadItem(SerializableAttrs):
     xma_story_share: Optional[List[XMAMediaShareItem]] = None
     xma_reel_share: Optional[List[XMAMediaShareItem]] = None
     xma_reel_mention: Optional[List[XMAMediaShareItem]] = None
+    xma_profile: Optional[List[XMAMediaProfileShareItem]] = None
     reel_share: Optional[ReelShareItem] = None
     story_share: Optional[StoryShareItem] = None
     location: Optional[Location] = None
