@@ -53,6 +53,7 @@ from mauigpapi.types import (
     Operation,
     RealtimeDirectEvent,
     Thread,
+    ThreadRemoveEvent,
     ThreadSyncEvent,
     TypingStatus,
 )
@@ -271,6 +272,7 @@ class User(DBUser, BaseUser):
         self.mqtt.add_event_handler(NewSequenceID, self.update_seq_id)
         self.mqtt.add_event_handler(MessageSyncEvent, self.handle_message)
         self.mqtt.add_event_handler(ThreadSyncEvent, self.handle_thread_sync)
+        self.mqtt.add_event_handler(ThreadRemoveEvent, self.handle_thread_remove)
         self.mqtt.add_event_handler(RealtimeDirectEvent, self.handle_rtd)
         self.mqtt.add_event_handler(ProxyUpdate, self.on_proxy_update)
 
@@ -1093,6 +1095,9 @@ class User(DBUser, BaseUser):
                 "Got thread sync event for DM %s without existing portal, ignoring",
                 portal.thread_id,
             )
+
+    async def handle_thread_remove(self, evt: ThreadRemoveEvent) -> None:
+        self.log.debug("Got thread remove event: %s", evt.serialize())
 
     @async_time(METRIC_RTD)
     async def handle_rtd(self, evt: RealtimeDirectEvent) -> None:
