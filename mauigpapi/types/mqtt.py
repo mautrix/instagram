@@ -126,6 +126,15 @@ class ThreadSyncEvent(Thread, SerializableAttrs):
     op: Operation
 
 
+@dataclass
+class ThreadRemoveEvent(SerializableAttrs):
+    thread_id: str
+
+    path: str
+    op: Operation
+    data: Any
+
+
 @dataclass(kw_only=True)
 class PubsubPublishMetadata(SerializableAttrs):
     publish_time_ms: str

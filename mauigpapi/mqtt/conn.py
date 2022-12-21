@@ -23,7 +23,6 @@ import json
 import logging
 import re
 import time
-import urllib.request
 import zlib
 
 from yarl import URL
@@ -57,6 +56,7 @@ from ..types import (
     RealtimeZeroProvisionPayload,
     ThreadAction,
     ThreadItemType,
+    ThreadRemoveEvent,
     ThreadSyncEvent,
     TypingStatus,
 )
@@ -370,12 +370,24 @@ class AndroidMQTT:
             message = MessageSyncMessage.deserialize(raw_message)
             evt = MessageSyncEvent(iris=parsed_item, message=message)
         elif part.path.startswith("/direct_v2/inbox/threads/"):
-            raw_message = {
-                "path": part.path,
-                "op": part.op,
-                **json.loads(part.value),
-            }
-            evt = ThreadSyncEvent.deserialize(raw_message)
+            if part.op == Operation.REMOVE:
+                blank, direct_v2, inbox, threads, thread_id, *_ = part.path.split("/")
+                evt = ThreadRemoveEvent.deserialize(
+                    {
+                        "thread_id": thread_id,
+                        "path": part.path,
+                        "op": part.op,
+                        **json.loads(part.value),
+                    }
+                )
+            else:
+                evt = ThreadSyncEvent.deserialize(
+                    {
+                        "path": part.path,
+                        "op": part.op,
+                        **json.loads(part.value),
+                    }
+                )
         else:
             self.log.warning(f"Unsupported path {part.path}")
             return False

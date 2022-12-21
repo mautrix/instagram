@@ -57,6 +57,7 @@ from .mqtt import (
     RealtimeDirectEvent,
     RealtimeZeroProvisionPayload,
     ThreadAction,
+    ThreadRemoveEvent,
     ThreadSyncEvent,
     TypingStatus,
     ZeroProductProvisioningEvent,
