@@ -16,4 +16,4 @@ aiohttp-socks
 pillow>=4,<10
 
 #/sqlite
-aiosqlite>=0.16,<0.18
+aiosqlite>=0.16,<0.19
