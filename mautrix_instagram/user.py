@@ -833,13 +833,6 @@ class User(DBUser, BaseUser):
                     # The sync was successful. Exit the loop.
                     return
                 except IGNotLoggedInError as e:
-                    await self.send_bridge_notice(
-                        f"You have been logged out of Instagram: {e!s}",
-                        important=True,
-                        state_event=BridgeStateEvent.BAD_CREDENTIALS,
-                        error_code="ig-auth-error",
-                        error_message=str(e),
-                    )
                     await self.logout(error=e)
                     return
                 except Exception:
