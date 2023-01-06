@@ -1,5 +1,5 @@
 # mautrix-instagram - A Matrix-Instagram puppeting bridge.
-# Copyright (C) 2022 Tulir Asokan
+# Copyright (C) 2023 Tulir Asokan
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as published by
@@ -29,7 +29,6 @@ from mauigpapi.errors import (
     IGChallengeError,
     IGCheckpointError,
     IGConsentRequiredError,
-    IGLoginRequiredError,
     IGNotLoggedInError,
     IGRateLimitError,
     IGUserIDNotFoundError,
@@ -318,18 +317,13 @@ class User(DBUser, BaseUser):
                 await req.mark_dispatched()
                 await portal.backfill(self, req)
                 await req.mark_done()
-            except IGLoginRequiredError as e:
-                self.log.exception(
-                    "User is logged out. Stopping backfill requests loop and forcing refresh."
-                )
-                await self.refresh(resync=False)
+            except IGNotLoggedInError as e:
+                self.log.exception("User got logged out during backfill loop")
+                await self.logout(error=e)
                 break
-            except IGChallengeError as e:
-                self.log.exception(
-                    "User received a challenge. Stopping backfill requests loop and "
-                    "forcing refresh."
-                )
-                await self.refresh(resync=False)
+            except (IGChallengeError, IGConsentRequiredError) as e:
+                self.log.exception("User got a challenge during backfill loop")
+                await self._handle_checkpoint(e, on="backfill")
                 break
             except Exception as e:
                 self.log.exception("Failed to backfill portal %s: %s", req.portal_thread_id, e)
