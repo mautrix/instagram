@@ -451,7 +451,7 @@ class ProvisioningAPI:
             )
         except IG2FACodeExpiredError as e:
             self.log.debug("%s submitted an expired 2-factor auth code", user.mxid)
-            self.log.debug("Login error body: %s", e.body.serialize())
+            self.log.debug("Login error body: %s", e.body)
             track(user, "$login_failed", {"error": "expired-2fa-code"})
             return web.json_response(
                 data={
