@@ -46,6 +46,7 @@ async def get_login_state(user: u.User, seed: str) -> tuple[AndroidAPI, AndroidS
         seed = hmac.new(seed.encode("utf-8"), user.mxid.encode("utf-8"), hashlib.sha256).digest()
         state.device.generate(seed)
         api = AndroidAPI(state, log=user.api_log, proxy_handler=user.proxy_handler)
+        await api.qe_sync_login_experiments()
         user.command_status = {
             "action": "Login",
             "state": state,
