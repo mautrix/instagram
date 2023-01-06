@@ -44,12 +44,12 @@ class DMInbox(SerializableAttrs):
 @dataclass
 class DMInboxResponse(SerializableAttrs):
     status: str
-    seq_id: int
-    snapshot_at_ms: int
     pending_requests_total: int
     has_pending_top_requests: bool
-    viewer: ThreadUser
-    inbox: DMInbox
+    seq_id: Optional[int] = None
+    snapshot_at_ms: Optional[int] = None
+    viewer: Optional[ThreadUser] = None
+    inbox: Optional[DMInbox] = None
     # TODO type
     most_recent_inviter: Any = None
 

@@ -37,7 +37,7 @@ class ThreadAPI(BaseAndroidAPI):
         self,
         cursor: str | None = None,
         seq_id: str | None = None,
-        message_limit: int = 10,
+        message_limit: int | None = 10,
         limit: int = 20,
         pending: bool = False,
         spam: bool = False,
