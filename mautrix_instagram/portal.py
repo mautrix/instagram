@@ -505,6 +505,8 @@ class Portal(DBPortal, BasePortal):
         )
 
         if message.msgtype == MessageType.NOTICE and not self.config["bridge.bridge_notices"]:
+            self.log.debug(f"Dropping m.notice event {event_id}")
+            # TODO send checkpoint
             return
 
         if message.msgtype in (MessageType.EMOTE, MessageType.TEXT, MessageType.NOTICE):

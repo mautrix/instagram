@@ -734,6 +734,7 @@ class AndroidMQTT:
         client_context: str | None = None,
         **kwargs: Any,
     ) -> CommandResponse | None:
+        self.log.debug(f"Preparing to send {action} to {thread_id} with {client_context}")
         client_context = client_context or self.state.gen_client_context()
         req = {
             "thread_id": thread_id,
@@ -747,9 +748,10 @@ class AndroidMQTT:
         async with self._message_response_waiter_lock:
             lock_wait_dur = time.monotonic() - lock_start
             if lock_wait_dur > 1:
-                self.log.debug(f"Waited {lock_wait_dur:.3f} seconds to send {client_context}")
+                self.log.warning(f"Waited {lock_wait_dur:.3f} seconds to send {client_context}")
             fut = self._message_response_waiter = asyncio.Future()
             self._message_response_waiter_id = client_context
+            self.log.debug(f"Publishing {action} to {thread_id} with {client_context}")
             await self.publish(RealtimeTopic.SEND_MESSAGE, req)
             self.log.trace(
                 f"Request published to {RealtimeTopic.SEND_MESSAGE}, "
