@@ -1,5 +1,5 @@
 # mautrix-instagram - A Matrix-Instagram puppeting bridge.
-# Copyright (C) 2022 Tulir Asokan
+# Copyright (C) 2023 Tulir Asokan
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as published by
@@ -103,6 +103,7 @@ class BaseAndroidAPI:
             "x-device-id": self.state.device.uuid,
             "x-ig-app-locale": self.state.device.language,
             "x-ig-device-locale": self.state.device.language,
+            "x-ig-mapped-locale": self.state.device.language,
             "x-pigeon-session-id": self.state.pigeon_session_id,
             "x-pigeon-rawclienttime": str(round(time.time(), 3)),
             "x-ig-connection-speed": f"{random.randint(1000, 3700)}kbps",
@@ -124,6 +125,7 @@ class BaseAndroidAPI:
             "x-ig-device-id": self.state.device.uuid,
             "x-ig-android-id": self.state.device.id,
             "x-ig-connection-type": self.state.device.connection_type,
+            "x-fb-connection-type": self.state.device.connection_type,
             "x-ig-capabilities": self.state.application.CAPABILITIES,
             "x-ig-app-id": self.state.application.FACEBOOK_ANALYTICS_APPLICATION_ID,
             "user-agent": self.state.user_agent,
@@ -135,8 +137,13 @@ class BaseAndroidAPI:
             "ig-u-shbts": self.state.session.shbts,
             "ig-u-ds-user-id": self.state.session.ds_user_id,
             "ig-u-rur": self.state.session.rur,
+            "ig-intended-user-id": self.state.session.ds_user_id or "0",
+            "ig-client-endpoint": "unknown",
             "x-fb-http-engine": "Liger",
             "x-fb-client-ip": "True",
+            "x-fb-rmd": "cached=0;state=NO_MATCH",
+            "x-fb-server-cluster": "True",
+            "x-tigon-is-retry": "False",
             "accept-encoding": "gzip",
         }
         return {k: v for k, v in headers.items() if v is not None}

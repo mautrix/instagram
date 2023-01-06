@@ -1,5 +1,5 @@
 # mautrix-instagram - A Matrix-Instagram puppeting bridge.
-# Copyright (C) 2020 Tulir Asokan
+# Copyright (C) 2023 Tulir Asokan
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as published by
@@ -13,35 +13,19 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
-import json
-import pkgutil
-
 from attr import dataclass
 
 from mautrix.types import SerializableAttrs
-
-default_capabilities = json.loads(
-    pkgutil.get_data("mauigpapi.state", "samples/supported-capabilities.json")
-)
 
 
 @dataclass
 class AndroidApplication(SerializableAttrs):
     APP_VERSION: str = "256.0.0.18.105"
     APP_VERSION_CODE: str = "407842973"
-    BREADCRUMB_KEY: str = "iN4$aGr0m"
     FACEBOOK_ANALYTICS_APPLICATION_ID: str = "567067343352427"
-    FACEBOOK_OTA_FIELDS: str = (
-        "update%7Bdownload_uri%2Cdownload_uri_delta_base%2Cversion_code_delta_base"
-        "%2Cdownload_uri_delta%2Cfallback_to_full_update%2Cfile_size_delta%2Cversion_code"
-        "%2Cpublished_date%2Cfile_size%2Cota_bundle_type%2Cresources_checksum"
-        "%2Cresources_sha256_checksum%2Callowed_networks%2Crelease_id%7D "
-    )
-    FACEBOOK_ORCA_APPLICATION_ID: str = "124024574287414"
 
     BLOKS_VERSION_ID: str = "0928297a84f74885ff39fc1628f8a40da3ef1c467555d555bfd9f8fe1aaacafe"
     CAPABILITIES: str = "3brTv10="
-    SUPPORTED_CAPABILITIES: str = default_capabilities
 
     EXPERIMENTS: str = ",".join(
         (

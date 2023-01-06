@@ -69,7 +69,7 @@ setuptools.setup(
             "example-config.yaml",
         ],
         "mauigpapi.state": [
-            "samples/*.json",
+            "devices.json",
         ],
     },
     data_files=[

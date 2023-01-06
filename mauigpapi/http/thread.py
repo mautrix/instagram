@@ -1,5 +1,5 @@
 # mautrix-instagram - A Matrix-Instagram puppeting bridge.
-# Copyright (C) 2022 Tulir Asokan
+# Copyright (C) 2023 Tulir Asokan
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as published by
@@ -40,6 +40,7 @@ class ThreadAPI(BaseAndroidAPI):
         message_limit: int = 10,
         limit: int = 20,
         pending: bool = False,
+        spam: bool = False,
         direction: str = "older",
     ) -> DMInboxResponse:
         query = {
@@ -50,8 +51,20 @@ class ThreadAPI(BaseAndroidAPI):
             "thread_message_limit": message_limit,
             "persistentBadging": "true",
             "limit": limit,
+            "push_disabled": "true",
+            "is_prefetching": "false",
         }
-        inbox_type = "pending_inbox" if pending else "inbox"
+        inbox_type = "inbox"
+        if pending:
+            inbox_type = "pending_inbox"
+            if spam:
+                inbox_type = "spam_inbox"
+        elif not cursor:
+            query["fetch_reason"] = "initial_snapshot"  # can also be manual_refresh
+        headers = {
+            # MainFeedFragment:feed_timeline for limit=0 cold start fetch
+            "ig-client-endpoint": "DirectInboxFragment:direct_inbox",
+        }
         return await self.std_http_get(
             f"/api/v1/direct_v2/{inbox_type}/", query=query, response_type=DMInboxResponse
         )
@@ -80,7 +93,7 @@ class ThreadAPI(BaseAndroidAPI):
             has_more = True
         while has_more:
             try:
-                resp = await self.get_inbox(message_limit=10, cursor=cursor, seq_id=seq_id)
+                resp = await self.get_inbox(cursor=cursor, seq_id=seq_id)
             except IGRateLimitError:
                 self.log.warning(
                     "Fetching more threads failed due to rate limit. Waiting for "
@@ -106,7 +119,7 @@ class ThreadAPI(BaseAndroidAPI):
         self,
         thread_id: str,
         cursor: str | None = None,
-        limit: int = 10,
+        limit: int = 20,
         direction: str = "older",
         seq_id: int | None = None,
     ) -> DMThreadResponse:
@@ -116,6 +129,10 @@ class ThreadAPI(BaseAndroidAPI):
             "direction": direction,
             "seq_id": seq_id,
             "limit": limit,
+        }
+        headers = {
+            "ig-client-endpoint": "DirectThreadFragment:direct_thread",
+            "x-ig-nav-chain": "MainFeedFragment:feed_timeline:1:cold_start::,DirectInboxFragment:direct_inbox:4:on_launch_direct_inbox::",
         }
         return await self.std_http_get(
             f"/api/v1/direct_v2/threads/{thread_id}/", query=query, response_type=DMThreadResponse
