@@ -418,6 +418,25 @@ class Portal(DBPortal, BasePortal):
             allow_full_aspect_ratio="true",
         )
 
+    async def _needs_conversion(
+        self,
+        data: bytes,
+        mime_type: str,
+    ) -> bool:
+        if mime_type != "video/mp4":
+            self.log.info(f"Will convert: mime_type is {mime_type}")
+            return True
+        else:
+            probe = await ffmpeg.probe_bytes(data, input_mime=mime_type, logger=self.log)
+            is_there_correct_stream = any(
+                "pix_fmt" in stream and stream["pix_fmt"] == "yuv420p"
+                for stream in probe["streams"]
+            )
+            if not is_there_correct_stream:
+                self.log.info(f"Will convert: no yuv420p stream found")
+                return True
+            return False
+
     async def _handle_matrix_video(
         self,
         sender: u.User,
@@ -429,13 +448,24 @@ class Portal(DBPortal, BasePortal):
         width: int | None = None,
         height: int | None = None,
     ) -> CommandResponse:
-        if mime_type != "video/mp4":
+        if await self._needs_conversion(data, mime_type):
             data = await ffmpeg.convert_bytes(
                 data,
                 output_extension=".mp4",
-                output_args=("-c:v", "libx264", "-c:a", "aac"),
+                output_args=(
+                    "-c:v",
+                    "libx264",
+                    "-pix_fmt",
+                    "yuv420p",
+                    "-c:a",
+                    "aac",
+                    "-movflags",
+                    "+faststart",
+                ),
                 input_mime=mime_type,
+                logger=self.log,
             )
+            self.log.info(f"Uploaded video converted")
 
         self.log.trace(f"Uploading video from {event_id}")
         _, upload_id = await sender.client.upload_mp4(
