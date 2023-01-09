@@ -70,7 +70,7 @@ class AndroidDevice(SerializableAttrs):
         rand = random.Random(seed)
         self.phone_id = str(UUID(int=rand.getrandbits(128), version=4))
         self.adid = str(UUID(int=rand.getrandbits(128), version=4))
-        self.id = f"android-{''.join(rand.choices(string.hexdigits, k=16))}"
+        self.id = f"android-{''.join(rand.choices(string.hexdigits, k=16))}".lower()
         self.descriptor = rand.choice(
             [
                 "33/13; 420dpi; 1080x2219; Google/google; Pixel 6; oriole; oriole",
