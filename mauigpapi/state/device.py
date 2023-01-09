@@ -32,6 +32,7 @@ class AndroidDevice(SerializableAttrs):
     id: Optional[str] = None
     descriptor: Optional[str] = None
     uuid: Optional[str] = None
+    fdid: Optional[str] = None
     phone_id: Optional[str] = attr.ib(default=None, metadata={"json": "phoneId"})
     # Google Play advertising ID
     adid: Optional[str] = None
@@ -78,3 +79,4 @@ class AndroidDevice(SerializableAttrs):
             ]
         )
         self.uuid = str(UUID(int=rand.getrandbits(128), version=4))
+        self.fdid = str(UUID(int=rand.getrandbits(128), version=4))

@@ -123,6 +123,7 @@ class BaseAndroidAPI:
             "x-ig-timezone-offset": self.state.device.timezone_offset,
             # "x-messenger": "1",
             "x-ig-device-id": self.state.device.uuid,
+            "x-ig-family-device-id": self.state.device.fdid,
             "x-ig-android-id": self.state.device.id,
             "x-ig-connection-type": self.state.device.connection_type,
             "x-fb-connection-type": self.state.device.connection_type,

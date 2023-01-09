@@ -20,6 +20,7 @@ import io
 import json
 import struct
 import time
+import uuid
 
 from Crypto.Cipher import AES, PKCS1_v1_5
 from Crypto.PublicKey import RSA
@@ -30,6 +31,19 @@ from .base import BaseAndroidAPI
 
 
 class LoginAPI(BaseAndroidAPI):
+    async def get_mobile_config(self) -> None:
+        req = {
+            "bool_opt_policy": "0",
+            "mobileconfigsessionless": "",
+            "api_version": "3",
+            "unit_type": "1",
+            "query_hash": "dae17f1d3276207ebfe78f7a67cc9a04d4b88ff8c88dfc17e148fafb3f655b8e",
+            "device_id": self.state.device.id,
+            "fetch_type": "ASYNC_FULL",
+            "family_device_id": self.state.device.fdid.upper(),
+        }
+        await self.std_http_post("/api/v1/launcher/mobileconfig/", data=req)
+
     async def login(
         self,
         username: str,
