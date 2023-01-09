@@ -54,7 +54,7 @@ class MatrixHandler(BaseMatrixHandler):
 
     async def check_versions(self) -> None:
         await super().check_versions()
-        if self.config["bridge.backfill.enable"] and not (
+        if self.config["bridge.backfill.msc2716"] and not (
             support := self.versions.supports("org.matrix.msc2716")
         ):
             self.log.fatal(
