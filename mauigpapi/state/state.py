@@ -14,7 +14,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from typing import Optional
-from uuid import UUID
+from uuid import uuid4
 import random
 import time
 
@@ -37,25 +37,25 @@ class AndroidState(SerializableAttrs):
     session: AndroidSession = field(factory=lambda: AndroidSession())
     application: AndroidApplication = field(factory=lambda: AndroidApplication())
     experiments: AndroidExperiments = field(factory=lambda: AndroidExperiments(), hidden=True)
-    client_session_id_lifetime: int = 1_200_000
-    pigeon_session_id_lifetime: int = 1_200_000
     challenge: Optional[ChallengeStateResponse] = None
     challenge_context: Optional[ChallengeContext] = None
     _challenge_path: Optional[str] = field(default=None, json="challenge_path")
     cookies: Cookies = field(factory=lambda: Cookies())
     login_2fa_username: Optional[str] = field(default=None, hidden=True)
+    _pigeon_session_id: Optional[str] = field(default=None, hidden=True)
 
     def __attrs_post_init__(self) -> None:
         if self.application.APP_VERSION_CODE != AndroidApplication().APP_VERSION_CODE:
             self.application = AndroidApplication()
 
     @property
-    def client_session_id(self) -> str:
-        return str(self._gen_temp_uuid("clientSessionId", self.client_session_id_lifetime))
-
-    @property
     def pigeon_session_id(self) -> str:
-        return str(self._gen_temp_uuid("pigeonSessionId", self.pigeon_session_id_lifetime))
+        if not self._pigeon_session_id:
+            self._pigeon_session_id = str(uuid4())
+        return self._pigeon_session_id
+
+    def reset_pigeon_session_id(self) -> None:
+        self._pigeon_session_id = None
 
     @property
     def user_agent(self) -> str:
@@ -86,7 +86,3 @@ class AndroidState(SerializableAttrs):
     @staticmethod
     def gen_client_context() -> str:
         return str((int(time.time() * 1000) << 22) + random.randint(10000, 5000000))
-
-    def _gen_temp_uuid(self, seed: str, lifetime: int) -> UUID:
-        rand = random.Random(f"{seed}{self.device.id}{round(time.time() * 1000 / lifetime)}")
-        return UUID(int=rand.getrandbits(128), version=4)

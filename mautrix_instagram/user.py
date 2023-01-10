@@ -462,6 +462,7 @@ class User(DBUser, BaseUser):
         self._is_refreshing = True
         try:
             await self.stop_listen()
+            self.state.reset_pigeon_session_id()
             if resync:
                 retry_count = 0
                 minutes = 1
@@ -639,6 +640,8 @@ class User(DBUser, BaseUser):
         await self.run_with_sync_lock(partial(self._sync, increment_total_backfilled_portals))
 
     async def _sync(self, increment_total_backfilled_portals: bool = False) -> None:
+        if not self._listen_task:
+            self.state.reset_pigeon_session_id()
         sleep_minutes = 2
         errors = 0
         while True:

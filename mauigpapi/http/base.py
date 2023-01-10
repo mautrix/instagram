@@ -104,7 +104,7 @@ class BaseAndroidAPI:
             "x-ig-app-locale": self.state.device.language,
             "x-ig-device-locale": self.state.device.language,
             "x-ig-mapped-locale": self.state.device.language,
-            "x-pigeon-session-id": self.state.pigeon_session_id,
+            "x-pigeon-session-id": f"UFS-{self.state.pigeon_session_id}-0",
             "x-pigeon-rawclienttime": str(round(time.time(), 3)),
             "x-ig-connection-speed": f"{random.randint(1000, 3700)}kbps",
             "x-ig-bandwidth-speed-kbps": "-1.000",
