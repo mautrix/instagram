@@ -1112,9 +1112,7 @@ class User(DBUser, BaseUser):
         is_typing = evt.value.activity_status != TypingStatus.OFF
         if puppet.pk == self.igpk:
             self.remote_typing_status = TypingStatus.TEXT if is_typing else TypingStatus.OFF
-        await puppet.intent_for(portal).set_typing(
-            portal.mxid, is_typing=is_typing, timeout=evt.value.ttl
-        )
+        await puppet.intent_for(portal).set_typing(portal.mxid, timeout=evt.value.ttl)
 
     # endregion
     # region Database getters

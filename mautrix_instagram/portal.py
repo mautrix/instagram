@@ -299,7 +299,6 @@ class Portal(DBPortal, BasePortal):
                 status.status = MessageStatus.RETRIABLE
         else:
             status.status = MessageStatus.SUCCESS
-        status.fill_legacy_booleans()
 
         await intent.send_message_event(
             room_id=self.mxid,
@@ -1491,7 +1490,7 @@ class Portal(DBPortal, BasePortal):
                     await self.enqueue_immediate_backfill(source, 0)
 
         intent = sender.intent_for(self)
-        asyncio.create_task(intent.set_typing(self.mxid, is_typing=False))
+        asyncio.create_task(intent.set_typing(self.mxid, timeout=0))
         event_ids = []
         for event_type, content in await self.convert_instagram_item(source, sender, item):
             event_ids.append(
