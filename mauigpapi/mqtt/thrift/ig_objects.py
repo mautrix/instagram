@@ -44,14 +44,14 @@ class RealtimeClientInfo:
     app_id: int = field(TType.I64)
     override_nectar_logging: bool = None
     connect_token_hash: str = None
-    region_preference: str
+    region_preference: str = None
     device_secret: str
     client_stack: int = field(TType.BYTE)
     fbns_connection_key: int = field(TType.I64, default=None)
     fbns_connection_secret: str = None
     fbns_device_id: str = None
     fbns_device_secret: str = None
-    another_unknown: int = field(TType.I64, default=None)
+    luid: int = field(TType.I64, default=None)
 
 
 @autospec
@@ -64,7 +64,7 @@ class RealtimeConfig:
     password: str
     get_diffs_request: List[str] = None
     zero_rating_token_hash: str = None
-    app_specific_info: Dict[str, str]
+    app_specific_info: Dict[str, str] = None
 
     def to_thrift(self) -> bytes:
         buf = ThriftWriter()

@@ -262,7 +262,6 @@ class User(DBUser, BaseUser):
 
         self.mqtt = AndroidMQTT(
             self.state,
-            loop=self.loop,
             log=self.ig_base_log.getChild("mqtt").getChild(self.mxid),
             proxy_handler=self.proxy_handler,
         )

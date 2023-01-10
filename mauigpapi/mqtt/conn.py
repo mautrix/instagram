@@ -104,7 +104,6 @@ class AndroidMQTT:
     def __init__(
         self,
         state: AndroidState,
-        loop: asyncio.AbstractEventLoop | None = None,
         log: TraceLogger | None = None,
         proxy_handler: ProxyHandler | None = None,
     ) -> None:
@@ -123,7 +122,7 @@ class AndroidMQTT:
         self._event_dispatcher_task = None
         self._outgoing_events = asyncio.Queue()
         self.log = log or logging.getLogger("mauigpapi.mqtt")
-        self._loop = loop or asyncio.get_event_loop()
+        self._loop = asyncio.get_running_loop()
         self.state = state
         self._client = MQTToTClient(
             client_id=self._form_client_id(),
@@ -207,8 +206,6 @@ class AndroidMQTT:
         ]
         subscribe_topic_ids = [int(topic.encoded) for topic in subscribe_topics]
         password = f"authorization={self.state.session.authorization}"
-        # if not self.state.session.authorization:
-        #     password = f"sessionid={self.state.cookies['sessionid']}"
         cfg = RealtimeConfig(
             client_identifier=self.state.device.phone_id[:20],
             client_info=RealtimeClientInfo(
@@ -222,19 +219,19 @@ class AndroidMQTT:
                 device_id=self.state.device.phone_id,
                 is_initially_foreground=False,
                 network_type=1,
-                network_subtype=0,
+                network_subtype=-1,
                 client_mqtt_session_id=int(time.time() * 1000) & 0xFFFFFFFF,
                 subscribe_topics=subscribe_topic_ids,
                 client_type="cookie_auth",
                 app_id=567067343352427,
-                region_preference=self.state.session.region_hint or "LLA",
+                # region_preference=self.state.session.region_hint or "LLA",
                 device_secret="",
                 client_stack=3,
             ),
             password=password,
             app_specific_info={
+                "capabilities": self.state.application.CAPABILITIES,
                 "app_version": self.state.application.APP_VERSION,
-                "X-IG-Capabilities": self.state.application.CAPABILITIES,
                 "everclear_subscriptions": json.dumps(everclear_subscriptions),
                 "User-Agent": self.state.user_agent,
                 "Accept-Language": self.state.device.language.replace("_", "-"),
