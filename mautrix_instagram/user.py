@@ -551,6 +551,9 @@ class User(DBUser, BaseUser):
         else:
             await portal.update_matrix_room(self, thread)
 
+        if not self.config["bridge.backfill.enable_initial"]:
+            return True
+
         last_message = await DBMessage.get_last(portal.mxid)
         cursor = thread.oldest_cursor
         if last_message:

@@ -138,15 +138,10 @@ bridge:
     federate_rooms: true
     # Settings for backfilling messages from Instagram.
     backfill:
-        # Whether to enable backfilling at all.
-        #
-        # This requires a server with MSC2716 support, which is currently an
-        # experimental feature in synapse. It can be enabled by setting
-        # experimental_features -> msc2716_enabled to true in homeserver.yaml.
-        #
-        # Note that prior to Synapse 1.49, there were some bugs with the
-        # implementation, especially if using event persistence workers. There
-        # are also still some issues in Synapse's federation implementation.
+        # Enable initial backfill (~10 messages after creating portal)?
+        enable_initial: true
+        # Enable backfill queue? This is used for backfilling additional threads after the initial sync,
+        # and when MSC2716 is enabled, to backfill message history going backwards.
         enable: false
         # Use MSC2716 for backfilling? If this is disabled, backfilling only happens when syncing threads,
         # and the incremental settings below don't apply.

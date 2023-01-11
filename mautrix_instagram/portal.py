@@ -1485,9 +1485,8 @@ class Portal(DBPortal, BasePortal):
                 # Failed to create
                 return
 
-            if self.config["bridge.backfill.enable"]:
-                if self.config["bridge.backfill.msc2716"]:
-                    await self.enqueue_immediate_backfill(source, 0)
+            if self.config["bridge.backfill.enable"] and self.config["bridge.backfill.msc2716"]:
+                await self.enqueue_immediate_backfill(source, 0)
 
         intent = sender.intent_for(self)
         asyncio.create_task(intent.set_typing(self.mxid, timeout=0))

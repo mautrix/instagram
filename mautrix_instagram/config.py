@@ -60,6 +60,7 @@ class Config(BaseBridgeConfig):
         copy("bridge.double_puppet_allow_discovery")
         copy("bridge.login_shared_secret_map")
         copy("bridge.federate_rooms")
+        copy("bridge.backfill.enable_initial")
         copy("bridge.backfill.enable")
         copy("bridge.backfill.msc2716")
         copy("bridge.backfill.double_puppet_backfill")
