@@ -1088,23 +1088,28 @@ class Portal(DBPortal, BasePortal):
             self.log.warning(f"Item {item.item_id} has multiple xma media share parts")
         if media.xma_layout_type not in (0, 4):
             self.log.warning(f"Unrecognized xma layout type {media.xma_layout_type}")
-        _, content = await self._convert_instagram_media(source, intent, item)
+        if media.preview_url:
+            _, content = await self._convert_instagram_media(source, intent, item)
+        else:
+            content = None
 
         # Post shares (layout type 0): media title text
         # Reel shares/replies/reactions (layout type 4): item text
         caption_text = media.title_text or item.text or ""
+        post_caption_text = None
         if media.subtitle_text:
             caption_text = (
                 f"{caption_text}\n{media.subtitle_text}" if caption_text else media.subtitle_text
             )
-        if media.target_url:
-            caption_body = (
-                f"> {caption_text}\n\n{media.target_url}" if caption_text else media.target_url
-            )
-        else:
-            caption_body = f"> {caption_text}"
+        header_text = media.header_title_text or ""
+        # Note replies have title_text for sender username, caption_body_text for the original note
+        # and item.text for the reply itself.
+        if not header_text and media.caption_body_text:
+            header_text = caption_text
+            caption_text = media.caption_body_text
+            post_caption_text = item.text
         escaped_caption_text = html.escape(caption_text).replace("\n", "<br>")
-        escaped_header_text = html.escape(media.header_title_text or "")
+        escaped_header_text = html.escape(header_text)
         # For post shares, the media title starts with the username, which is also the header.
         # That part should be bolded.
         if (
@@ -1137,12 +1142,21 @@ class Portal(DBPortal, BasePortal):
             f"<blockquote>{escaped_caption_text}</blockquote>" if escaped_caption_text else ""
         )
         if media.target_url:
+            caption_body = (
+                f"> {caption_text}\n\n{media.target_url}" if caption_text else media.target_url
+            )
+        else:
+            caption_body = f"> {caption_text}"
+        if media.target_url:
             target_url_pretty = str(URL(media.target_url).with_query(None)).replace(
                 "https://www.", ""
             )
             caption_formatted_body += (
                 f'<p><a href="{media.target_url}">{target_url_pretty}</a></p>'
             )
+        if post_caption_text:
+            caption_formatted_body += f"<p>{html.escape(post_caption_text)}</p>"
+            caption_body += f"\n\n{post_caption_text}"
         # Add auxiliary text as prefix for caption
         if item.auxiliary_text:
             caption_formatted_body = (
@@ -1155,11 +1169,13 @@ class Portal(DBPortal, BasePortal):
             formatted_body=caption_formatted_body,
             format=Format.HTML,
         )
-        if media.target_url:
+        if content and media.target_url:
             content.external_url = media.target_url
             caption.external_url = media.target_url
 
-        if self.bridge.config["bridge.caption_in_message"]:
+        if content is None:
+            return [(EventType.ROOM_MESSAGE, caption)]
+        elif self.bridge.config["bridge.caption_in_message"]:
             if isinstance(content, TextMessageEventContent):
                 content.ensure_has_html()
                 caption.ensure_has_html()

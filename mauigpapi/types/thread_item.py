@@ -503,16 +503,18 @@ class DirectMediaShareItem(SerializableAttrs):
 class XMAMediaShareItem(SerializableAttrs):
     xma_layout_type: int
 
-    target_url: str
-
     title_text: str
-    header_title_text: str
-    subtitle_text: Optional[str]
 
-    preview_url: str
-    preview_url_mime_type: str
-    preview_width: int
-    preview_height: int
+    target_url: Optional[str] = None
+
+    header_title_text: Optional[str] = None
+    subtitle_text: Optional[str] = None
+    caption_body_text: Optional[str] = None
+
+    preview_url: Optional[str] = None
+    preview_url_mime_type: Optional[str] = None
+    preview_width: Optional[int] = None
+    preview_height: Optional[int] = None
 
 
 @dataclass
