@@ -68,9 +68,6 @@ setuptools.setup(
         "mautrix_instagram": [
             "example-config.yaml",
         ],
-        "mauigpapi.state": [
-            "devices.json",
-        ],
     },
     data_files=[
         (".", ["mautrix_instagram/example-config.yaml"]),

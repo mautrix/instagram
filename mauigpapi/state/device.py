@@ -24,8 +24,6 @@ import attr
 
 from mautrix.types import SerializableAttrs
 
-# descriptors = json.loads(pkgutil.get_data("mauigpapi.state", "devices.json"))
-
 
 @dataclass
 class AndroidDevice(SerializableAttrs):
