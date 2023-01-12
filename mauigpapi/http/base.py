@@ -143,7 +143,7 @@ class BaseAndroidAPI:
 
     def setup_http(self, cookie_jar: CookieJar) -> None:
         connector = None
-        http_proxy = self.proxy_handler.get_proxy_url()
+        http_proxy = self.proxy_handler.get_proxy_url() if self.proxy_handler else None
         if http_proxy:
             if ProxyConnector:
                 connector = ProxyConnector.from_url(http_proxy)

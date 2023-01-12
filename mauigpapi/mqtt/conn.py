@@ -149,7 +149,7 @@ class AndroidMQTT:
         self._client.on_socket_unregister_write = self._on_socket_unregister_write
 
     def setup_proxy(self):
-        http_proxy = self.proxy_handler.get_proxy_url()
+        http_proxy = self.proxy_handler.get_proxy_url() if self.proxy_handler else None
         if http_proxy:
             if not socks:
                 self.log.warning("http_proxy is set, but pysocks is not installed")
@@ -610,7 +610,7 @@ class AndroidMQTT:
                 elif rc == pmc.MQTT_ERR_NO_CONN:
                     if connection_retries > retry_limit:
                         raise MQTTNotConnected(f"Connection failed {connection_retries} times")
-                    if self.proxy_handler.update_proxy_url():
+                    if self.proxy_handler and self.proxy_handler.update_proxy_url():
                         self.setup_proxy()
                         await self._dispatch(ProxyUpdate())
                     sleep = connection_retries * 2
