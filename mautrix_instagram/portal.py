@@ -32,7 +32,7 @@ from yarl import URL
 import asyncpg
 import magic
 
-from mauigpapi.errors import IGRateLimitError
+from mauigpapi.errors import IGRateLimitError, IGResponseError
 from mauigpapi.types import (
     AnimatedMediaItem,
     CommandResponse,
@@ -418,6 +418,28 @@ class Portal(DBPortal, BasePortal):
             allow_full_aspect_ratio="true",
         )
 
+    async def _needs_conversion(
+        self,
+        data: bytes,
+        mime_type: str,
+    ) -> bool:
+        if mime_type != "video/mp4":
+            self.log.info(f"Will convert: mime_type is {mime_type}")
+            return True
+        # Comment this out for now, as it seems like retrying on 500
+        # might be sufficient to fix the video upload problems
+        # (but keep it handy in case it turns out videos are still failing)
+        # else:
+        #     probe = await ffmpeg.probe_bytes(data, input_mime=mime_type, logger=self.log)
+        #     is_there_correct_stream = any(
+        #         "pix_fmt" in stream and stream["pix_fmt"] == "yuv420p"
+        #         for stream in probe["streams"]
+        #     )
+        #     if not is_there_correct_stream:
+        #         self.log.info(f"Will convert: no yuv420p stream found")
+        #         return True
+        #     return False
+
     async def _handle_matrix_video(
         self,
         sender: u.User,
@@ -429,26 +451,57 @@ class Portal(DBPortal, BasePortal):
         width: int | None = None,
         height: int | None = None,
     ) -> CommandResponse:
-        if mime_type != "video/mp4":
+        if await self._needs_conversion(data, mime_type):
             data = await ffmpeg.convert_bytes(
                 data,
                 output_extension=".mp4",
-                output_args=("-c:v", "libx264", "-c:a", "aac"),
+                output_args=(
+                    "-c:v",
+                    "libx264",
+                    "-pix_fmt",
+                    "yuv420p",
+                    "-c:a",
+                    "aac",
+                    "-movflags",
+                    "+faststart",
+                ),
                 input_mime=mime_type,
+                logger=self.log,
             )
+            self.log.info(f"Uploaded video converted")
 
         self.log.trace(f"Uploading video from {event_id}")
         _, upload_id = await sender.client.upload_mp4(
             data, duration_ms=duration, width=width, height=height
         )
         self.log.trace(f"Broadcasting uploaded video with request ID {request_id}")
-        return await sender.client.broadcast(
-            self.thread_id,
-            ThreadItemType.CONFIGURE_VIDEO,
-            client_context=request_id,
-            upload_id=upload_id,
-            video_result="",
-        )
+        retry_num = 0
+        max_retries = 4
+        while True:
+            try:
+                return await sender.client.broadcast(
+                    self.thread_id,
+                    ThreadItemType.CONFIGURE_VIDEO,
+                    client_context=request_id,
+                    upload_id=upload_id,
+                    video_result="",
+                )
+            except IGResponseError as e:
+                if e.response.status == 500 and retry_num < max_retries:
+                    self.log.warning("Received 500 on broadcast, retrying in 5 seconds")
+                    sender.send_remote_checkpoint(
+                        status=MessageSendCheckpointStatus.WILL_RETRY,
+                        event_id=event_id,
+                        room_id=self.mxid,
+                        event_type=EventType.ROOM_MESSAGE,
+                        message_type=MessageType.VIDEO,
+                        error=e,
+                        retry_num=retry_num,
+                    )
+                    await asyncio.sleep(5)
+                    retry_num += 1
+                else:
+                    raise e
 
     async def _handle_matrix_audio(
         self,
