@@ -34,7 +34,7 @@ from .session import AndroidSession
 class AndroidState(SerializableAttrs):
     device: AndroidDevice = field(factory=lambda: AndroidDevice())
     session: AndroidSession = field(factory=lambda: AndroidSession())
-    application: AndroidApplication = field(factory=lambda: AndroidApplication())
+    application: AndroidApplication = field(factory=lambda: AndroidApplication(), hidden=True)
     challenge: Optional[ChallengeStateResponse] = None
     challenge_context: Optional[ChallengeContext] = None
     _challenge_path: Optional[str] = field(default=None, json="challenge_path")
