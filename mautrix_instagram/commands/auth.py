@@ -15,8 +15,10 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from __future__ import annotations
 
+import base64
 import hashlib
 import hmac
+import zlib
 
 from mauigpapi.errors import (
     IGBad2FACodeError,
@@ -30,6 +32,7 @@ from mauigpapi.http import AndroidAPI
 from mauigpapi.state import AndroidState
 from mauigpapi.types import BaseResponseUser
 from mautrix.bridge.commands import HelpSection, command_handler
+from mautrix.types import EventID
 
 from .. import user as u
 from .typehint import CommandEvent
@@ -59,7 +62,7 @@ async def get_login_state(user: u.User, seed: str) -> tuple[AndroidAPI, AndroidS
     needs_auth=False,
     management_only=True,
     help_section=SECTION_AUTH,
-    help_text="Log in to Instagram",
+    help_text="Log into Instagram",
     help_args="<_username_> <_password_>",
 )
 async def login(evt: CommandEvent) -> None:
@@ -221,3 +224,27 @@ async def _post_login(evt: CommandEvent, state: AndroidState, user: BaseResponse
 async def logout(evt: CommandEvent) -> None:
     await evt.sender.logout()
     await evt.reply("Successfully logged out")
+
+
+@command_handler(
+    needs_auth=False,
+    management_only=True,
+    help_section=SECTION_AUTH,
+    help_text="Log into Instagram with a pre-generated session blob",
+    help_args="<_blob_>",
+)
+async def login_blob(evt: CommandEvent) -> EventID:
+    if await evt.sender.is_logged_in():
+        return await evt.reply("You're already logged in")
+    elif len(evt.args) < 1:
+        return await evt.reply("**Usage:** `$cmdprefix+sp login-blob <blob>`")
+    await evt.redact()
+    try:
+        state = AndroidState.parse_json(zlib.decompress(base64.b64decode("".join(evt.args))))
+    except Exception:
+        evt.log.exception(f"{evt.sender} provided an invalid login blob")
+        return await evt.reply("Invalid blob")
+    evt.sender.state = state
+    await evt.reply("Connecting...")
+    await evt.sender.try_connect()
+    await evt.reply("Maybe connected now, try pinging?")
