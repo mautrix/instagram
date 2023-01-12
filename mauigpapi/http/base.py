@@ -106,22 +106,14 @@ class BaseAndroidAPI:
             "x-ig-mapped-locale": self.state.device.language,
             "x-pigeon-session-id": f"UFS-{self.state.pigeon_session_id}-0",
             "x-pigeon-rawclienttime": str(round(time.time(), 3)),
-            "x-ig-connection-speed": f"{random.randint(1000, 3700)}kbps",
             "x-ig-bandwidth-speed-kbps": "-1.000",
             "x-ig-bandwidth-totalbytes-b": "0",
             "x-ig-bandwidth-totaltime-ms": "0",
-            "x-ig-eu-dc-enabled": (
-                str(self.state.session.eu_dc_enabled).lower()
-                if self.state.session.eu_dc_enabled is not None
-                else None
-            ),
             "x-ig-app-startup-country": self.state.device.language.split("_")[1],
             "x-bloks-version-id": self.state.application.BLOKS_VERSION_ID,
             "x-ig-www-claim": self.state.session.ig_www_claim or "0",
             "x-bloks-is-layout-rtl": str(self.state.device.is_layout_rtl).lower(),
-            "x-bloks-is-panorama-enabled": "true",
             "x-ig-timezone-offset": self.state.device.timezone_offset,
-            # "x-messenger": "1",
             "x-ig-device-id": self.state.device.uuid,
             "x-ig-family-device-id": self.state.device.fdid,
             "x-ig-android-id": self.state.device.id,
