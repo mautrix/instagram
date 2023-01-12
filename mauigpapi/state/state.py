@@ -27,7 +27,6 @@ from ..types import ChallengeContext, ChallengeStateResponse
 from .application import AndroidApplication
 from .cookies import Cookies
 from .device import AndroidDevice
-from .experiments import AndroidExperiments
 from .session import AndroidSession
 
 
@@ -36,7 +35,6 @@ class AndroidState(SerializableAttrs):
     device: AndroidDevice = field(factory=lambda: AndroidDevice())
     session: AndroidSession = field(factory=lambda: AndroidSession())
     application: AndroidApplication = field(factory=lambda: AndroidApplication())
-    experiments: AndroidExperiments = field(factory=lambda: AndroidExperiments(), hidden=True)
     challenge: Optional[ChallengeStateResponse] = None
     challenge_context: Optional[ChallengeContext] = None
     _challenge_path: Optional[str] = field(default=None, json="challenge_path")
