@@ -475,11 +475,11 @@ class Portal(DBPortal, BasePortal):
             data, duration_ms=duration, width=width, height=height
         )
         self.log.trace(f"Broadcasting uploaded video with request ID {request_id}")
-        broadcast_response = None
-        retries_left = 4
-        while broadcast_response is None:
+        retry_num = 0
+        max_retries = 4
+        while True:
             try:
-                broadcast_response = await sender.client.broadcast(
+                return await sender.client.broadcast(
                     self.thread_id,
                     ThreadItemType.CONFIGURE_VIDEO,
                     client_context=request_id,
@@ -487,16 +487,21 @@ class Portal(DBPortal, BasePortal):
                     video_result="",
                 )
             except IGResponseError as e:
-                if e.response.status == 500 and retries_left > 0:
-                    self.log.warn(
-                        f"Received 500 on broadcast - retrying in 5 sec "
-                        f"({retries_left} retries left)"
+                if e.response.status == 500 and retry_num < max_retries:
+                    self.log.warning("Received 500 on broadcast, retrying in 5 seconds")
+                    sender.send_remote_checkpoint(
+                        status=MessageSendCheckpointStatus.WILL_RETRY,
+                        event_id=event_id,
+                        room_id=self.mxid,
+                        event_type=EventType.ROOM_MESSAGE,
+                        message_type=MessageType.VIDEO,
+                        error=e,
+                        retry_num=retry_num,
                     )
                     await asyncio.sleep(5)
-                    retries_left -= 1
+                    retry_num += 1
                 else:
                     raise e
-        return broadcast_response
 
     async def _handle_matrix_audio(
         self,
