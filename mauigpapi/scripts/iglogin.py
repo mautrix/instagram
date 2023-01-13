@@ -38,10 +38,11 @@ async def main():
                         if twofactor == "r":
                             if inf.sms_two_factor_on:
                                 print("Re-requesting SMS code...")
-                                await api.send_two_factor_login_sms(
+                                resp = await api.send_two_factor_login_sms(
                                     username, identifier=inf.two_factor_identifier
                                 )
                                 print("SMS code re-requested")
+                                inf = resp.two_factor_info
                                 inf.totp_two_factor_on = False
                             else:
                                 print("You don't have SMS 2FA on 🤔")
