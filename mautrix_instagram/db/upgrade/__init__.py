@@ -30,4 +30,5 @@ from . import (
     v10_portal_infinite_backfill,
     v11_per_user_thread_sync_status,
     v12_portal_thread_image_id,
+    v13_fix_portal_thread_image_id,
 )
