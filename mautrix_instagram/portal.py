@@ -1933,16 +1933,20 @@ class Portal(DBPortal, BasePortal):
 
     async def enqueue_immediate_backfill(self, source: u.User, priority: int) -> None:
         assert self.config["bridge.backfill.msc2716"]
+        max_pages = self.config["bridge.backfill.incremental.max_pages"]
+        max_total_pages = self.config["bridge.backfill.incremental.max_total_pages"]
+        if max_pages <= 0 or max_total_pages == 0:
+            return
         if not await Backfill.get(source.mxid, self.thread_id, self.receiver):
             await Backfill.new(
                 source.mxid,
                 priority,
                 self.thread_id,
                 self.receiver,
-                self.config["bridge.backfill.incremental.max_pages"],
+                max_pages,
                 self.config["bridge.backfill.incremental.page_delay"],
                 self.config["bridge.backfill.incremental.post_batch_delay"],
-                self.config["bridge.backfill.incremental.max_total_pages"],
+                max_total_pages,
             ).insert()
 
     async def backfill(self, source: u.User, backfill_request: Backfill) -> None:
