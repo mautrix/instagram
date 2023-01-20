@@ -35,6 +35,7 @@ from ..errors import (
     MQTTConnectionUnauthorized,
     MQTTNotConnected,
     MQTTNotLoggedIn,
+    MQTTReconnectionError,
 )
 from ..proxy import ProxyHandler
 from ..state import AndroidState
@@ -527,8 +528,7 @@ class AndroidMQTT:
             self.log.trace("Trying to reconnect to MQTT")
             self._client.reconnect()
         except (SocketError, OSError, pmc.WebsocketConnectionError) as e:
-            # TODO custom class
-            raise MQTTNotLoggedIn("MQTT reconnection failed") from e
+            raise MQTTReconnectionError("MQTT reconnection failed") from e
 
     def add_event_handler(
         self, evt_type: Type[T], handler: Callable[[T], Awaitable[None]]

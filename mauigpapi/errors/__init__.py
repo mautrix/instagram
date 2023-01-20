@@ -5,6 +5,7 @@ from .mqtt import (
     MQTTConnectionUnauthorized,
     MQTTNotConnected,
     MQTTNotLoggedIn,
+    MQTTReconnectionError,
 )
 from .response import (
     IG2FACodeExpiredError,

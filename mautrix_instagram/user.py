@@ -36,6 +36,7 @@ from mauigpapi.errors import (
     MQTTConnectionUnauthorized,
     MQTTNotConnected,
     MQTTNotLoggedIn,
+    MQTTReconnectionError,
 )
 from mauigpapi.mqtt import (
     Connect,
@@ -851,7 +852,22 @@ class User(DBUser, BaseUser):
         )
         self._listen_task = self.loop.create_task(task)
 
-    async def fetch_user_and_reconnect(self) -> None:
+    async def delayed_start_listen(self, sleep: int) -> None:
+        await asyncio.sleep(sleep)
+        if self.is_connected:
+            self.log.debug(
+                "Already reconnected before delay after MQTT reconnection error finished"
+            )
+        else:
+            self.log.debug("Reconnecting after MQTT connection error")
+            self.start_listen()
+
+    async def fetch_user_and_reconnect(self, sleep_first: int | None = None) -> None:
+        if sleep_first:
+            await asyncio.sleep(sleep_first)
+            if self.is_connected:
+                self.log.debug("Canceling user fetch, already reconnected")
+                return
         self.log.debug("Refetching current user after disconnection")
         errors = 0
         while True:
@@ -922,20 +938,30 @@ class User(DBUser, BaseUser):
             else:
                 self.log.warning(f"Got IrisSubscribeError {e}, refreshing...")
                 asyncio.create_task(self.refresh())
-        except (MQTTNotConnected, MQTTNotLoggedIn, MQTTConnectionUnauthorized) as e:
+        except MQTTReconnectionError as e:
             self.log.warning(
-                f"Unexpected connection error: {e}", exc_info="MQTT reconnection failed" in str(e)
+                f"Unexpected connection error: {e}, reconnecting in 1 minute", exc_info=True
             )
             await self.send_bridge_notice(
                 f"Error in listener: {e}",
                 important=True,
+                state_event=BridgeStateEvent.TRANSIENT_DISCONNECT,
+                error_code="ig-connection-error-socket",
+            )
+            self.mqtt.disconnect()
+            asyncio.create_task(self.delayed_start_listen(sleep=60))
+        except (MQTTNotConnected, MQTTNotLoggedIn, MQTTConnectionUnauthorized) as e:
+            self.log.warning(f"Unexpected connection error: {e}, checking auth and reconnecting")
+            await self.send_bridge_notice(
+                f"Error in listener: {e}",
+                important=True,
                 state_event=BridgeStateEvent.UNKNOWN_ERROR,
-                error_code="ig-connection-error",
+                error_code="ig-connection-error-maybe-auth",
             )
             self.mqtt.disconnect()
             asyncio.create_task(self.fetch_user_and_reconnect())
         except Exception as e:
-            self.log.exception("Fatal error in listener")
+            self.log.exception("Fatal error in listener, reconnecting in 5 minutes")
             await self.send_bridge_notice(
                 "Fatal error in listener (see logs for more info)",
                 state_event=BridgeStateEvent.UNKNOWN_ERROR,
@@ -944,6 +970,7 @@ class User(DBUser, BaseUser):
                 info={"python_error": str(e)},
             )
             self.mqtt.disconnect()
+            asyncio.create_task(self.fetch_user_and_reconnect(sleep_first=300))
         else:
             if not self.shutdown:
                 await self.send_bridge_notice(

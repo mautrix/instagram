@@ -24,6 +24,10 @@ class MQTTNotLoggedIn(IGMQTTError):
     pass
 
 
+class MQTTReconnectionError(IGMQTTError):
+    pass
+
+
 class MQTTNotConnected(IGMQTTError):
     pass
 
