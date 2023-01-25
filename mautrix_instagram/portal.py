@@ -2236,7 +2236,7 @@ class Portal(DBPortal, BasePortal):
                             content=reaction_event,
                             type=EventType.REACTION,
                             sender=intent.mxid,
-                            timestamp=reaction.timestamp_ms or message.timestamp_ms,
+                            timestamp=message.timestamp_ms,
                         )
                     )
 
