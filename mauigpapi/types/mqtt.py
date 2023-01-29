@@ -132,7 +132,7 @@ class ThreadRemoveEvent(SerializableAttrs):
 
     path: str
     op: Operation
-    data: Any
+    data: Any = None
 
 
 @dataclass(kw_only=True)
