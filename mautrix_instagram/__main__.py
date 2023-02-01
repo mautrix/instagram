@@ -66,6 +66,7 @@ class InstagramBridge(Bridge):
             shared_secret=cfg["shared_secret"],
             device_seed=self.config["instagram.device_seed"],
             segment_key=cfg["segment_key"],
+            segment_user_id=cfg["segment_user_id"],
         )
         self.az.app.add_subapp(cfg["prefix"], self.provisioning_api.app)
 

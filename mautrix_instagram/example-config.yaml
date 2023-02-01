@@ -302,6 +302,8 @@ bridge:
         shared_secret: generate
         # Segment API key to enable analytics tracking for web server endpoints. Set to null to disable.
         segment_key: null
+        # Optional user_id to use when sending Segment events. If null, defaults to using mxID.
+        segment_user_id: null
 
     # The prefix for commands. Only required in non-management rooms.
     command_prefix: "!ig"
