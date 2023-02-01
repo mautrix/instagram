@@ -565,6 +565,15 @@ class AndroidMQTT:
         finally:
             self.log.debug(f"Dispatcher loop {loop_id} stopped")
 
+    async def update_proxy_and_sleep(self, sleep):
+        if self.proxy_handler and self.proxy_handler.update_proxy_url():
+            self.setup_proxy()
+            await self._dispatch(ProxyUpdate())
+        await self._dispatch(
+            Disconnect(reason=f"MQTT Error: no connection, retrying in {sleep} seconds")
+        )
+        await asyncio.sleep(sleep)
+
     async def listen(
         self,
         graphql_subs: set[str] | None = None,
@@ -610,23 +619,19 @@ class AndroidMQTT:
                 elif rc == pmc.MQTT_ERR_NO_CONN:
                     if connection_retries > retry_limit:
                         raise MQTTNotConnected(f"Connection failed {connection_retries} times")
-                    if self.proxy_handler and self.proxy_handler.update_proxy_url():
-                        self.setup_proxy()
-                        await self._dispatch(ProxyUpdate())
-                    sleep = connection_retries * 2
-                    await self._dispatch(
-                        Disconnect(
-                            reason="MQTT Error: no connection, retrying "
-                            f"in {connection_retries} seconds"
-                        )
-                    )
-                    await asyncio.sleep(sleep)
+                    await self.update_proxy_and_sleep(sleep=connection_retries * 2)
                 else:
                     err = pmc.error_string(rc)
                     self.log.error("MQTT Error: %s", err)
                     await self._dispatch(Disconnect(reason=f"MQTT Error: {err}, retrying"))
 
-                await self._reconnect()
+                try:
+                    await self._reconnect()
+                except MQTTReconnectionError:
+                    if connection_retries > retry_limit:
+                        raise
+                    await self.update_proxy_and_sleep(sleep=connection_retries * 2)
+
                 connection_retries += 1
             else:
                 connection_retries = 0
