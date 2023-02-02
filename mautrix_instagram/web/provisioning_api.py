@@ -760,6 +760,24 @@ class ProvisioningAPI:
                 status=403,
                 headers=self._acao_headers,
             )
+        except IGRateLimitError as e:
+            track(user, "$login_failed", {"error": "fb-ratelimit"})
+            try:
+                message = e.body["message"]
+            except (KeyError, TypeError, AttributeError):
+                message = "Please wait a few minutes before you try again."
+            self.log.debug("%s got a ratelimit error trying to post FB login token", user.mxid)
+            self.log.debug(
+                "Login error body: %s",
+                e.body.serialize() if isinstance(e.body, Serializable) else e.body,
+            )
+            return web.json_response(
+                data={
+                    "status": "fb-ratelimit",
+                    "error": message,
+                },
+                status=429,
+            )
         except IGLoginTwoFactorRequiredError as e:
             return self._2fa_required(user, "<facebook credentials>", state, e)
         except IGCheckpointError as e:
