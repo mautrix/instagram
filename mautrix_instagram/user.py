@@ -61,6 +61,7 @@ from mauigpapi.types.direct_inbox import DMInbox, DMInboxResponse
 from mautrix.appservice import AppService
 from mautrix.bridge import BaseUser, async_getter_lock
 from mautrix.types import EventID, MessageType, RoomID, TextMessageEventContent, UserID
+from mautrix.util import background_task
 from mautrix.util.bridge_state import BridgeState, BridgeStateEvent
 from mautrix.util.logging import TraceLogger
 from mautrix.util.opt_prometheus import Gauge, Summary, async_time
@@ -937,7 +938,7 @@ class User(DBUser, BaseUser):
                 )
             else:
                 self.log.warning(f"Got IrisSubscribeError {e}, refreshing...")
-                asyncio.create_task(self.refresh())
+                background_task.create(self.refresh())
         except MQTTReconnectionError as e:
             self.log.warning(
                 f"Unexpected connection error: {e}, reconnecting in 1 minute", exc_info=True
@@ -949,7 +950,7 @@ class User(DBUser, BaseUser):
                 error_code="ig-connection-error-socket",
             )
             self.mqtt.disconnect()
-            asyncio.create_task(self.delayed_start_listen(sleep=60))
+            background_task.create(self.delayed_start_listen(sleep=60))
         except (MQTTNotConnected, MQTTNotLoggedIn, MQTTConnectionUnauthorized) as e:
             self.log.warning(f"Unexpected connection error: {e}, checking auth and reconnecting")
             await self.send_bridge_notice(
@@ -959,7 +960,7 @@ class User(DBUser, BaseUser):
                 error_code="ig-connection-error-maybe-auth",
             )
             self.mqtt.disconnect()
-            asyncio.create_task(self.fetch_user_and_reconnect())
+            background_task.create(self.fetch_user_and_reconnect())
         except Exception as e:
             self.log.exception("Fatal error in listener, reconnecting in 5 minutes")
             await self.send_bridge_notice(
@@ -970,7 +971,7 @@ class User(DBUser, BaseUser):
                 info={"python_error": str(e)},
             )
             self.mqtt.disconnect()
-            asyncio.create_task(self.fetch_user_and_reconnect(sleep_first=300))
+            background_task.create(self.fetch_user_and_reconnect(sleep_first=300))
         else:
             if not self.shutdown:
                 await self.send_bridge_notice(

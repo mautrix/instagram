@@ -85,7 +85,7 @@ from mautrix.types import (
     UserID,
     VideoInfo,
 )
-from mautrix.util import ffmpeg
+from mautrix.util import background_task, ffmpeg
 from mautrix.util.message_send_checkpoint import MessageSendCheckpointStatus
 
 from . import matrix as m, puppet as p, user as u
@@ -240,7 +240,7 @@ class Portal(DBPortal, BasePortal):
             event_type=event_type,
             message_type=msgtype,
         )
-        asyncio.create_task(self._send_message_status(event_id, err=None))
+        background_task.create(self._send_message_status(event_id, err=None))
         await self._send_delivery_receipt(event_id)
 
     async def _send_bridge_error(
@@ -274,7 +274,7 @@ class Portal(DBPortal, BasePortal):
                     body=f"\u26a0 Your {event_type_str} {error_type} bridged: {str(err)}",
                 ),
             )
-        asyncio.create_task(self._send_message_status(event_id, err))
+        background_task.create(self._send_message_status(event_id, err))
 
     async def _send_message_status(self, event_id: EventID, err: Exception | None) -> None:
         if not self.config["bridge.message_status_events"]:
@@ -1558,7 +1558,7 @@ class Portal(DBPortal, BasePortal):
                 await self.enqueue_immediate_backfill(source, 0)
 
         intent = sender.intent_for(self)
-        asyncio.create_task(intent.set_typing(self.mxid, timeout=0))
+        background_task.create(intent.set_typing(self.mxid, timeout=0))
         event_ids = []
         for event_type, content in await self.convert_instagram_item(source, sender, item):
             event_ids.append(

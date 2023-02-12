@@ -28,6 +28,7 @@ import zlib
 from yarl import URL
 import paho.mqtt.client as pmc
 
+from mautrix.util import background_task
 from mautrix.util.logging import TraceLogger
 
 from ..errors import (
@@ -402,7 +403,7 @@ class AndroidMQTT:
                 self.log.trace(f"Got new seq_id: {parsed_item.seq_id}")
                 self._iris_seq_id = parsed_item.seq_id
                 self._iris_snapshot_at_ms = int(time.time() * 1000)
-                asyncio.create_task(
+                background_task.create(
                     self._dispatch(NewSequenceID(self._iris_seq_id, self._iris_snapshot_at_ms))
                 )
             for part in parsed_item.data:
@@ -698,7 +699,7 @@ class AndroidMQTT:
             self.log.info(f"Latest sequence ID is {latest_seq_id}, catching up from {seq_id}")
             self._iris_seq_id = latest_seq_id
             self._iris_snapshot_at_ms = resp_dict.get("subscribed_at_ms", int(time.time() * 1000))
-            asyncio.create_task(
+            background_task.create(
                 self._dispatch(NewSequenceID(self._iris_seq_id, self._iris_snapshot_at_ms))
             )
 
