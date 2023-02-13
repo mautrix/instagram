@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+from typing import Callable
 import asyncio
 import json
 import logging
 import urllib.request
 
 from aiohttp import ClientConnectionError
+
+from mautrix.util.logging import TraceLogger
 
 try:
     from aiohttp_socks import ProxyConnectionError, ProxyError, ProxyTimeoutError
@@ -71,3 +74,31 @@ class ProxyHandler:
             self.update_proxy_url()
 
         return self.current_proxy_url
+
+
+async def proxy_with_retry(
+    name: str,
+    func: Callable,
+    logger: TraceLogger,
+    proxy_handler: ProxyHandler,
+    on_proxy_change: Callable,
+    max_retries: int = 10,
+):
+    errors = 0
+
+    while True:
+        try:
+            return await func()
+        except RETRYABLE_PROXY_EXCEPTIONS as e:
+            errors += 1
+            if errors > max_retries:
+                raise
+            wait = min(errors * 10, 60)
+            logger.warning(
+                "%s while trying to %s, retrying in %d seconds",
+                e.__class__.__name__,
+                name,
+                wait,
+            )
+            if errors > 1 and proxy_handler.update_proxy_url():
+                await on_proxy_change()
