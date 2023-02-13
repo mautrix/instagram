@@ -667,7 +667,8 @@ class User(DBUser, BaseUser):
                     f"{e.__class__.__name__} while trying to sync, retrying in {wait} seconds: {e}"
                 )
                 await asyncio.sleep(wait)
-                await self._maybe_update_proxy("sync error")
+                if errors > 1:
+                    await self._maybe_update_proxy("sync error")
             except IGNotLoggedInError as e:
                 self.log.exception("Got not logged in error while syncing")
                 await self.logout(error=e)
@@ -889,7 +890,8 @@ class User(DBUser, BaseUser):
                     f"retrying in {wait} seconds: {e}"
                 )
                 await asyncio.sleep(wait)
-                await self._maybe_update_proxy("fetch_user_and_reconnect error")
+                if errors > 1:
+                    await self._maybe_update_proxy("fetch_user_and_reconnect error")
             except IGNotLoggedInError as e:
                 self.log.warning(f"Failed to reconnect to Instagram: {e}, logging out")
                 await self.logout(error=e)
