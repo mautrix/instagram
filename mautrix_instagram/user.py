@@ -22,9 +22,13 @@ import asyncio
 import logging
 import time
 
-from aiohttp import ClientConnectionError
-
-from mauigpapi import AndroidAPI, AndroidMQTT, AndroidState, ProxyHandler
+from mauigpapi import (
+    RETRYABLE_PROXY_EXCEPTIONS,
+    AndroidAPI,
+    AndroidMQTT,
+    AndroidState,
+    ProxyHandler,
+)
 from mauigpapi.errors import (
     IGChallengeError,
     IGCheckpointError,
@@ -653,14 +657,7 @@ class User(DBUser, BaseUser):
             try:
                 resp = await self.client.get_inbox()
                 break
-            except (
-                ProxyError,
-                ProxyTimeoutError,
-                ProxyConnectionError,
-                ClientConnectionError,
-                ConnectionError,
-                asyncio.TimeoutError,
-            ) as e:
+            except RETRYABLE_PROXY_EXCEPTIONS as e:
                 errors += 1
                 wait = min(errors * 10, 60)
                 self.log.warning(
@@ -875,14 +872,7 @@ class User(DBUser, BaseUser):
         while True:
             try:
                 resp = await self.client.current_user()
-            except (
-                ProxyError,
-                ProxyTimeoutError,
-                ProxyConnectionError,
-                ClientConnectionError,
-                ConnectionError,
-                asyncio.TimeoutError,
-            ) as e:
+            except RETRYABLE_PROXY_EXCEPTIONS as e:
                 errors += 1
                 wait = min(errors * 10, 60)
                 self.log.warning(
