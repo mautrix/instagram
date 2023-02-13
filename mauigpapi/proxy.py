@@ -1,8 +1,29 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import urllib.request
+
+from aiohttp import ClientConnectionError
+
+try:
+    from aiohttp_socks import ProxyConnectionError, ProxyError, ProxyTimeoutError
+except ImportError:
+
+    class ProxyError(Exception):
+        pass
+
+    ProxyConnectionError = ProxyTimeoutError = ProxyError
+
+RETRYABLE_PROXY_EXCEPTIONS = (
+    ProxyError,
+    ProxyTimeoutError,
+    ProxyConnectionError,
+    ClientConnectionError,
+    ConnectionError,
+    asyncio.TimeoutError,
+)
 
 
 class ProxyHandler:
