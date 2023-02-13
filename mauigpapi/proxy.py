@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Callable
+from typing import Awaitable, Callable, TypeVar
 import asyncio
 import json
 import logging
@@ -76,14 +76,17 @@ class ProxyHandler:
         return self.current_proxy_url
 
 
+T = TypeVar("T")
+
+
 async def proxy_with_retry(
     name: str,
-    func: Callable,
+    func: Callable[[], Awaitable[T]],
     logger: TraceLogger,
     proxy_handler: ProxyHandler,
-    on_proxy_change: Callable,
+    on_proxy_change: Callable[[], Awaitable[None]],
     max_retries: int = 10,
-):
+) -> T:
     errors = 0
 
     while True:
