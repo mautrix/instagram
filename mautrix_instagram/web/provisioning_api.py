@@ -782,6 +782,9 @@ class ProvisioningAPI:
             return self._2fa_required(user, "<facebook credentials>", state, e)
         except IGCheckpointError as e:
             return self._checkpoint_error(user, "<facebook credentials>", e, after="facebook auth")
+        except IGChallengeError as e:
+            self.log.debug("%s logged in as %s, but got a challenge", user.mxid, username)
+            return await self.start_checkpoint(user, state, api, e, after="facebook auth")
         except IGConsentRequiredError as e:
             return self._consent_error(user, "<facebook credentials>", e, after="facebook auth")
         except Exception as e:
