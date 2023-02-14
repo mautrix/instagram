@@ -105,20 +105,18 @@ class Gender(SerializableEnum):
 
 @dataclass(kw_only=True)
 class CurrentUser(BaseFullResponseUser, SerializableAttrs):
-    biography: str
-    can_link_entities_in_bio: bool
-    biography_with_entities: EntityText
-    external_url: str
+    biography: Optional[str] = None
+    can_link_entities_in_bio: bool = True
+    biography_with_entities: Optional[EntityText] = None
+    external_url: Optional[str] = None
     has_biography_translation: bool = False
     hd_profile_pic_versions: List[HDProfilePictureVersion] = attr.ib(factory=lambda: [])
-    hd_profile_pic_url_info: HDProfilePictureVersion
-    show_conversion_edit_entry: bool
-    # TODO type
-    # birthday: Any
-    gender: Gender
-    custom_gender: str
-    email: str
-    profile_edit_params: Dict[str, ProfileEditParams]
+    show_conversion_edit_entry: bool = True
+    birthday: Optional[str] = None
+    gender: Gender = Gender.UNSET
+    custom_gender: Optional[str] = None
+    email: Optional[str] = None
+    profile_edit_params: Dict[str, ProfileEditParams] = attr.ib(factory=lambda: {})
 
 
 @dataclass
