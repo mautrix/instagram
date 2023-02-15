@@ -47,7 +47,7 @@ from mauigpapi.errors import (
     IGResponseError,
 )
 from mauigpapi.proxy import proxy_with_retry
-from mauigpapi.types import ChallengeStateResponse, LoginResponse
+from mauigpapi.types import ChallengeStateResponse, FacebookLoginResponse, LoginResponse
 from mautrix.types import JSON, Serializable, UserID
 from mautrix.util.logging import TraceLogger
 
@@ -731,31 +731,17 @@ class ProvisioningAPI:
         track(user, "$login_start", {"type": "facebook"})
         api, state = await get_login_state(user, self.device_seed)
         try:
-            resp = await proxy_with_retry(
+            resp: FacebookLoginResponse = await proxy_with_retry(
                 "provisioning_api.post_fb_login_token",
                 lambda: api.facebook_signup(fb_access_token),
                 logger=self.log,
                 proxy_handler=user.proxy_handler,
                 on_proxy_change=user.on_proxy_update,
             )
+            if not resp.account_created:
+                return self._no_fb_account(user, resp=resp)
         except IGFBNoContactPointFoundError as e:
-            self.log.debug(
-                "%s sent a valid Facebook token, "
-                "but it didn't seem to have an Instagram account linked",
-                user.mxid,
-            )
-            self.log.debug("Login error body: %s", e.body.serialize())
-            track(
-                user, "$login_failed", {"error": "fb-no-account-found", "after": "facebook auth"}
-            )
-            return web.json_response(
-                data={
-                    "error": "You don't have an Instagram account linked to that Facebook account",
-                    "status": e.body.error_type,
-                },
-                status=403,
-                headers=self._acao_headers,
-            )
+            return self._no_fb_account(user, e)
         except IGFBEmailTaken as e:
             maybe_username = None
             for button in e.body.buttons or []:
@@ -835,3 +821,30 @@ class ProvisioningAPI:
         except Exception as e:
             return self._unknown_error(user, "<facebook credentials>", e, after="facebook auth")
         return await self._finish_login(user, state, api, login_resp=resp, after="facebook auth")
+
+    def _no_fb_account(
+        self,
+        user: u.User,
+        e: IGFBNoContactPointFoundError | None = None,
+        resp: FacebookLoginResponse | None = None,
+    ) -> web.Response:
+        self.log.debug(
+            "%s sent a valid Facebook token, "
+            "but it didn't seem to have an Instagram account linked",
+            user.mxid,
+        )
+        if e:
+            self.log.debug("Login error body: %s", e.body.serialize() if e else "<N/A>")
+        elif resp:
+            self.log.debug("Login response body: %s", resp.serialize())
+        else:
+            self.log.debug("Login response body: not found")
+        track(user, "$login_failed", {"error": "fb-no-account-found", "after": "facebook auth"})
+        return web.json_response(
+            data={
+                "error": "You don't have an Instagram account linked to that Facebook account",
+                "status": e.body.error_type,
+            },
+            status=403,
+            headers=self._acao_headers,
+        )

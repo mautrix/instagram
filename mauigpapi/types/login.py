@@ -46,8 +46,8 @@ class LoginResponseUser(BaseFullResponseUser, SerializableAttrs):
 
 @dataclass
 class LoginResponse(SerializableAttrs):
-    logged_in_user: LoginResponseUser
     status: str
+    logged_in_user: Optional[LoginResponseUser] = None
 
 
 @dataclass
@@ -56,6 +56,7 @@ class FacebookLoginResponse(LoginResponse, SerializableAttrs):
     fb_access_token: Optional[str] = None
     fb_user_id: Optional[str] = None
     session_flush_nonce: Optional[str] = None
+    account_created: bool = True
 
 
 @dataclass
