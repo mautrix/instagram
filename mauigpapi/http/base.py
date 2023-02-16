@@ -18,7 +18,6 @@ from __future__ import annotations
 from typing import Any, Type, TypeVar
 import json
 import logging
-import random
 import time
 
 from aiohttp import ClientResponse, ClientSession, ContentTypeError, CookieJar
@@ -39,6 +38,7 @@ from ..errors import (
     IGFBSSODisabled,
     IGInactiveUserError,
     IGLoginBadPasswordError,
+    IGLoginInvalidCredentialsError,
     IGLoginInvalidUserError,
     IGLoginRequiredError,
     IGLoginTwoFactorRequiredError,
@@ -285,6 +285,10 @@ class BaseAndroidAPI:
             raise IGFBSSODisabled(resp, data)
         elif error_type == "rate_limit_error":
             raise IGRateLimitError(resp, data)
+
+        exception_name = data.get("exception_name")
+        if exception_name == "UserInvalidCredentials":
+            raise IGLoginInvalidCredentialsError(resp, data)
 
         raise IGResponseError(resp, data)
 

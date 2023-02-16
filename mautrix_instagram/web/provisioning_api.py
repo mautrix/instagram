@@ -38,6 +38,7 @@ from mauigpapi.errors import (
     IGFBNoContactPointFoundError,
     IGFBSSODisabled,
     IGLoginBadPasswordError,
+    IGLoginInvalidCredentialsError,
     IGLoginInvalidUserError,
     IGLoginRequiredError,
     IGLoginTwoFactorRequiredError,
@@ -299,6 +300,15 @@ class ProvisioningAPI:
             return web.json_response(
                 data={"error": "Invalid username", "status": "invalid-username"},
                 status=404,
+                headers=self._acao_headers,
+            )
+        except IGLoginInvalidCredentialsError as e:
+            self.log.debug("%s tried to log in with invalid credentials %s", user.mxid, username)
+            self.log.debug("Login error body: %s", e.body.serialize())
+            track(user, "$login_failed", {"error": "invalid-credentials"})
+            return web.json_response(
+                data={"error": "Invalid username or password", "status": "invalid-credentials"},
+                status=403,
                 headers=self._acao_headers,
             )
         except IGLoginBadPasswordError:

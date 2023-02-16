@@ -21,6 +21,7 @@ from .response import (
     IGInactiveUserError,
     IGLoginBadPasswordError,
     IGLoginError,
+    IGLoginInvalidCredentialsError,
     IGLoginInvalidUserError,
     IGLoginRequiredError,
     IGLoginTwoFactorRequiredError,

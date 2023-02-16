@@ -152,6 +152,10 @@ class IGLoginInvalidUserError(IGLoginError):
     pass
 
 
+class IGLoginInvalidCredentialsError(IGLoginError):
+    pass
+
+
 class IGBad2FACodeError(IGResponseError):
     pass
 

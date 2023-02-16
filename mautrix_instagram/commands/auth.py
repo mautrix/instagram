@@ -25,6 +25,7 @@ from mauigpapi.errors import (
     IGChallengeError,
     IGChallengeWrongCodeError,
     IGLoginBadPasswordError,
+    IGLoginInvalidCredentialsError,
     IGLoginInvalidUserError,
     IGLoginTwoFactorRequiredError,
 )
@@ -123,6 +124,8 @@ async def login(evt: CommandEvent) -> None:
         await evt.reply("Invalid username")
     except IGLoginBadPasswordError:
         await evt.reply("Incorrect password")
+    except IGLoginInvalidCredentialsError:
+        await evt.reply("Incorrect username or password")
     except Exception as e:
         evt.log.exception("Failed to log in")
         await evt.reply(f"Failed to log in: {e}")
