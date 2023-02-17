@@ -543,6 +543,12 @@ class ProfileItem(BaseResponseUser, SerializableAttrs):
     pass
 
 
+@dataclass
+class VideoCallEvent(SerializableAttrs):
+    action: str
+    description: str
+
+
 @dataclass(kw_only=True)
 class ThreadItem(SerializableAttrs):
     item_id: Optional[str] = None
@@ -583,6 +589,7 @@ class ThreadItem(SerializableAttrs):
     clip: Optional[ClipItem] = None
     felix_share: Optional[FelixShareItem] = None
     profile: Optional[ProfileItem] = None
+    video_call_event: Optional[VideoCallEvent] = None
 
     @property
     def timestamp_ms(self) -> int:

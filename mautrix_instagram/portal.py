@@ -1651,6 +1651,19 @@ class Portal(DBPortal, BasePortal):
                 converted.append((msg_type, combined))
             else:
                 converted.append((msg_type, expired))
+        elif item.video_call_event:
+            msg_type = (
+                MessageType.NOTICE
+                if item.video_call_event.action == "video_call_ended"
+                else MessageType.TEXT
+            )
+            video_call_notification = TextMessageEventContent(
+                msgtype=msg_type,
+                body=item.video_call_event.description,
+                formatted_body=f"<b>{item.video_call_event.description}</b>",
+                format=Format.HTML,
+            )
+            converted.append((EventType.ROOM_MESSAGE, video_call_notification))
         elif item.action_log:
             # These probably don't need to be bridged
             self.log.debug(f"Ignoring action log message {item.item_id}")
