@@ -52,6 +52,7 @@ async def get_login_state(user: u.User, seed: str) -> tuple[AndroidAPI, AndroidS
         state.device.generate(seed)
         api = AndroidAPI(state, log=user.api_log, proxy_handler=user.proxy_handler)
         await proxy_with_retry(
+            "get_login_state",
             lambda: api.get_mobile_config(),
             logger=user.log,
             proxy_handler=user.proxy_handler,
