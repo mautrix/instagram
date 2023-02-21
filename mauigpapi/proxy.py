@@ -103,5 +103,6 @@ async def proxy_with_retry(
                 name,
                 wait,
             )
+            await asyncio.sleep(wait)
             if errors > 1 and proxy_handler.update_proxy_url():
                 await on_proxy_change()
