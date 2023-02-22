@@ -37,7 +37,7 @@ class ProxyHandler:
     def __init__(self, api_url: str | None) -> None:
         self.api_url = api_url
 
-    def get_proxy_url_from_api(self) -> str | None:
+    def get_proxy_url_from_api(self, reason: str | None = None) -> str | None:
         assert self.api_url is not None
 
         api_url = str(URL(self.api_url).update_query({"reason": reason} if reason else {}))
