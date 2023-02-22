@@ -566,10 +566,10 @@ class AndroidMQTT:
         finally:
             self.log.debug(f"Dispatcher loop {loop_id} stopped")
 
-    async def update_proxy_and_sleep(self, retry):
+    async def update_proxy_and_sleep(self, retry, reason):
         sleep = retry * 2
         if retry > 1:
-            if self.proxy_handler and self.proxy_handler.update_proxy_url():
+            if self.proxy_handler and self.proxy_handler.update_proxy_url(reason):
                 self.setup_proxy()
             await self._dispatch(ProxyUpdate())
         await self._dispatch(
@@ -622,7 +622,7 @@ class AndroidMQTT:
                 elif rc == pmc.MQTT_ERR_NO_CONN:
                     if connection_retries > retry_limit:
                         raise MQTTNotConnected(f"Connection failed {connection_retries} times")
-                    await self.update_proxy_and_sleep(connection_retries)
+                    await self.update_proxy_and_sleep(connection_retries, "MQTT_ERR_NO_CONN")
                 else:
                     err = pmc.error_string(rc)
                     self.log.error("MQTT Error: %s", err)
@@ -633,7 +633,7 @@ class AndroidMQTT:
                 except MQTTReconnectionError:
                     if connection_retries > retry_limit:
                         raise
-                    await self.update_proxy_and_sleep(connection_retries)
+                    await self.update_proxy_and_sleep(connection_retries, "MQTTReconnectionError")
 
                 connection_retries += 1
             else:

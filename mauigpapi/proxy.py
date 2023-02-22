@@ -7,6 +7,7 @@ import logging
 import urllib.request
 
 from aiohttp import ClientConnectionError
+from yarl import URL
 
 from mautrix.util.logging import TraceLogger
 
@@ -39,8 +40,10 @@ class ProxyHandler:
     def get_proxy_url_from_api(self) -> str | None:
         assert self.api_url is not None
 
-        request = urllib.request.Request(self.api_url, method="GET")
-        self.log.debug("Requesting proxy from: %s", self.api_url)
+        api_url = str(URL(self.api_url).update_query({"reason": reason} if reason else {}))
+
+        request = urllib.request.Request(api_url, method="GET")
+        self.log.debug("Requesting proxy from: %s", api_url)
 
         try:
             with urllib.request.urlopen(request) as f:
@@ -52,12 +55,12 @@ class ProxyHandler:
 
         return None
 
-    def update_proxy_url(self) -> bool:
+    def update_proxy_url(self, reason: str | None = None) -> bool:
         old_proxy = self.current_proxy_url
         new_proxy = None
 
         if self.api_url is not None:
-            new_proxy = self.get_proxy_url_from_api()
+            new_proxy = self.get_proxy_url_from_api(reason)
         else:
             new_proxy = urllib.request.getproxies().get("http")
 
@@ -104,5 +107,7 @@ async def proxy_with_retry(
                 wait,
             )
             await asyncio.sleep(wait)
-            if errors > 1 and proxy_handler.update_proxy_url():
+            if errors > 1 and proxy_handler.update_proxy_url(
+                f"{e.__class__.__name__} while trying to {name}"
+            ):
                 await on_proxy_change()
