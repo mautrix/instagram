@@ -640,7 +640,7 @@ class User(DBUser, BaseUser):
 
     async def _maybe_update_proxy(self, source: str) -> None:
         if not self._listen_task:
-            self.proxy_handler.update_proxy_url()
+            self.proxy_handler.update_proxy_url(source)
             await self.on_proxy_update()
         else:
             self.log.debug(f"Not updating proxy: listen_task is still running? (caller: {source})")
