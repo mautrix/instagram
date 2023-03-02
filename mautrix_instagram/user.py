@@ -98,14 +98,14 @@ BridgeState.human_readable_errors.update(
         "ig-connection-error": "Instagram disconnected unexpectedly",
         "ig-refresh-connection-error": "Reconnecting failed again after refresh: {message}",
         "ig-connection-fatal-error": "Instagram disconnected unexpectedly",
-        "ig-auth-error": "Authentication error from Instagram: {message}",
+        "ig-auth-error": "Authentication error from Instagram: {message}, please login again to continue",
         "ig-checkpoint": "Instagram checkpoint error. Please check the Instagram website.",
         "ig-consent-required": "Instagram requires a consent update. Please check the Instagram website.",
         "ig-checkpoint-locked": "Instagram checkpoint error. Please check the Instagram website.",
         "ig-rate-limit": "Got Instagram ratelimit error, waiting a few minutes before retrying...",
         "ig-disconnected": None,
         "ig-no-mqtt": "You're not connected to Instagram",
-        "logged-out": "You're not logged into Instagram",
+        "logged-out": "You've been logged out of instagram, please login again to continue",
     }
 )
 
