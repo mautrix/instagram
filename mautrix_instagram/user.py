@@ -236,7 +236,11 @@ class User(DBUser, BaseUser):
 
     async def connect(self, user: CurrentUser | None = None) -> None:
         if not self.state:
-            await self.push_bridge_state(BridgeStateEvent.BAD_CREDENTIALS, error="logged-out")
+            await self.push_bridge_state(
+                BridgeStateEvent.BAD_CREDENTIALS,
+                error="logged-out",
+                info={"cnd_action": "reauth"},
+            )
             return
         client = AndroidAPI(
             self.state,
@@ -1025,6 +1029,7 @@ class User(DBUser, BaseUser):
                 state_event=BridgeStateEvent.BAD_CREDENTIALS,
                 error_code="ig-auth-error",
                 error_message=error.proper_message,
+                info={"cnd_action": "reauth"},
             )
         self.client = None
         self.mqtt = None
