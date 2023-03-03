@@ -25,6 +25,7 @@ from yarl import URL
 
 from mautrix.types import JSON, Serializable
 from mautrix.util.logging import TraceLogger
+from mautrix.util.proxy import ProxyHandler
 
 from ..errors import (
     IG2FACodeExpiredError,
@@ -51,7 +52,6 @@ from ..errors import (
     IGUnknownError,
     IGUserHasLoggedOutError,
 )
-from ..proxy import ProxyHandler
 from ..state import AndroidState
 from ..types import ChallengeContext
 

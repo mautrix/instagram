@@ -30,11 +30,11 @@ from mauigpapi.errors import (
     IGLoginTwoFactorRequiredError,
 )
 from mauigpapi.http import AndroidAPI
-from mauigpapi.proxy import proxy_with_retry
 from mauigpapi.state import AndroidState
 from mauigpapi.types import BaseResponseUser
 from mautrix.bridge.commands import HelpSection, command_handler
 from mautrix.types import EventID
+from mautrix.util.proxy import proxy_with_retry
 
 from .. import user as u
 from .typehint import CommandEvent
