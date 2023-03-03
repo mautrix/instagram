@@ -30,6 +30,7 @@ import paho.mqtt.client as pmc
 
 from mautrix.util import background_task
 from mautrix.util.logging import TraceLogger
+from mautrix.util.proxy import ProxyHandler
 
 from ..errors import (
     IrisSubscribeError,
@@ -38,7 +39,6 @@ from ..errors import (
     MQTTNotLoggedIn,
     MQTTReconnectionError,
 )
-from ..proxy import ProxyHandler
 from ..state import AndroidState
 from ..types import (
     AppPresenceEventPayload,

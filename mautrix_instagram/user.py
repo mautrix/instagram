@@ -22,13 +22,7 @@ import asyncio
 import logging
 import time
 
-from mauigpapi import (
-    RETRYABLE_PROXY_EXCEPTIONS,
-    AndroidAPI,
-    AndroidMQTT,
-    AndroidState,
-    ProxyHandler,
-)
+from mauigpapi import AndroidAPI, AndroidMQTT, AndroidState
 from mauigpapi.errors import (
     IGChallengeError,
     IGCheckpointError,
@@ -69,6 +63,7 @@ from mautrix.util import background_task
 from mautrix.util.bridge_state import BridgeState, BridgeStateEvent
 from mautrix.util.logging import TraceLogger
 from mautrix.util.opt_prometheus import Gauge, Summary, async_time
+from mautrix.util.proxy import RETRYABLE_PROXY_EXCEPTIONS, ProxyHandler
 from mautrix.util.simple_lock import SimpleLock
 
 from . import portal as po, puppet as pu

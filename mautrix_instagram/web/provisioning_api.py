@@ -47,10 +47,10 @@ from mauigpapi.errors import (
     IGRateLimitError,
     IGResponseError,
 )
-from mauigpapi.proxy import proxy_with_retry
 from mauigpapi.types import ChallengeStateResponse, FacebookLoginResponse, LoginResponse
 from mautrix.types import JSON, Serializable, UserID
 from mautrix.util.logging import TraceLogger
+from mautrix.util.proxy import proxy_with_retry
 
 from .. import user as u
 from ..commands.auth import get_login_state
