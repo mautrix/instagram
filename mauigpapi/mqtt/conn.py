@@ -82,6 +82,7 @@ INBOX_THREAD_REGEX = re.compile(r"/direct_v2/inbox/threads/([\w_]+)")
 
 REQUEST_TIMEOUT = 30
 
+
 class AndroidMQTT:
     _loop: asyncio.AbstractEventLoop
     _client: MQTToTClient
@@ -176,9 +177,7 @@ class AndroidMQTT:
     def _clear_publish_waiters(self) -> None:
         for waiter in self._publish_waiters.values():
             if not waiter.done():
-                waiter.set_exception(
-                    MQTTNotConnected("MQTT disconnected before PUBACK received")
-                )
+                waiter.set_exception(MQTTNotConnected("MQTT disconnected before PUBACK received"))
         self._publish_waiters = {}
 
     def _form_client_id(self) -> bytes:
