@@ -179,12 +179,6 @@ class AndroidMQTT:
                 waiter.set_exception(
                     MQTTNotConnected("MQTT disconnected before PUBACK received")
                 )
-        if self._message_response_waiter and not self._message_response_waiter.done():
-            self._message_response_waiter.set_exception(
-                MQTTNotConnected("MQTT disconnected before message send returned response")
-            )
-            self._message_response_waiter = None
-            self._message_response_waiter_id = None
         self._publish_waiters = {}
 
     def _form_client_id(self) -> bytes:
@@ -784,7 +778,16 @@ class AndroidMQTT:
             fut = self._message_response_waiter = asyncio.Future()
             self._message_response_waiter_id = client_context
             self.log.debug(f"Publishing {action} to {thread_id} with {client_context}")
-            await self.publish(RealtimeTopic.SEND_MESSAGE, req)
+            try:
+                await self.publish(RealtimeTopic.SEND_MESSAGE, req)
+            except asyncio.TimeoutError:
+                self.log.warning("Publish timed out - try forcing reconnect")
+                self._client.reconnect()
+            except MQTTNotConnected:
+                self.log.warning(
+                    "MQTT disconnected before PUBACK - wait a hot minute, we should get "
+                    "the response after we auto reconnect"
+                )
             self.log.trace(
                 f"Request published to {RealtimeTopic.SEND_MESSAGE}, "
                 f"waiting for response {RealtimeTopic.SEND_MESSAGE_RESPONSE}"
