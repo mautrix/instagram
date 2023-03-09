@@ -785,7 +785,7 @@ class AndroidMQTT:
                 f"waiting for response {RealtimeTopic.SEND_MESSAGE_RESPONSE}"
             )
             try:
-                resp = await asyncio.wait_for(fut, timeout=30000)
+                resp = await asyncio.wait_for(fut, timeout=REQUEST_TIMEOUT)
             except asyncio.TimeoutError:
                 self.log.error(f"Request with ID {client_context} timed out!")
                 raise
