@@ -297,7 +297,8 @@ class AndroidMQTT:
             self.log.trace(f"Got publish confirmation for {mid}, but no waiters")
             return
         self.log.trace(f"Got publish confirmation for {mid}")
-        waiter.set_result(None)
+        if not waiter.done():
+            waiter.set_result(None)
 
     # region Incoming event parsing
 
