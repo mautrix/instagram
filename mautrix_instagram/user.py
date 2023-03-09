@@ -35,6 +35,7 @@ from mauigpapi.errors import (
     IGConsentRequiredError,
     IGNotLoggedInError,
     IGRateLimitError,
+    IGUnknownError,
     IGUserIDNotFoundError,
     IrisSubscribeError,
     MQTTConnectionUnauthorized,
@@ -889,6 +890,16 @@ class User(DBUser, BaseUser):
             except (IGChallengeError, IGConsentRequiredError) as e:
                 await self._handle_checkpoint(e, on="reconnect")
                 return
+            except IGUnknownError as e:
+                if "non-JSON body" not in e:
+                    raise
+                errors += 1
+                if errors > 10:
+                    raise
+                self.log.warning(
+                    "Non-JSON body while trying to check user for reconnection, retrying in 10s"
+                )
+                await asyncio.sleep(10)
             except Exception as e:
                 self.log.exception("Error while reconnecting to Instagram")
                 if isinstance(e, IGCheckpointError):
