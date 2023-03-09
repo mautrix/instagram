@@ -245,7 +245,7 @@ class ProvisioningAPI:
             track(user, "$login_failed", {"error": error_code})
         return web.json_response(
             data={
-                "error": "Unknown error while logging in",
+                "error": "Unknown error while logging in, please try logging in again.",
                 "status": "unknown-error",
                 "ig_error_code": error_code,
             },
