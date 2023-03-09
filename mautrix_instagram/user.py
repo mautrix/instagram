@@ -967,7 +967,7 @@ class User(DBUser, BaseUser):
             self.log.exception("Fatal error in listener, reconnecting in 5 minutes")
             await self.send_bridge_notice(
                 "Fatal error in listener (see logs for more info)",
-                state_event=BridgeStateEvent.TRANSIENT_DISCONNECT,
+                state_event=BridgeStateEvent.UNKNOWN_ERROR,
                 important=True,
                 error_code="ig-unknown-connection-error",
                 info={"python_error": str(e)},
