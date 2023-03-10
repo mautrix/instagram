@@ -468,7 +468,7 @@ class Portal(DBPortal, BasePortal):
                 input_mime=mime_type,
                 logger=self.log,
             )
-            self.log.info(f"Uploaded video converted")
+            self.log.info("Uploaded video converted")
 
         self.log.trace(f"Uploading video from {event_id}")
         _, upload_id = await sender.client.upload_mp4(
@@ -901,7 +901,10 @@ class Portal(DBPortal, BasePortal):
         convert_fn: Callable[[bytes, str], Awaitable[tuple[bytes, str]]] | None = None,
         allow_encrypt: bool = True,
     ) -> MediaMessageEventContent:
-        data, mimetype = await self._download_instagram_file(source, url)
+        data, mimetype = await source.proxy_with_retry(
+            "portal._reupload_instagram_file",
+            lambda: self._download_instagram_file(source, url),
+        )
         assert data is not None
         info.mimetype = mimetype
 
@@ -1548,7 +1551,10 @@ class Portal(DBPortal, BasePortal):
             f"Handling Instagram message {item.item_id} ({item.client_context}) by {item.user_id}"
         )
         if not self.mxid:
-            thread = await source.client.get_thread(item.thread_id)
+            thread = await source.proxy_with_retry(
+                "portal.handle_instagram_item",
+                lambda: source.client.get_thread(item.thread_id),
+            )
             mxid = await self.create_matrix_room(source, thread.thread)
             if not mxid:
                 # Failed to create
@@ -1819,7 +1825,10 @@ class Portal(DBPortal, BasePortal):
                 best = candidate
         if not best:
             return None
-        data, mimetype = await self._download_instagram_file(source, best.url)
+        data, mimetype = await source.proxy_with_retry(
+            "portal._get_thread_avatar",
+            lambda: self._download_instagram_file(source, best.url),
+        )
         if not data:
             return None
         mxc = await self.main_intent.upload_media(
@@ -1992,14 +2001,20 @@ class Portal(DBPortal, BasePortal):
                 self.log.debug(
                     f"There is a cursor for the chat, fetching messages before {self.cursor}"
                 )
-                resp = await source.client.get_thread(
-                    self.thread_id, seq_id=source.seq_id, cursor=self.cursor
+                resp = await source.proxy_with_retry(
+                    "portal._backfill",
+                    lambda: source.client.get_thread(
+                        self.thread_id, seq_id=source.seq_id, cursor=self.cursor
+                    ),
                 )
             else:
                 self.log.debug(
                     "There is no first message in the chat, starting with the most recent messages"
                 )
-                resp = await source.client.get_thread(self.thread_id, seq_id=source.seq_id)
+                resp = await source.proxy_with_retry(
+                    "portal._backfill",
+                    lambda: source.client.get_thread(self.thread_id, seq_id=source.seq_id),
+                )
         except IGRateLimitError as e:
             backoff = self.config.get("bridge.backfill.backoff.message_history", 300)
             self.log.warning(
@@ -2066,13 +2081,16 @@ class Portal(DBPortal, BasePortal):
 
                 # Fetch more messages
                 try:
-                    resp = await source.client.get_thread(
-                        self.thread_id, seq_id=source.seq_id, cursor=self.cursor
+                    resp = await source.proxy_with_retry(
+                        "portal._backfill",
+                        lambda: source.client.get_thread(
+                            self.thread_id, seq_id=source.seq_id, cursor=self.cursor
+                        ),
                     )
                     messages = await dedup_messages(resp.thread.items)
                     cursor = resp.thread.oldest_cursor
                     backfill_more &= resp.thread.has_older
-                except IGRateLimitError as e:
+                except IGRateLimitError:
                     backoff = self.config.get("bridge.backfill.backoff.message_history", 300)
                     self.log.warning(
                         f"Backfilling failed due to rate limit. Waiting for {backoff} seconds "
