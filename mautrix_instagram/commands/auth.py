@@ -34,7 +34,6 @@ from mauigpapi.state import AndroidState
 from mauigpapi.types import BaseResponseUser
 from mautrix.bridge.commands import HelpSection, command_handler
 from mautrix.types import EventID
-from mautrix.util.proxy import proxy_with_retry
 
 from .. import user as u
 from .typehint import CommandEvent
@@ -56,13 +55,7 @@ async def get_login_state(user: u.User, seed: str) -> tuple[AndroidAPI, AndroidS
             proxy_handler=user.proxy_handler,
             on_proxy_update=user.on_proxy_update,
         )
-        await proxy_with_retry(
-            "get_login_state",
-            lambda: api.get_mobile_config(),
-            logger=user.log,
-            proxy_handler=user.proxy_handler,
-            on_proxy_change=user.on_proxy_update,
-        )
+        await api.get_mobile_config()
         user.command_status = {
             "action": "Login",
             "state": state,
