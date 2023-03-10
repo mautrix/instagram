@@ -160,9 +160,12 @@ class Puppet(DBPuppet, BasePuppet):
             if info.has_anonymous_profile_picture:
                 mxc = ""
             else:
-                async with source.client.raw_http_get(info.profile_pic_url) as resp:
-                    content_type = resp.headers["Content-Type"]
-                    resp_data = await resp.read()
+                resp = await source.client.proxy_with_retry(
+                    "Puppet._update_avatar",
+                    lambda: source.client.raw_http_get(info.profile_pic_url),
+                )
+                content_type = resp.headers["Content-Type"]
+                resp_data = await resp.read()
                 mxc = await self.default_mxid_intent.upload_media(
                     data=resp_data,
                     mime_type=content_type,

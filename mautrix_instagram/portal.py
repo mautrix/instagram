@@ -870,26 +870,29 @@ class Portal(DBPortal, BasePortal):
     async def _download_instagram_file(
         self, source: u.User, url: str
     ) -> tuple[Optional[bytes], str]:
-        async with source.client.raw_http_get(url) as resp:
-            try:
-                length = int(resp.headers["Content-Length"])
-            except KeyError:
-                # TODO can the download be short-circuited if there's too much data?
-                self.log.warning(
-                    "Got file download response with no Content-Length header,"
-                    "reading data dangerously"
-                )
-                length = 0
-            if length > self.matrix.media_config.upload_size:
-                self.log.debug(
-                    f"{url} was too large ({length} > {self.matrix.media_config.upload_size})"
-                )
-                raise ValueError("Attachment not available: too large")
-            data = await resp.read()
-            if not data:
-                return None, ""
-            mimetype = resp.headers["Content-Type"] or magic.from_buffer(data, mime=True)
-            return data, mimetype
+        async def download():
+            async with source.client.raw_http_get(url) as resp:
+                try:
+                    length = int(resp.headers["Content-Length"])
+                except KeyError:
+                    # TODO can the download be short-circuited if there's too much data?
+                    self.log.warning(
+                        "Got file download response with no Content-Length header,"
+                        "reading data dangerously"
+                    )
+                    length = 0
+                if length > self.matrix.media_config.upload_size:
+                    self.log.debug(
+                        f"{url} was too large ({length} > {self.matrix.media_config.upload_size})"
+                    )
+                    raise ValueError("Attachment not available: too large")
+                data = await resp.read()
+                if not data:
+                    return None, ""
+                mimetype = resp.headers["Content-Type"] or magic.from_buffer(data, mime=True)
+                return data, mimetype
+
+        return await source.client.proxy_with_retry("Portal._download_instagram_file", download)
 
     async def _reupload_instagram_file(
         self,
