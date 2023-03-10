@@ -215,7 +215,7 @@ class BaseAndroidAPI:
         query = {k: v for k, v in (query or {}).items() if v is not None}
         url = self.url.with_path(path).with_query(query)
         resp = await self.proxy_with_retry(
-            f"AndroidAPI.std_htt_get: {url}",
+            f"AndroidAPI.std_http_get: {url}",
             lambda: self.http.get(url=url, headers=headers),
         )
         self.log.trace(f"{path} response: {await resp.text()}")
