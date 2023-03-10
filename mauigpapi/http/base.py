@@ -186,6 +186,7 @@ class BaseAndroidAPI:
             logger=self.log,
             proxy_handler=self.proxy_handler,
             on_proxy_change=self.on_proxy_update,
+            min_wait_seconds=1,  # we want to retry these pretty fast
         )
         self.log.trace(f"{path} response: {await resp.text()}")
         if response_type is str or response_type is None:
@@ -214,6 +215,7 @@ class BaseAndroidAPI:
             logger=self.log,
             proxy_handler=self.proxy_handler,
             on_proxy_change=self.on_proxy_update,
+            min_wait_seconds=1,  # we want to retry these pretty fast
         )
         self.log.trace(f"{path} response: {await resp.text()}")
         if response_type is None:
