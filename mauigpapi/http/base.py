@@ -16,6 +16,7 @@
 from __future__ import annotations
 
 from typing import Any, Awaitable, Callable, Type, TypeVar
+from functools import partial
 import json
 import logging
 import time
@@ -89,6 +90,14 @@ class BaseAndroidAPI:
         self.setup_http(cookie_jar=state.cookies.jar)
 
         self.state = state
+
+        self.proxy_with_retry = partial(
+            proxy_with_retry,
+            logger=self.log,
+            proxy_handler=self.proxy_handler,
+            on_proxy_change=self.on_proxy_update,
+            min_wait_seconds=1,  # we want to retry these pretty fast
+        )
 
     @staticmethod
     def sign(req: Any, filter_nulls: bool = False) -> dict[str, str]:
@@ -180,13 +189,9 @@ class BaseAndroidAPI:
         if not raw:
             data = self.sign(data, filter_nulls=filter_nulls)
         url = self.url.with_path(path).with_query(query or {})
-        resp = await proxy_with_retry(
+        resp = await self.proxy_with_retry(
             f"AndroidAPI.std_http_post: {url}",
             lambda: self.http.post(url=url, headers=headers, data=data),
-            logger=self.log,
-            proxy_handler=self.proxy_handler,
-            on_proxy_change=self.on_proxy_update,
-            min_wait_seconds=1,  # we want to retry these pretty fast
         )
         self.log.trace(f"{path} response: {await resp.text()}")
         if response_type is str or response_type is None:
@@ -209,13 +214,9 @@ class BaseAndroidAPI:
         headers = {**self._headers, **headers} if headers else self._headers
         query = {k: v for k, v in (query or {}).items() if v is not None}
         url = self.url.with_path(path).with_query(query)
-        resp = await proxy_with_retry(
+        resp = await self.proxy_with_retry(
             f"AndroidAPI.std_htt_get: {url}",
             lambda: self.http.get(url=url, headers=headers),
-            logger=self.log,
-            proxy_handler=self.proxy_handler,
-            on_proxy_change=self.on_proxy_update,
-            min_wait_seconds=1,  # we want to retry these pretty fast
         )
         self.log.trace(f"{path} response: {await resp.text()}")
         if response_type is None:
