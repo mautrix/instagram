@@ -15,7 +15,7 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from __future__ import annotations
 
-from typing import Any, Type, TypeVar
+from typing import Any, Awaitable, Callable, Type, TypeVar
 import json
 import logging
 import time
@@ -80,10 +80,12 @@ class BaseAndroidAPI:
         state: AndroidState,
         log: TraceLogger | None = None,
         proxy_handler: ProxyHandler | None = None,
+        on_proxy_update: Callable[[], Awaitable[None]] | None = None,
     ) -> None:
         self.log = log or logging.getLogger("mauigpapi.http")
 
         self.proxy_handler = proxy_handler
+        self.on_proxy_update = on_proxy_update
         self.setup_http(cookie_jar=state.cookies.jar)
 
         self.state = state
