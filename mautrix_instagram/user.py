@@ -64,7 +64,7 @@ from mautrix.util import background_task
 from mautrix.util.bridge_state import BridgeState, BridgeStateEvent
 from mautrix.util.logging import TraceLogger
 from mautrix.util.opt_prometheus import Gauge, Summary, async_time
-from mautrix.util.proxy import RETRYABLE_PROXY_EXCEPTIONS, ProxyHandler
+from mautrix.util.proxy import ProxyHandler, proxy_with_retry
 from mautrix.util.simple_lock import SimpleLock
 
 from . import portal as po, puppet as pu
@@ -179,6 +179,13 @@ class User(DBUser, BaseUser):
 
         self.proxy_handler = ProxyHandler(
             api_url=self.config["bridge.get_proxy_api_url"],
+        )
+
+        self.proxy_with_retry = partial(
+            proxy_with_retry,
+            logger=self.log,
+            proxy_handler=self.proxy_handler,
+            on_proxy_cahnge=self.on_proxy_update,
         )
 
     @classmethod
