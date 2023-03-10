@@ -242,6 +242,7 @@ class User(DBUser, BaseUser):
             self.state,
             log=self.api_log,
             proxy_handler=self.proxy_handler,
+            on_proxy_update=self.on_proxy_update,
         )
 
         if not user:
@@ -441,7 +442,7 @@ class User(DBUser, BaseUser):
             self.log.exception("Failed to update own puppet info")
         try:
             if puppet.custom_mxid != self.mxid and puppet.can_auto_login(self.mxid):
-                self.log.info(f"Automatically enabling custom puppet")
+                self.log.info("Automatically enabling custom puppet")
                 await puppet.switch_mxid(access_token="auto", mxid=self.mxid)
         except Exception:
             self.log.exception("Failed to automatically enable custom puppet")

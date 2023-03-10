@@ -50,7 +50,6 @@ from mauigpapi.errors import (
 from mauigpapi.types import ChallengeStateResponse, FacebookLoginResponse, LoginResponse
 from mautrix.types import JSON, Serializable, UserID
 from mautrix.util.logging import TraceLogger
-from mautrix.util.proxy import proxy_with_retry
 
 from .. import user as u
 from ..commands.auth import get_login_state
@@ -278,13 +277,7 @@ class ProvisioningAPI:
         track(user, "$login_start", {"type": "instagram"})
         api, state = await get_login_state(user, self.device_seed)
         try:
-            resp = await proxy_with_retry(
-                "provisioning_api.login",
-                lambda: api.login(username, password),
-                logger=self.log,
-                proxy_handler=user.proxy_handler,
-                on_proxy_change=user.on_proxy_update,
-            )
+            resp = await api.login(username, password)
         except IGLoginTwoFactorRequiredError as e:
             return self._2fa_required(user, username, state, e)
         except IGChallengeError as e:
@@ -399,13 +392,7 @@ class ProvisioningAPI:
             username = state.login_2fa_username
         track(user, "$login_resend_2fa_sms")
         try:
-            resp = await proxy_with_retry(
-                "provisioning_api.send_two_factor_login_sms",
-                lambda: api.send_two_factor_login_sms(username, identifier=identifier),
-                logger=self.log,
-                proxy_handler=user.proxy_handler,
-                on_proxy_change=user.on_proxy_update,
-            )
+            resp = await api.send_two_factor_login_sms(username, identifier=identifier)
         except IGRateLimitError as e:
             track(user, "$login_resend_2fa_sms_fail", {"error": "ratelimit"})
             try:
@@ -464,14 +451,8 @@ class ProvisioningAPI:
             username = state.login_2fa_username
         track(user, "$login_submit_2fa")
         try:
-            resp = await proxy_with_retry(
-                "provisioning_api.two_factor_login",
-                lambda: api.two_factor_login(
-                    username, code=code, identifier=identifier, is_totp=is_totp
-                ),
-                logger=self.log,
-                proxy_handler=user.proxy_handler,
-                on_proxy_change=user.on_proxy_update,
+            resp = await api.two_factor_login(
+                username, code=code, identifier=identifier, is_totp=is_totp
             )
         except IGBad2FACodeError:
             self.log.debug("%s submitted an incorrect 2-factor auth code", user.mxid)
@@ -511,13 +492,7 @@ class ProvisioningAPI:
         self, user: u.User, state: AndroidState, api: AndroidAPI, err: IGChallengeError, after: str
     ) -> web.Response:
         try:
-            resp = await proxy_with_retry(
-                "provisioning_api.challenge_auto",
-                lambda: api.challenge_auto(reset=after == "2fa"),
-                logger=self.log,
-                proxy_handler=user.proxy_handler,
-                on_proxy_change=user.on_proxy_update,
-            )
+            resp = await api.challenge_auto(reset=after == "2fa")
         except Exception:
             self.log.exception("Challenge reset failed for %s", user.mxid)
             track(user, "$login_failed", {"error": "challenge-reset-fail", "after": after})
@@ -583,13 +558,7 @@ class ProvisioningAPI:
         state: AndroidState = user.command_status["state"]
         track(user, "$login_submit_challenge")
         try:
-            resp = await proxy_with_retry(
-                "provisioning_api.challenge_send_security_code",
-                lambda: api.challenge_send_security_code(code=code),
-                logger=self.log,
-                proxy_handler=user.proxy_handler,
-                on_proxy_change=user.on_proxy_update,
-            )
+            resp = await api.challenge_send_security_code(code=code)
         except IGChallengeWrongCodeError:
             self.log.debug("%s submitted an incorrect challenge code", user.mxid)
             track(user, "$login_failed", {"error": "incorrect-challenge-code"})
@@ -643,13 +612,7 @@ class ProvisioningAPI:
             else "<username not known>"
         )
         try:
-            resp = await proxy_with_retry(
-                "provisioning_api.finish_login",
-                lambda: api.current_user(),
-                logger=self.log,
-                proxy_handler=user.proxy_handler,
-                on_proxy_change=user.on_proxy_update,
-            )
+            resp = await api.current_user()
         except IGChallengeError as e:
             if isinstance(login_resp, ChallengeStateResponse):
                 track(user, "$login_failed", {"error": "repeat-challenge", "after": after})
@@ -741,13 +704,7 @@ class ProvisioningAPI:
         track(user, "$login_start", {"type": "facebook"})
         api, state = await get_login_state(user, self.device_seed)
         try:
-            resp: FacebookLoginResponse = await proxy_with_retry(
-                "provisioning_api.post_fb_login_token",
-                lambda: api.facebook_signup(fb_access_token),
-                logger=self.log,
-                proxy_handler=user.proxy_handler,
-                on_proxy_change=user.on_proxy_update,
-            )
+            resp = await api.facebook_signup(fb_access_token)
             if not resp.account_created:
                 return self._no_fb_account(user, resp=resp)
         except IGFBNoContactPointFoundError as e:
