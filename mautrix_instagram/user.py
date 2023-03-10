@@ -214,7 +214,10 @@ class User(DBUser, BaseUser):
             return portal
         if create:
             # TODO add error handling somewhere
-            thread = await self.client.create_group_thread([puppet.pk])
+            thread = await self.proxy_with_retry(
+                "user.get_portal_with",
+                lambda: self.client.create_group_thread([puppet.pk]),
+            )
             portal = await po.Portal.get_by_thread(thread, self.igpk)
             await portal.update_info(thread, self)
             return portal
@@ -253,7 +256,10 @@ class User(DBUser, BaseUser):
 
         if not user:
             try:
-                resp = await client.current_user()
+                resp = await self.proxy_with_retry(
+                    "user.connect",
+                    lambda: client.current_user(),
+                )
                 user = resp.user
             except IGNotLoggedInError as e:
                 self.log.warning(f"Failed to connect to Instagram: {e}, logging out")
@@ -448,7 +454,7 @@ class User(DBUser, BaseUser):
             self.log.exception("Failed to update own puppet info")
         try:
             if puppet.custom_mxid != self.mxid and puppet.can_auto_login(self.mxid):
-                self.log.info(f"Automatically enabling custom puppet")
+                self.log.info("Automatically enabling custom puppet")
                 await puppet.switch_mxid(access_token="auto", mxid=self.mxid)
         except Exception:
             self.log.exception("Failed to automatically enable custom puppet")
@@ -525,7 +531,10 @@ class User(DBUser, BaseUser):
             return
         error_code = "ig-checkpoint"
         try:
-            resp = await client.challenge_reset()
+            resp = await self.proxy_with_retry(
+                "user._handle_checkpoint",
+                lambda: client.challenge_reset(),
+            )
             info = {
                 "challenge_context": (
                     resp.challenge_context.serialize() if resp.challenge_context_str else None
@@ -586,7 +595,10 @@ class User(DBUser, BaseUser):
                 await asyncio.sleep(self.config["bridge.backfill.incremental.page_delay"])
 
                 portal.log.debug("Fetching more messages for forward backfill")
-                resp = await self.client.get_thread(portal.thread_id, cursor=cursor)
+                resp = await self.proxy_with_retry(
+                    "user._sync_thread",
+                    lambda: self.client.get_thread(portal.thread_id, cursor=cursor),
+                )
                 if len(resp.thread.items) == 0:
                     break
                 original_number_of_messages = len(resp.thread.items)
@@ -659,20 +671,13 @@ class User(DBUser, BaseUser):
         if not self._listen_task:
             self.state.reset_pigeon_session_id()
         sleep_minutes = 2
-        errors = 0
         while True:
             try:
-                resp = await self.client.get_inbox()
-                break
-            except RETRYABLE_PROXY_EXCEPTIONS as e:
-                errors += 1
-                wait = min(errors * 10, 60)
-                self.log.warning(
-                    f"{e.__class__.__name__} while trying to sync, retrying in {wait} seconds: {e}"
+                resp = await self.proxy_with_retry(
+                    "user._sync",
+                    lambda: self.client.get_inbox(),
                 )
-                await asyncio.sleep(wait)
-                if errors > 1:
-                    await self._maybe_update_proxy("sync error")
+                break
             except IGNotLoggedInError as e:
                 self.log.exception("Got not logged in error while syncing")
                 await self.logout(error=e)
@@ -714,13 +719,16 @@ class User(DBUser, BaseUser):
         elif sync_count < 0:
             local_limit = None
 
-        await self._sync_threads_with_delay(
-            self.client.iter_inbox(
-                self._update_seq_id_and_cursor, start_at=resp, local_limit=local_limit
+        await self.proxy_with_retry(
+            "user._sync",
+            lambda: self._sync_threads_with_delay(
+                self.client.iter_inbox(
+                    self._update_seq_id_and_cursor, start_at=resp, local_limit=local_limit
+                ),
+                stop_when_threads_have_no_messages_to_backfill=True,
+                increment_total_backfilled_portals=increment_total_backfilled_portals,
+                local_limit=local_limit,
             ),
-            stop_when_threads_have_no_messages_to_backfill=True,
-            increment_total_backfilled_portals=increment_total_backfilled_portals,
-            local_limit=local_limit,
         )
 
         try:
@@ -771,15 +779,18 @@ class User(DBUser, BaseUser):
                 ),
             )
         backoff = self.config.get("bridge.backfill.backoff.thread_list", 300)
-        await self._sync_threads_with_delay(
-            self.client.iter_inbox(
-                self._update_seq_id_and_cursor,
-                start_at=start_at,
+        await self.proxy_with_retry(
+            "user._backfill_threads",
+            lambda: self._sync_threads_with_delay(
+                self.client.iter_inbox(
+                    self._update_seq_id_and_cursor,
+                    start_at=start_at,
+                    local_limit=local_limit,
+                    rate_limit_exceeded_backoff=backoff,
+                ),
+                increment_total_backfilled_portals=True,
                 local_limit=local_limit,
-                rate_limit_exceeded_backoff=backoff,
             ),
-            increment_total_backfilled_portals=True,
-            local_limit=local_limit,
         )
         await self.update_direct_chats()
 
@@ -878,17 +889,10 @@ class User(DBUser, BaseUser):
         errors = 0
         while True:
             try:
-                resp = await self.client.current_user()
-            except RETRYABLE_PROXY_EXCEPTIONS as e:
-                errors += 1
-                wait = min(errors * 10, 60)
-                self.log.warning(
-                    f"{e.__class__.__name__} while trying to check user for reconnection, "
-                    f"retrying in {wait} seconds: {e}"
+                resp = await self.proxy_with_retry(
+                    "user.fetch_user_and_reconnect",
+                    lambda: self.client.current_user(),
                 )
-                await asyncio.sleep(wait)
-                if errors > 1:
-                    await self._maybe_update_proxy("fetch_user_and_reconnect error")
             except IGNotLoggedInError as e:
                 self.log.warning(f"Failed to reconnect to Instagram: {e}, logging out")
                 await self.logout(error=e)
@@ -1079,7 +1083,10 @@ class User(DBUser, BaseUser):
         portal = await po.Portal.get_by_thread_id(evt.message.thread_id, receiver=self.igpk)
         if not portal or not portal.mxid:
             self.log.debug("Got message in thread with no portal, getting info...")
-            resp = await self.client.get_thread(evt.message.thread_id)
+            resp = await self.proxy_with_retry(
+                "user.handle_message",
+                lambda: self.client.get_thread(evt.message.thread_id),
+            )
             portal = await po.Portal.get_by_thread(resp.thread, self.igpk)
             self.log.debug("Got info for unknown portal, creating room")
             await portal.create_matrix_room(self, resp.thread)
