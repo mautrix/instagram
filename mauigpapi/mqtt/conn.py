@@ -623,8 +623,11 @@ class AndroidMQTT:
             proxy_handler=self.proxy_handler,
             on_proxy_change=lambda: self._dispatch(ProxyUpdate()),
             max_retries=retry_limit,
-            min_wait_seconds=10,
             retryable_exceptions=(MQTTNotConnected, MQTTReconnectionError),
+            # Wait 1s * errors, max 10s for fast reconnect or die
+            min_wait_seconds=0,
+            max_wait_seconds=10,
+            multiply_wait_seconds=1,
         )
 
         if self._event_dispatcher_task:
