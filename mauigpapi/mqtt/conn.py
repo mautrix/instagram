@@ -578,7 +578,7 @@ class AndroidMQTT:
         self.log.debug("Connecting to Instagram MQTT")
         connection_retries = 0
 
-        async def setup_connection():
+        async def connect_and_watch():
             await self._reconnect()
 
             while True:
@@ -618,7 +618,7 @@ class AndroidMQTT:
 
         await proxy_with_retry(
             "mqtt.listen",
-            lambda: setup_connection(),
+            lambda: connect_and_watch(),
             logger=self.log,
             proxy_handler=self.proxy_handler,
             on_proxy_change=lambda: self._dispatch(ProxyUpdate()),
