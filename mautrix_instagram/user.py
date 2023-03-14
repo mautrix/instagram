@@ -353,6 +353,8 @@ class User(DBUser, BaseUser):
     async def on_proxy_update(self, evt: ProxyUpdate | None = None) -> None:
         if self.client:
             self.client.setup_http(self.state.cookies.jar)
+        if self.mqtt:
+            self.mqtt.setup_proxy()
 
     # TODO this stuff could probably be moved to mautrix-python
     async def get_notice_room(self) -> RoomID:
