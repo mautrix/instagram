@@ -96,7 +96,9 @@ class BaseAndroidAPI:
             logger=self.log,
             proxy_handler=self.proxy_handler,
             on_proxy_change=self.on_proxy_update,
-            min_wait_seconds=1,  # we want to retry these pretty fast
+            # Wait 1s * errors, max 10s for fast failure
+            max_wait_seconds=10,
+            multiply_wait_seconds=1,
         )
 
     @staticmethod

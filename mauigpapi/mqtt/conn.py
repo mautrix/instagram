@@ -625,7 +625,6 @@ class AndroidMQTT:
             max_retries=retry_limit,
             retryable_exceptions=(MQTTNotConnected, MQTTReconnectionError),
             # Wait 1s * errors, max 10s for fast reconnect or die
-            min_wait_seconds=0,
             max_wait_seconds=10,
             multiply_wait_seconds=1,
         )
