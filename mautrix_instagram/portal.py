@@ -28,7 +28,7 @@ import re
 import sqlite3
 import time
 
-from aiohttp import ClientTimeout
+from aiohttp import ClientPayloadError, ClientTimeout
 from yarl import URL
 import asyncpg
 import magic
@@ -88,6 +88,7 @@ from mautrix.types import (
 )
 from mautrix.util import background_task, ffmpeg
 from mautrix.util.message_send_checkpoint import MessageSendCheckpointStatus
+from mautrix.util.proxy import RETRYABLE_PROXY_EXCEPTIONS
 
 from . import matrix as m, puppet as p, user as u
 from .config import Config
@@ -899,7 +900,12 @@ class Portal(DBPortal, BasePortal):
                 mimetype = resp.headers["Content-Type"] or magic.from_buffer(data, mime=True)
                 return data, mimetype
 
-        return await source.client.proxy_with_retry("Portal._download_instagram_file", download)
+        return await source.client.proxy_with_retry(
+            "Portal._download_instagram_file",
+            download,
+            # TODO: should ClientPayloadError be added to mautrix-python util.proxy?
+            retryable_exceptions=RETRYABLE_PROXY_EXCEPTIONS + (ClientPayloadError,),
+        )
 
     async def _reupload_instagram_file(
         self,
