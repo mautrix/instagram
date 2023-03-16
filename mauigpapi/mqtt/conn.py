@@ -576,7 +576,6 @@ class AndroidMQTT:
         self._iris_snapshot_at_ms = snapshot_at_ms
 
         self.log.debug("Connecting to Instagram MQTT")
-        connection_retries = 0
 
         async def connect_and_watch():
             await self._reconnect()
@@ -609,7 +608,7 @@ class AndroidMQTT:
                     elif rc == pmc.MQTT_ERR_CONN_REFUSED:
                         raise MQTTNotLoggedIn("MQTT connection refused")
                     elif rc == pmc.MQTT_ERR_NO_CONN:
-                        raise MQTTNotConnected(f"Connection failed {connection_retries} times")
+                        raise MQTTNotConnected("Connection failed")
                     else:
                         err = pmc.error_string(rc)
                         self.log.error("MQTT Error: %s", err)
