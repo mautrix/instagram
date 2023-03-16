@@ -28,6 +28,7 @@ import re
 import sqlite3
 import time
 
+from aiohttp import ClientTimeout
 from yarl import URL
 import asyncpg
 import magic
@@ -869,8 +870,15 @@ class Portal(DBPortal, BasePortal):
     async def _download_instagram_file(
         self, source: u.User, url: str
     ) -> tuple[Optional[bytes], str]:
+        # Use a low timeout for media reqs so we quickly retry them if they get stuck
+        timeout = ClientTimeout(
+            total=30,
+            sock_connect=5,
+            sock_read=10,
+        )
+
         async def download():
-            async with source.client.raw_http_get(url) as resp:
+            async with source.client.raw_http_get(url, timeout=timeout) as resp:
                 try:
                     length = int(resp.headers["Content-Length"])
                 except KeyError:
