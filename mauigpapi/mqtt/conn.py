@@ -599,21 +599,23 @@ class AndroidMQTT:
                     # If known/expected error
                     if rc == pmc.MQTT_ERR_CONN_LOST:
                         await self._dispatch(Disconnect(reason="Connection lost, retrying"))
-                        raise MQTTNotConnected
+                        raise MQTTNotConnected("MQTT_ERR_CONN_LOST")
                     elif rc == pmc.MQTT_ERR_NOMEM:
                         # This error is wrongly classified
                         # See https://github.com/eclipse/paho.mqtt.python/issues/340
                         await self._dispatch(Disconnect(reason="Connection lost, retrying"))
-                        raise MQTTNotConnected
+                        raise MQTTNotConnected("MQTT_ERR_NOMEM")
                     elif rc == pmc.MQTT_ERR_CONN_REFUSED:
-                        raise MQTTNotLoggedIn("MQTT connection refused")
+                        await self._dispatch(Disconnect(reason="Connection refused, retrying"))
+                        raise MQTTNotLoggedIn("MQTT_ERR_CONN_REFUSED")
                     elif rc == pmc.MQTT_ERR_NO_CONN:
-                        raise MQTTNotConnected("Connection failed")
+                        await self._dispatch(Disconnect(reason="Connection dropped, retrying"))
+                        raise MQTTNotConnected("MQTT_ERR_NO_CONN")
                     else:
                         err = pmc.error_string(rc)
                         self.log.error("MQTT Error: %s", err)
                         await self._dispatch(Disconnect(reason=f"MQTT Error: {err}, retrying"))
-                        raise MQTTNotConnected
+                        raise MQTTNotConnected(err)
 
         await proxy_with_retry(
             "mqtt.listen",
