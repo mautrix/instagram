@@ -92,7 +92,6 @@ BridgeState.human_readable_errors.update(
         "ig-checkpoint-locked": "Instagram checkpoint error. Please check the Instagram website.",
         "ig-rate-limit": "Got Instagram ratelimit error, waiting a few minutes before retrying...",
         "ig-disconnected": None,
-        "ig-no-mqtt": "You're not connected to Instagram",
         "logged-out": "You've been logged out of instagram, please login again to continue",
     }
 )
@@ -221,6 +220,18 @@ class User(DBUser, BaseUser):
     @property
     def is_connected(self) -> bool:
         return bool(self.client) and bool(self.mqtt) and self._is_connected
+
+    async def ensure_connected(self, max_wait_seconds: int = 5) -> None:
+        sleep_interval = 0.1
+        max_attempts = max_wait_seconds / sleep_interval
+        attempts = 0
+        while True:
+            if self.is_connected:
+                return
+            attempts += 1
+            if attempts > max_attempts:
+                raise Exception("You're not connected to instagram")
+            await asyncio.sleep(sleep_interval)
 
     async def connect(self, user: CurrentUser | None = None) -> None:
         if not self.state:
