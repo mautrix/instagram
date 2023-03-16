@@ -166,7 +166,7 @@ class BaseAndroidAPI:
         self.http = ClientSession(connector=connector, cookie_jar=cookie_jar)
         return None
 
-    def raw_http_get(self, url: URL | str):
+    def raw_http_get(self, url: URL | str, **kwargs):
         if isinstance(url, str):
             url = URL(url, encoded=True)
         return self.http.get(
@@ -175,6 +175,7 @@ class BaseAndroidAPI:
                 "user-agent": self.state.user_agent,
                 "accept-language": self.state.device.language.replace("_", "-"),
             },
+            **kwargs,
         )
 
     async def std_http_post(
