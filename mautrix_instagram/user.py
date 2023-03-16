@@ -64,7 +64,7 @@ from mautrix.util import background_task
 from mautrix.util.bridge_state import BridgeState, BridgeStateEvent
 from mautrix.util.logging import TraceLogger
 from mautrix.util.opt_prometheus import Gauge, Summary, async_time
-from mautrix.util.proxy import RETRYABLE_PROXY_EXCEPTIONS, ProxyHandler
+from mautrix.util.proxy import ProxyHandler
 from mautrix.util.simple_lock import SimpleLock
 
 from . import portal as po, puppet as pu
@@ -74,14 +74,6 @@ from .db import Backfill, Message as DBMessage, Portal as DBPortal, User as DBUs
 if TYPE_CHECKING:
     from .__main__ import InstagramBridge
 
-try:
-    from aiohttp_socks import ProxyConnectionError, ProxyError, ProxyTimeoutError
-except ImportError:
-
-    class ProxyError(Exception):
-        pass
-
-    ProxyConnectionError = ProxyTimeoutError = ProxyError
 
 METRIC_MESSAGE = Summary("bridge_on_message", "calls to handle_message")
 METRIC_THREAD_SYNC = Summary("bridge_on_thread_sync", "calls to handle_thread_sync")
@@ -641,13 +633,6 @@ class User(DBUser, BaseUser):
             await portal.enqueue_immediate_backfill(self, 1)
         return len(forward_messages) > 0
 
-    async def _maybe_update_proxy(self, source: str) -> None:
-        if not self._listen_task:
-            self.proxy_handler.update_proxy_url(source)
-            await self.on_proxy_update()
-        else:
-            self.log.debug(f"Not updating proxy: listen_task is still running? (caller: {source})")
-
     async def sync(self, increment_total_backfilled_portals: bool = False) -> None:
         await self.run_with_sync_lock(partial(self._sync, increment_total_backfilled_portals))
 
@@ -655,20 +640,10 @@ class User(DBUser, BaseUser):
         if not self._listen_task:
             self.state.reset_pigeon_session_id()
         sleep_minutes = 2
-        errors = 0
         while True:
             try:
                 resp = await self.client.get_inbox()
                 break
-            except RETRYABLE_PROXY_EXCEPTIONS as e:
-                errors += 1
-                wait = min(errors * 10, 60)
-                self.log.warning(
-                    f"{e.__class__.__name__} while trying to sync, retrying in {wait} seconds: {e}"
-                )
-                await asyncio.sleep(wait)
-                if errors > 1:
-                    await self._maybe_update_proxy("sync error")
             except IGNotLoggedInError as e:
                 self.log.exception("Got not logged in error while syncing")
                 await self.logout(error=e)
@@ -875,16 +850,6 @@ class User(DBUser, BaseUser):
         while True:
             try:
                 resp = await self.client.current_user()
-            except RETRYABLE_PROXY_EXCEPTIONS as e:
-                errors += 1
-                wait = min(errors * 10, 60)
-                self.log.warning(
-                    f"{e.__class__.__name__} while trying to check user for reconnection, "
-                    f"retrying in {wait} seconds: {e}"
-                )
-                await asyncio.sleep(wait)
-                if errors > 1:
-                    await self._maybe_update_proxy("fetch_user_and_reconnect error")
             except IGNotLoggedInError as e:
                 self.log.warning(f"Failed to reconnect to Instagram: {e}, logging out")
                 await self.logout(error=e)
