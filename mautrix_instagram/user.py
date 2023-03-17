@@ -64,7 +64,7 @@ from mautrix.util import background_task
 from mautrix.util.bridge_state import BridgeState, BridgeStateEvent
 from mautrix.util.logging import TraceLogger
 from mautrix.util.opt_prometheus import Gauge, Summary, async_time
-from mautrix.util.proxy import ProxyHandler
+from mautrix.util.proxy import RETRYABLE_PROXY_EXCEPTIONS, ProxyHandler
 from mautrix.util.simple_lock import SimpleLock
 
 from . import portal as po, puppet as pu
@@ -861,6 +861,13 @@ class User(DBUser, BaseUser):
         while True:
             try:
                 resp = await self.client.current_user()
+            except RETRYABLE_PROXY_EXCEPTIONS as e:
+                # These are retried by the client up to 10 times, but we actually want to retry
+                # these indefinitely so we capture them here again and retry.
+                self.log.warning(
+                    f"Proxy error fetching user from Instagram: {e}, retrying in 1 minute",
+                )
+                await asyncio.sleep(60)
             except IGNotLoggedInError as e:
                 self.log.warning(f"Failed to reconnect to Instagram: {e}, logging out")
                 await self.logout(error=e)
