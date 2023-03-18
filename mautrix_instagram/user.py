@@ -503,7 +503,6 @@ class User(DBUser, BaseUser):
                 self.start_listen()
         finally:
             self._is_refreshing = False
-            self.proxy_handler.update_proxy_url()
 
     async def _handle_checkpoint(
         self,
