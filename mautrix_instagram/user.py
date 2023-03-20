@@ -470,11 +470,13 @@ class User(DBUser, BaseUser):
             if portal.mxid
         }
 
-    async def refresh(self, resync: bool = True) -> None:
+    async def refresh(self, resync: bool = True, update_proxy: bool = False) -> None:
         self._is_refreshing = True
         try:
             await self.stop_listen()
             self.state.reset_pigeon_session_id()
+            if update_proxy and self.proxy_handler.update_proxy_url(reason="reconnect"):
+                await self.on_proxy_update()
             if resync:
                 retry_count = 0
                 minutes = 1

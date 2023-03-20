@@ -125,7 +125,7 @@ class InstagramBridge(Bridge):
                     continue
                 log.debug("Executing periodic reconnect for %s", user.mxid)
                 try:
-                    await user.refresh(resync=resync)
+                    await user.refresh(resync=resync, update_proxy=True)
                 except asyncio.CancelledError:
                     log.debug("Periodic reconnect loop stopped")
                     return
