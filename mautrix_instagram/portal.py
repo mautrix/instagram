@@ -28,7 +28,7 @@ import re
 import sqlite3
 import time
 
-from aiohttp import ClientPayloadError, ClientTimeout
+from aiohttp import ClientSession
 from yarl import URL
 import asyncpg
 import magic
@@ -88,7 +88,6 @@ from mautrix.types import (
 )
 from mautrix.util import background_task, ffmpeg
 from mautrix.util.message_send_checkpoint import MessageSendCheckpointStatus
-from mautrix.util.proxy import RETRYABLE_PROXY_EXCEPTIONS
 
 from . import matrix as m, puppet as p, user as u
 from .config import Config
@@ -871,15 +870,8 @@ class Portal(DBPortal, BasePortal):
     async def _download_instagram_file(
         self, source: u.User, url: str
     ) -> tuple[Optional[bytes], str]:
-        # Use a low timeout for media reqs so we quickly retry them if they get stuck
-        timeout = ClientTimeout(
-            total=30,
-            sock_connect=5,
-            sock_read=10,
-        )
-
-        async def download():
-            async with source.client.raw_http_get(url, timeout=timeout) as resp:
+        async with ClientSession() as session:
+            async with session.get(url) as resp:
                 try:
                     length = int(resp.headers["Content-Length"])
                 except KeyError:
@@ -900,13 +892,6 @@ class Portal(DBPortal, BasePortal):
                     return None, ""
                 mimetype = resp.headers["Content-Type"] or magic.from_buffer(data, mime=True)
                 return data, mimetype
-
-        return await source.client.proxy_with_retry(
-            "Portal._download_instagram_file",
-            download,
-            # TODO: should ClientPayloadError be added to mautrix-python util.proxy?
-            retryable_exceptions=RETRYABLE_PROXY_EXCEPTIONS + (ClientPayloadError,),
-        )
 
     async def _reupload_instagram_file(
         self,
