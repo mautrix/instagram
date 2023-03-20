@@ -894,6 +894,7 @@ class Portal(DBPortal, BasePortal):
                         f"{url} was too large ({length} > {self.matrix.media_config.upload_size})"
                     )
                     raise ValueError("Attachment not available: too large")
+                self.log.debug(f"Downloading file with length {length}: {url}")
                 data = await resp.read()
                 if not data:
                     return None, ""
