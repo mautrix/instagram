@@ -103,6 +103,7 @@ class Config(BaseBridgeConfig):
         copy("bridge.command_prefix")
 
         copy("bridge.get_proxy_api_url")
+        copy("bridge.use_proxy_for_media")
 
         copy_dict("bridge.permissions")
 

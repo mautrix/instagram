@@ -212,6 +212,8 @@ bridge:
 
     # URL to call to retrieve a proxy URL from (defaults to the http_proxy environment variable).
     get_proxy_api_url: null
+    # Whether to use proxy for downloading media from Instagram.
+    use_proxy_for_media: true
 
     # End-to-bridge encryption support options.
     #
