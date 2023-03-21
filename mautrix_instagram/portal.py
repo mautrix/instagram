@@ -28,7 +28,7 @@ import re
 import sqlite3
 import time
 
-from aiohttp import ClientSession
+from aiohttp import ClientResponse, ClientSession
 from yarl import URL
 import asyncpg
 import magic
@@ -870,28 +870,35 @@ class Portal(DBPortal, BasePortal):
     async def _download_instagram_file(
         self, source: u.User, url: str
     ) -> tuple[Optional[bytes], str]:
-        async with ClientSession() as session:
-            async with session.get(url) as resp:
-                try:
-                    length = int(resp.headers["Content-Length"])
-                except KeyError:
-                    # TODO can the download be short-circuited if there's too much data?
-                    self.log.warning(
-                        "Got file download response with no Content-Length header,"
-                        "reading data dangerously"
-                    )
-                    length = 0
-                if length > self.matrix.media_config.upload_size:
-                    self.log.debug(
-                        f"{url} was too large ({length} > {self.matrix.media_config.upload_size})"
-                    )
-                    raise ValueError("Attachment not available: too large")
-                self.log.debug(f"Downloading file with length {length}: {url}")
-                data = await resp.read()
-                if not data:
-                    return None, ""
-                mimetype = resp.headers["Content-Type"] or magic.from_buffer(data, mime=True)
-                return data, mimetype
+        async def handle_resp(resp: ClientResponse) -> tuple[Optional[bytes], str]:
+            try:
+                length = int(resp.headers["Content-Length"])
+            except KeyError:
+                # TODO can the download be short-circuited if there's too much data?
+                self.log.warning(
+                    "Got file download response with no Content-Length header,"
+                    "reading data dangerously"
+                )
+                length = 0
+            if length > self.matrix.media_config.upload_size:
+                self.log.debug(
+                    f"{url} was too large ({length} > {self.matrix.media_config.upload_size})"
+                )
+                raise ValueError("Attachment not available: too large")
+            self.log.debug(f"Downloading file with length {length}: {url}")
+            data = await resp.read()
+            if not data:
+                return None, ""
+            mimetype = resp.headers["Content-Type"] or magic.from_buffer(data, mime=True)
+            return data, mimetype
+
+        if self.config["bridge.use_proxy_for_media"]:
+            async with source.client.raw_http_get(url) as resp:
+                return await handle_resp(resp)
+        else:
+            async with ClientSession() as session:
+                async with session.get(url) as resp:
+                    return await handle_resp(resp)
 
     async def _reupload_instagram_file(
         self,
