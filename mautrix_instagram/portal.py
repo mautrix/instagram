@@ -893,11 +893,11 @@ class Portal(DBPortal, BasePortal):
             return data, mimetype
 
         if self.config["bridge.use_proxy_for_media"]:
-            async with source.client.raw_http_get(url) as resp:
+            async with source.client.raw_http_get(url, raise_for_status=True) as resp:
                 return await handle_resp(resp)
         else:
             async with ClientSession() as session:
-                async with session.get(url) as resp:
+                async with session.get(url, raise_for_status=True) as resp:
                     return await handle_resp(resp)
 
     async def _reupload_instagram_file(
