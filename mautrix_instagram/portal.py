@@ -18,6 +18,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, AsyncGenerator, Awaitable, Callable, Optional, Union, cast
 from collections import deque
 from io import BytesIO
+from urllib.parse import urlparse
 import asyncio
 import base64
 import hashlib
@@ -870,6 +871,17 @@ class Portal(DBPortal, BasePortal):
     async def _download_instagram_file(
         self, source: u.User, url: str
     ) -> tuple[Optional[bytes], str]:
+        parsed_url = URL(url)
+        if "/" in parsed_url.query_string:
+            # Hacky hacks for forcing encoded slashes in query parameters. Normally yarl/aiohttp
+            # forces decoding slashes in query parameters, but that breaks Instagram's URL signature
+            # and the CDN rejects the request. (the reason there are slashes in the URL in the
+            # first place is presumably that Instagram hasn't heard of URL-safe base64).
+            urlparsed = urlparse(url)
+            parsed_url = parsed_url.with_query(None).with_path(
+                f"{urlparsed.path}?{urlparsed.query}", encoded=True
+            )
+
         async def handle_resp(resp: ClientResponse) -> tuple[Optional[bytes], str]:
             try:
                 length = int(resp.headers["Content-Length"])
@@ -882,10 +894,10 @@ class Portal(DBPortal, BasePortal):
                 length = 0
             if length > self.matrix.media_config.upload_size:
                 self.log.debug(
-                    f"{url} was too large ({length} > {self.matrix.media_config.upload_size})"
+                    f"{parsed_url} was too large ({length} > {self.matrix.media_config.upload_size})"
                 )
                 raise ValueError("Attachment not available: too large")
-            self.log.debug(f"Downloading file with length {length}: {url}")
+            self.log.debug(f"Downloading file with length {length}: {parsed_url}")
             data = await resp.read()
             if not data:
                 return None, ""
@@ -893,11 +905,11 @@ class Portal(DBPortal, BasePortal):
             return data, mimetype
 
         if self.config["bridge.use_proxy_for_media"]:
-            async with source.client.raw_http_get(url, raise_for_status=True) as resp:
+            async with source.client.raw_http_get(parsed_url, raise_for_status=True) as resp:
                 return await handle_resp(resp)
         else:
             async with ClientSession() as session:
-                async with session.get(url, raise_for_status=True) as resp:
+                async with session.get(parsed_url, raise_for_status=True) as resp:
                     return await handle_resp(resp)
 
     async def _reupload_instagram_file(
