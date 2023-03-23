@@ -205,13 +205,23 @@ class User(DBUser, BaseUser):
         return None
 
     async def try_connect(self) -> None:
-        try:
-            await self.connect()
-        except Exception as e:
-            self.log.exception("Error while connecting to Instagram")
-            await self.push_bridge_state(
-                BridgeStateEvent.UNKNOWN_ERROR, info={"python_error": str(e)}
-            )
+        while True:
+            try:
+                await self.connect()
+            except RETRYABLE_PROXY_EXCEPTIONS as e:
+                # These are retried by the client up to 10 times, but we actually want to retry
+                # these indefinitely so we capture them here again and retry.
+                self.log.warning(
+                    f"Proxy error connecting to Instagram: {e}, retrying in 1 minute",
+                )
+                await asyncio.sleep(60)
+                continue
+            except Exception as e:
+                self.log.exception("Error while connecting to Instagram")
+                await self.push_bridge_state(
+                    BridgeStateEvent.UNKNOWN_ERROR, info={"python_error": str(e)}
+                )
+            return
 
     @property
     def api_log(self) -> TraceLogger:
