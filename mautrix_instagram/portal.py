@@ -59,7 +59,7 @@ from mauigpapi.types import (
 )
 from mautrix.appservice import DOUBLE_PUPPET_SOURCE_KEY, IntentAPI
 from mautrix.bridge import BasePortal, async_getter_lock
-from mautrix.errors import MatrixError, MForbidden, MNotFound, SessionNotFound
+from mautrix.errors import DecryptionError, MatrixError, MForbidden, MNotFound
 from mautrix.types import (
     AudioInfo,
     BatchID,
@@ -1516,7 +1516,7 @@ class Portal(DBPortal, BasePortal):
         if evt.type == EventType.ROOM_ENCRYPTED:
             try:
                 evt = await self.matrix.e2ee.decrypt(evt, wait_session_timeout=0)
-            except SessionNotFound:
+            except DecryptionError:
                 return
 
         if isinstance(evt.content, TextMessageEventContent):
