@@ -223,7 +223,7 @@ class ProvisioningAPI:
             headers=self._acao_headers,
         )
 
-    def _unknown_error(
+    async def _unknown_error(
         self, user: u.User, username: str, e: Exception, after: str, track_error: bool = True
     ) -> web.Response:
         self.log.exception(
@@ -242,6 +242,9 @@ class ProvisioningAPI:
                 error_code = e.body["error_type"]
         if track_error:
             track(user, "$login_failed", {"error": error_code})
+        if error_code == "ip_block" and user.proxy_handler:
+            user.proxy_handler.update_proxy_url(reason=error_code)
+            await user.on_proxy_update()
         return web.json_response(
             data={
                 "error": "Unknown error while logging in, please try logging in again.",
@@ -329,7 +332,7 @@ class ProvisioningAPI:
                 headers=self._acao_headers,
             )
         except Exception as e:
-            return self._unknown_error(user, username, e, after="password")
+            return await self._unknown_error(user, username, e, after="password")
         return await self._finish_login(user, state, api, login_resp=resp, after="password")
 
     def _2fa_required(
@@ -413,7 +416,7 @@ class ProvisioningAPI:
             )
         except Exception as e:
             track(user, "$login_resend_2fa_sms_fail", {"error": "unknown"})
-            return self._unknown_error(
+            return await self._unknown_error(
                 user, username, e, after="2fa sms request", track_error=False
             )
         return web.json_response(
@@ -485,7 +488,7 @@ class ProvisioningAPI:
         except IGCheckpointError as e:
             return self._checkpoint_error(user, username, e, after="2fa")
         except Exception as e:
-            return self._unknown_error(user, username, e, after="2fa")
+            return await self._unknown_error(user, username, e, after="2fa")
         return await self._finish_login(user, state, api, login_resp=resp, after="2-factor auth")
 
     async def start_checkpoint(
@@ -575,7 +578,7 @@ class ProvisioningAPI:
         except IGCheckpointError as e:
             return self._checkpoint_error(user, "<username not known>", e, after="challenge")
         except Exception as e:
-            return self._unknown_error(user, "<username not known>", e, after="challenge")
+            return await self._unknown_error(user, "<username not known>", e, after="challenge")
         liu = resp.logged_in_user
         challenge_data = resp.serialize()
         challenge_data.pop("logged_in_user", None)
@@ -633,7 +636,7 @@ class ProvisioningAPI:
         except IGLoginRequiredError as e:
             return self._login_required_error(user, username, e, after=f"{after}/success")
         except Exception as e:
-            return self._unknown_error(user, username, e, after=f"{after}/success")
+            return await self._unknown_error(user, username, e, after=f"{after}/success")
         track(user, "$login_success")
         await user.connect(user=resp.user)
         return web.json_response(
@@ -786,7 +789,9 @@ class ProvisioningAPI:
         except IGConsentRequiredError as e:
             return self._consent_error(user, "<facebook credentials>", e, after="facebook auth")
         except Exception as e:
-            return self._unknown_error(user, "<facebook credentials>", e, after="facebook auth")
+            return await self._unknown_error(
+                user, "<facebook credentials>", e, after="facebook auth"
+            )
         return await self._finish_login(user, state, api, login_resp=resp, after="facebook auth")
 
     def _no_fb_account(
