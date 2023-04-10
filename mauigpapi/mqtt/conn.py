@@ -80,7 +80,8 @@ ACTIVITY_INDICATOR_REGEX = re.compile(
 
 INBOX_THREAD_REGEX = re.compile(r"/direct_v2/inbox/threads/([\w_]+)")
 
-REQUEST_TIMEOUT = 30
+REQUEST_PUBLISH_TIMEOUT = 5
+REQUEST_RESPONSE_TIMEOUT = 30
 
 
 class AndroidMQTT:
@@ -661,7 +662,9 @@ class AndroidMQTT:
         info = self._client.publish(topic.encoded, payload, qos=1)
         self.log.trace(f"Published message ID: {info.mid}")
         fut = self._loop.create_future()
-        timeout_handle = self._loop.call_later(REQUEST_TIMEOUT, self._publish_cancel_later, fut)
+        timeout_handle = self._loop.call_later(
+            REQUEST_PUBLISH_TIMEOUT, self._publish_cancel_later, fut
+        )
         fut.add_done_callback(lambda _: timeout_handle.cancel())
         self._publish_waiters[info.mid] = fut
         return fut
@@ -690,7 +693,7 @@ class AndroidMQTT:
                 f"Request published to {topic.value}, waiting for response {response.name}"
             )
             timeout_handle = self._loop.call_later(
-                timeout or REQUEST_TIMEOUT, self._request_cancel_later, fut
+                timeout or REQUEST_RESPONSE_TIMEOUT, self._request_cancel_later, fut
             )
             fut.add_done_callback(lambda _: timeout_handle.cancel())
             return await fut
@@ -789,7 +792,7 @@ class AndroidMQTT:
                 f"waiting for response {RealtimeTopic.SEND_MESSAGE_RESPONSE}"
             )
             try:
-                resp = await asyncio.wait_for(fut, timeout=REQUEST_TIMEOUT)
+                resp = await asyncio.wait_for(fut, timeout=REQUEST_RESPONSE_TIMEOUT)
             except asyncio.TimeoutError:
                 self.log.error(f"Request with ID {client_context} timed out!")
                 raise
