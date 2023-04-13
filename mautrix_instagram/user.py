@@ -452,15 +452,15 @@ class User(DBUser, BaseUser):
     async def _try_sync_puppet(self, user_info: CurrentUser) -> None:
         puppet = await pu.Puppet.get_by_pk(self.igpk)
         try:
-            await puppet.update_info(user_info, self)
-        except Exception:
-            self.log.exception("Failed to update own puppet info")
-        try:
             if puppet.custom_mxid != self.mxid and puppet.can_auto_login(self.mxid):
                 self.log.info("Automatically enabling custom puppet")
                 await puppet.switch_mxid(access_token="auto", mxid=self.mxid)
         except Exception:
             self.log.exception("Failed to automatically enable custom puppet")
+        try:
+            await puppet.update_info(user_info, self)
+        except Exception:
+            self.log.exception("Failed to update own puppet info")
 
     async def _try_sync(self) -> None:
         try:
