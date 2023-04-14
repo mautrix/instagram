@@ -1,5 +1,5 @@
 # mautrix-instagram - A Matrix-Instagram puppeting bridge.
-# Copyright (C) 2022 Tulir Asokan
+# Copyright (C) 2023 Tulir Asokan
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as published by
@@ -82,7 +82,14 @@ class Config(BaseBridgeConfig):
         copy("bridge.periodic_reconnect.interval")
         copy("bridge.periodic_reconnect.resync")
         copy("bridge.periodic_reconnect.always")
-        copy("bridge.private_chat_portal_meta")
+        if isinstance(self.get("bridge.private_chat_portal_meta", "default"), bool):
+            base["bridge.private_chat_portal_meta"] = (
+                "always" if self["bridge.private_chat_portal_meta"] else "default"
+            )
+        else:
+            copy("bridge.private_chat_portal_meta")
+            if base["bridge.private_chat_portal_meta"] not in ("default", "always", "never"):
+                base["bridge.private_chat_portal_meta"] = "default"
         copy("bridge.delivery_receipts")
         copy("bridge.delivery_error_reports")
         copy("bridge.message_status_events")

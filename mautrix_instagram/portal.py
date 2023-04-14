@@ -1,5 +1,5 @@
 # mautrix-instagram - A Matrix-Instagram puppeting bridge.
-# Copyright (C) 2022 Tulir Asokan
+# Copyright (C) 2023 Tulir Asokan
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as published by
@@ -15,7 +15,17 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, AsyncGenerator, Awaitable, Callable, Optional, Union, cast
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    AsyncGenerator,
+    Awaitable,
+    Callable,
+    Literal,
+    Optional,
+    Union,
+    cast,
+)
 from collections import deque
 from io import BytesIO
 from urllib.parse import urlparse
@@ -142,7 +152,7 @@ class Portal(DBPortal, BasePortal):
     by_thread_id: dict[tuple[str, int], Portal] = {}
     config: Config
     matrix: m.MatrixHandler
-    private_chat_portal_meta: bool
+    private_chat_portal_meta: Literal["default", "always", "never"]
 
     _main_intent: IntentAPI | None
     _create_room_lock: asyncio.Lock
@@ -202,6 +212,14 @@ class Portal(DBPortal, BasePortal):
     @property
     def is_direct(self) -> bool:
         return self.other_user_pk is not None
+
+    @property
+    def set_dm_room_metadata(self) -> bool:
+        return (
+            not self.is_direct
+            or self.private_chat_portal_meta == "always"
+            or (self.encrypted and self.private_chat_portal_meta != "never")
+        )
 
     @property
     def main_intent(self) -> IntentAPI:
@@ -1846,7 +1864,7 @@ class Portal(DBPortal, BasePortal):
         mxc = await self.main_intent.upload_media(
             data=data,
             mime_type=mimetype,
-            filename=thread.thread_image.id,
+            filename=str(thread.thread_image.id),
             async_upload=self.config["homeserver.async_media"],
         )
         self.thread_image_id = thread.thread_image.id
@@ -1867,12 +1885,12 @@ class Portal(DBPortal, BasePortal):
             return
         if not puppet:
             puppet = await self.get_dm_puppet()
-        await self._update_photo_from_puppet(puppet)
+        await self._update_photo(puppet.photo_mxc)
         if self.name and not self.name_set:
             await self._update_name(self.name)
 
     async def _update_name(self, name: str) -> bool:
-        if name and (self.name != name or not self.name_set):
+        if name and (self.name != name or (not self.name_set and self.set_dm_room_metadata)):
             self.name = name
             if self.mxid:
                 try:
@@ -1884,22 +1902,17 @@ class Portal(DBPortal, BasePortal):
             return True
         return False
 
-    async def _update_photo_from_puppet(self, puppet: p.Puppet) -> bool:
-        if not self.private_chat_portal_meta and not self.encrypted:
-            return False
-        return await self._update_photo(puppet.photo_mxc)
-
     async def _update_photo(self, photo_mxc: ContentURI) -> bool:
-        if self.avatar_set and self.avatar_url == photo_mxc:
+        if self.avatar_url == photo_mxc and (self.avatar_set or not self.set_dm_room_metadata):
             return False
         self.avatar_url = photo_mxc
-        if self.mxid:
+        self.avatar_set = False
+        if self.mxid and self.set_dm_room_metadata:
             try:
                 await self.main_intent.set_room_avatar(self.mxid, photo_mxc)
                 self.avatar_set = True
             except Exception:
                 self.log.exception("Failed to set room avatar")
-                self.avatar_set = False
         return True
 
     async def _update_participants(self, users: list[ThreadUser], source: u.User) -> bool:
@@ -1912,7 +1925,7 @@ class Portal(DBPortal, BasePortal):
             if self.mxid:
                 await puppet.intent_for(self).ensure_joined(self.mxid)
             if puppet.pk == self.other_user_pk:
-                meta_changed = await self._update_photo_from_puppet(puppet)
+                meta_changed = await self._update_photo(puppet.photo_mxc)
 
         if self.mxid:
             # Kick puppets who shouldn't be here
@@ -2520,7 +2533,6 @@ class Portal(DBPortal, BasePortal):
             return self.mxid
         await self.update_info(info, source)
         self.log.debug("Creating Matrix room")
-        name: str | None = None
         initial_state = [
             {
                 "type": str(StateBridge),
@@ -2545,14 +2557,12 @@ class Portal(DBPortal, BasePortal):
             )
             if self.is_direct:
                 invites.append(self.az.bot_mxid)
-        if self.encrypted or self.private_chat_portal_meta or not self.is_direct:
-            name = self.name
 
         creation_content = {}
         if not self.config["bridge.federate_rooms"]:
             creation_content["m.federate"] = False
         self.mxid = await self.main_intent.create_room(
-            name=name,
+            name=self.name if self.set_dm_room_metadata else None,
             is_direct=self.is_direct,
             initial_state=initial_state,
             invitees=invites,
