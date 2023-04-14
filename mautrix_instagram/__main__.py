@@ -36,6 +36,8 @@ from .web import ProvisioningAPI
 class InstagramBridge(Bridge):
     name = "mautrix-instagram"
     module = "mautrix_instagram"
+    beeper_service_name = "instagram"
+    beeper_network_name = "instagram"
     command = "python -m mautrix-instagram"
     description = "A Matrix-Instagram DM puppeting bridge."
     repo_url = "https://github.com/mautrix/instagram"
