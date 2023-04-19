@@ -15,7 +15,7 @@
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, AsyncGenerator, AsyncIterable, Awaitable, cast
+from typing import TYPE_CHECKING, Any, AsyncGenerator, AsyncIterable, Awaitable, cast
 import os.path
 
 from yarl import URL
@@ -128,13 +128,13 @@ class Puppet(DBPuppet, BasePuppet):
         )
 
     async def update_info(self, info: BaseResponseUser, source: u.User) -> None:
-        update = await self._update_contact_info(info)
+        update = await self.update_contact_info(info)
         update = await self._update_name(info) or update
         update = await self._update_avatar(info, source) or update
         if update:
             await self.update()
 
-    async def _update_contact_info(self, info: BaseResponseUser | None = None) -> bool:
+    async def update_contact_info(self, info: BaseResponseUser | None = None) -> bool:
         if not self.bridge.homeserver_software.is_hungry:
             return False
 
@@ -142,17 +142,15 @@ class Puppet(DBPuppet, BasePuppet):
             return False
 
         try:
-            identifiers = []
+            contact_info: dict[str, Any] = {
+                "com.beeper.bridge.remote_id": str(self.igpk),
+                "com.beeper.bridge.service": self.bridge.beeper_service_name,
+                "com.beeper.bridge.network": self.bridge.beeper_network_name,
+            }
             if info and info.username:
-                identifiers.append(f"instagram:{info.username}")
-            await self.default_mxid_intent.beeper_update_profile(
-                {
-                    "com.beeper.bridge.identifiers": identifiers,
-                    "com.beeper.bridge.remote_id": str(self.fbid),
-                    "com.beeper.bridge.service": self.bridge.beeper_service_name,
-                    "com.beeper.bridge.network": self.bridge.beeper_network_name,
-                }
-            )
+                contact_info["com.beeper.bridge.identifiers"] = [f"instagram:{info.username}"]
+
+            await self.default_mxid_intent.beeper_update_profile(contact_info)
             self.contact_info_set = True
         except Exception:
             self.log.exception("Error updating contact info")
@@ -280,7 +278,18 @@ class Puppet(DBPuppet, BasePuppet):
     async def all_with_custom_mxid(cls) -> AsyncGenerator[Puppet, None]:
         puppets = await super().all_with_custom_mxid()
         puppet: cls
-        for index, puppet in enumerate(puppets):
+        for puppet in puppets:
+            try:
+                yield cls.by_pk[puppet.pk]
+            except KeyError:
+                puppet._add_to_cache()
+                yield puppet
+
+    @classmethod
+    async def get_all(cls) -> AsyncGenerator[Puppet, None]:
+        puppets = await super().get_all()
+        puppet: cls
+        for puppet in puppets:
             try:
                 yield cls.by_pk[puppet.pk]
             except KeyError:
