@@ -709,7 +709,10 @@ class Portal(DBPortal, BasePortal):
 
         async with self._reaction_lock:
             resp = await sender.mqtt.send_reaction(
-                self.thread_id, item_id=message.item_id, emoji=emoji
+                self.thread_id,
+                item_id=message.item_id,
+                emoji=emoji,
+                original_message_client_context=message.client_context,
             )
             if resp.status != "ok":
                 if resp.payload and resp.payload.message == "invalid unicode emoji":
@@ -758,6 +761,7 @@ class Portal(DBPortal, BasePortal):
                     item_id=reaction.ig_item_id,
                     reaction_status=ReactionStatus.DELETED,
                     emoji="",
+                    # TODO set original_message_client_context
                 )
             except Exception as e:
                 raise Exception(f"Removing reaction failed: {e}")
@@ -769,7 +773,9 @@ class Portal(DBPortal, BasePortal):
         if message and not message.is_internal:
             try:
                 await message.delete()
-                await sender.client.delete_item(self.thread_id, message.item_id)
+                await sender.client.delete_item(
+                    self.thread_id, message.item_id, message.client_context
+                )
                 self.log.trace(f"Removed {message} after Matrix redaction")
             except Exception as e:
                 raise Exception(f"Removing message failed: {e}")

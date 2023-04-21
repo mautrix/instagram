@@ -20,9 +20,9 @@ from mautrix.types import SerializableAttrs
 
 @dataclass
 class AndroidApplication(SerializableAttrs):
-    APP_VERSION: str = "256.0.0.18.105"
-    APP_VERSION_CODE: str = "407842973"
+    APP_VERSION: str = "279.0.0.23.112"
+    APP_VERSION_CODE: str = "466535821"
     FACEBOOK_ANALYTICS_APPLICATION_ID: str = "567067343352427"
 
-    BLOKS_VERSION_ID: str = "0928297a84f74885ff39fc1628f8a40da3ef1c467555d555bfd9f8fe1aaacafe"
+    BLOKS_VERSION_ID: str = "2fecedb8f3d321e9fc9b22f9693830c31650ff5b50516bdde984ff1b2090d2ac"
     CAPABILITIES: str = "3brTv10="

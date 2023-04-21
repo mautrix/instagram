@@ -44,12 +44,13 @@ class UploadAPI(BaseAndroidAPI):
                 }
             ),
             "media_type": str(MediaType.IMAGE.value),
+            "sticker_burnin_params": json.dumps([]),
             "upload_id": upload_id,
             "xsharing_user_ids": json.dumps([]),
         }
         if mime == "image/jpeg":
             params["image_compression"] = json.dumps(
-                {"lib_name": "moz", "lib_version": "3.1.m", "quality": 80}
+                {"lib_name": "moz", "lib_version": "3.1.m", "quality": "0"}
             )
         if width and height:
             params["original_width"] = str(width)
@@ -101,6 +102,8 @@ class UploadAPI(BaseAndroidAPI):
         if audio:
             params["is_direct_voice"] = "1"
         else:
+            params["sticker_burnin_params"] = json.dumps([])
+            params["hflip"] = "false"
             params["direct_v2"] = "1"
             params["for_direct_story"] = "1"
             params["content_tags"] = "use_default_cover"
@@ -121,6 +124,7 @@ class UploadAPI(BaseAndroidAPI):
         if not audio:
             headers["segment-type"] = "3"
             headers["segment-start-offset"] = "0"
+        # TODO call GET /rupload_igvideo with same params and priority header
         return (
             await self.std_http_post(
                 f"/rupload_igvideo/{name}",
@@ -133,7 +137,12 @@ class UploadAPI(BaseAndroidAPI):
         )
 
     async def finish_upload(
-        self, upload_id: str, source_type: str, video: bool = False
+        self,
+        upload_id: str,
+        source_type: str,
+        video: bool = False,
+        width: int | None = None,
+        height: int | None = None,
     ) -> FinishUploadResponse:
         headers = {
             "retry_context": json.dumps(
@@ -146,7 +155,6 @@ class UploadAPI(BaseAndroidAPI):
         }
         req = {
             "timezone_offset": self.state.device.timezone_offset,
-            "_csrftoken": self.state.cookies.csrf_token,
             "source_type": source_type,
             "_uid": self.state.session.ds_user_id,
             "device_id": self.state.device.id,
@@ -156,6 +164,14 @@ class UploadAPI(BaseAndroidAPI):
         }
         query = {}
         if video:
+            if width and height:
+                req["extra"] = {
+                    "source_width": width,
+                    "source_height": height,
+                }
+            req["filter_type"] = "0"
+            req["include_e2ee_mentioned_user_list"] = "false"
+            req["video_result"] = ""
             query["video"] = "1"
         return await self.std_http_post(
             "/api/v1/media/upload_finish/",

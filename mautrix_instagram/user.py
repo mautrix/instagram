@@ -1042,6 +1042,9 @@ class User(DBUser, BaseUser):
         self.mqtt = None
         self.state = None
         self.seq_id = None
+        if self._seq_id_save_task and not self._seq_id_save_task.done():
+            self._seq_id_save_task.cancel()
+            self._seq_id_save_task = None
         self.snapshot_at_ms = None
         self.thread_sync_completed = False
         self._is_logged_in = False
@@ -1052,6 +1055,8 @@ class User(DBUser, BaseUser):
 
     async def _save_seq_id_after_sleep(self) -> None:
         await asyncio.sleep(120)
+        if self.seq_id is None:
+            return
         self._seq_id_save_task = None
         self.log.trace("Saving sequence ID %d/%d", self.seq_id, self.snapshot_at_ms)
         try:
