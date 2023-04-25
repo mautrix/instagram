@@ -550,6 +550,14 @@ class VideoCallEvent(SerializableAttrs):
     description: str
 
 
+@dataclass
+class PlaceholderItem(SerializableAttrs):
+    title: Optional[str] = None
+    message: Optional[str] = None
+    reason: Optional[int] = None
+    # is_linked: bool
+
+
 @dataclass(kw_only=True)
 class ThreadItem(SerializableAttrs):
     item_id: Optional[str] = None
@@ -591,6 +599,7 @@ class ThreadItem(SerializableAttrs):
     clip: Optional[ClipItem] = None
     felix_share: Optional[FelixShareItem] = None
     profile: Optional[ProfileItem] = None
+    placeholder: Optional[PlaceholderItem] = None
     video_call_event: Optional[VideoCallEvent] = None
 
     @property

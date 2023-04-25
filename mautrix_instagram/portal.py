@@ -1454,6 +1454,14 @@ class Portal(DBPortal, BasePortal):
         await self._add_instagram_reply(content, item.replied_to_message)
         return EventType.ROOM_MESSAGE, content
 
+    async def _convert_instagram_placeholder(self, item: ThreadItem) -> ConvertedMessage:
+        content = TextMessageEventContent(
+            msgtype=MessageType.NOTICE, body=item.placeholder.message
+        )
+        content["com.beeper.linkpreviews"] = []
+        await self._add_instagram_reply(content, item.replied_to_message)
+        return EventType.ROOM_MESSAGE, content
+
     async def _convert_instagram_unhandled(self, item: ThreadItem) -> ConvertedMessage:
         content = TextMessageEventContent(
             msgtype=MessageType.NOTICE, body=f"Unsupported message type {item.item_type.value}"
@@ -1727,6 +1735,11 @@ class Portal(DBPortal, BasePortal):
             converted.append(await self._convert_instagram_text(item, item.like))
         elif item.link:
             converted.append(await self._convert_instagram_link(source, intent, item))
+        elif item.placeholder and len(converted) == 0:
+            self.log.warning(
+                f"Got placeholder item in {item.item_id}: {item.placeholder.serialize()}"
+            )
+            converted.append(await self._convert_instagram_placeholder(item))
 
         if len(converted) == 0:
             self.log.debug(f"Unhandled Instagram message {item.item_id}")
