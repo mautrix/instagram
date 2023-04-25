@@ -81,6 +81,7 @@ class ThreadItemType(ExtensibleEnum):
     XMA_REEL_SHARE = "xma_reel_share"
     XMA_STORY_SHARE = "xma_story_share"
     XMA_REEL_MENTION = "xma_reel_mention"
+    XMA_CLIP = "xma_clip"
     EXPIRED_PLACEHOLDER = "expired_placeholder"
 
 
@@ -579,6 +580,7 @@ class ThreadItem(SerializableAttrs):
     xma_story_share: Optional[List[XMAMediaShareItem]] = None
     xma_reel_share: Optional[List[XMAMediaShareItem]] = None
     xma_reel_mention: Optional[List[XMAMediaShareItem]] = None
+    xma_clip: Optional[List[XMAMediaShareItem]] = None
     xma_profile: Optional[List[XMAMediaProfileShareItem]] = None
     reel_share: Optional[ReelShareItem] = None
     story_share: Optional[StoryShareItem] = None
