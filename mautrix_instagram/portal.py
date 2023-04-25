@@ -864,6 +864,15 @@ class Portal(DBPortal, BasePortal):
     async def _reupload_instagram_xma(
         self, source: u.User, media: XMAMediaShareItem, intent: IntentAPI
     ) -> MediaMessageEventContent:
+        reel_clip_id = media.reel_share_clip_id
+        if reel_clip_id:
+            try:
+                fetched_clip = await source.client.fetch_clip(reel_clip_id)
+                return await self._reupload_instagram_media(source, fetched_clip.media, intent)
+            except Exception:
+                self.log.exception(f"Failed to fetch clip {reel_clip_id}, using fallback")
+        elif "/reel/" in media.target_url:
+            self.log.warning(f"No reel share clip ID found in {media.target_url}")
         url = media.preview_url
         info = ImageInfo(
             mimetype=media.preview_url_mime_type,

@@ -25,6 +25,7 @@ from ..types import (
     CommandResponse,
     DMInboxResponse,
     DMThreadResponse,
+    FetchedClipInfo,
     Thread,
     ThreadAction,
     ThreadItemType,
@@ -253,4 +254,11 @@ class ThreadAPI(BaseAndroidAPI):
     ) -> CommandResponse:
         return await self._broadcast(
             thread_id, item_type.value, CommandResponse, signed, client_context, **kwargs
+        )
+
+    async def fetch_clip(self, media_id: int) -> FetchedClipInfo:
+        return await self.std_http_get(
+            f"/api/v1/clips/item/",
+            query={"clips_media_id": str(media_id)},
+            response_type=FetchedClipInfo,
         )

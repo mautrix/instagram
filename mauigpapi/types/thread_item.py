@@ -17,6 +17,7 @@ from typing import List, Optional, Union
 import logging
 
 from attr import dataclass
+from yarl import URL
 import attr
 
 from mautrix.types import (
@@ -517,6 +518,16 @@ class XMAMediaShareItem(SerializableAttrs):
     preview_width: Optional[int] = None
     preview_height: Optional[int] = None
 
+    @property
+    def reel_share_clip_id(self) -> Optional[int]:
+        if "instagram.com/reel/" not in self.target_url:
+            return None
+        try:
+            real_id, extra_id = URL(self.target_url).query["id"].split("_")
+            return int(real_id)
+        except (ValueError, KeyError):
+            return None
+
 
 @dataclass
 class XMAMediaProfileShareItem(SerializableAttrs):
@@ -556,6 +567,12 @@ class PlaceholderItem(SerializableAttrs):
     message: Optional[str] = None
     reason: Optional[int] = None
     # is_linked: bool
+
+
+@dataclass
+class FetchedClipInfo(SerializableAttrs):
+    media: MediaShareItem
+    status: str
 
 
 @dataclass(kw_only=True)

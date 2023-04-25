@@ -80,6 +80,7 @@ from .thread_item import (
     CreateModeAttribution,
     CreativeConfig,
     ExpiredMediaItem,
+    FetchedClipInfo,
     ImageVersion,
     ImageVersions,
     LinkContext,
