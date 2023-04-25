@@ -864,20 +864,30 @@ class Portal(DBPortal, BasePortal):
     async def _reupload_instagram_xma(
         self, source: u.User, media: XMAMediaShareItem, intent: IntentAPI
     ) -> MediaMessageEventContent:
-        reel_clip_id = media.reel_share_clip_id
-        if reel_clip_id:
-            try:
-                fetched_clip = await source.client.fetch_clip(reel_clip_id)
-                return await self._reupload_instagram_media(source, fetched_clip.media, intent)
-            except Exception:
-                self.log.exception(f"Failed to fetch clip {reel_clip_id}, using fallback")
-        elif "/reel/" in media.target_url:
-            self.log.warning(f"No reel share clip ID found in {media.target_url}")
         url = media.preview_url
         info = ImageInfo(
             mimetype=media.preview_url_mime_type,
         )
-        return await self._reupload_instagram_file(source, url, MessageType.IMAGE, info, intent)
+        reuploaded_image = await self._reupload_instagram_file(
+            source, url, MessageType.IMAGE, info, intent
+        )
+        reel_clip_id = media.reel_share_clip_id
+        if reel_clip_id:
+            try:
+                fetched_clip = await source.client.fetch_clip(reel_clip_id)
+                reuploaded_video = await self._reupload_instagram_media(
+                    source, fetched_clip.media, intent
+                )
+            except Exception:
+                self.log.exception(f"Failed to fetch clip {reel_clip_id}, using fallback")
+            else:
+                reuploaded_video.info.thumbnail_file = reuploaded_image.file
+                reuploaded_video.info.thumbnail_url = reuploaded_image.url
+                reuploaded_video.info.thumbnail_info = reuploaded_image.info
+                return reuploaded_video
+        elif "/reel/" in media.target_url:
+            self.log.warning(f"No reel share clip ID found in {media.target_url}")
+        return reuploaded_image
 
     async def _reupload_instagram_voice(
         self, source: u.User, media: VoiceMediaItem, intent: IntentAPI
