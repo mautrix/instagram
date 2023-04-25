@@ -63,14 +63,7 @@ from .mqtt import (
     ZeroProductProvisioningEvent,
 )
 from .qe import AndroidExperiment, QeSyncExperiment, QeSyncExperimentParam, QeSyncResponse
-from .thread import (
-    Thread,
-    ThreadImageCandidate,
-    ThreadItem,
-    ThreadTheme,
-    ThreadUser,
-    ThreadUserLastSeenAt,
-)
+from .thread import Thread, ThreadTheme, ThreadUser, ThreadUserLastSeenAt
 from .thread_item import (
     AnimatedMediaImage,
     AnimatedMediaImages,
@@ -98,6 +91,7 @@ from .thread_item import (
     RegularMediaItem,
     ReplayableMediaItem,
     SharingFrictionInfo,
+    ThreadImage,
     ThreadItem,
     ThreadItemActionLog,
     ThreadItemType,

@@ -1095,7 +1095,9 @@ class User(DBUser, BaseUser):
             )
             return
         sender = await pu.Puppet.get_by_pk(evt.message.user_id) if evt.message.user_id else None
-        if evt.message.op == Operation.ADD:
+        if evt.message.is_thread_image:
+            await portal.update_thread_image(self, evt.message.thread_image, sender=sender)
+        elif evt.message.op == Operation.ADD:
             if not sender:
                 # I don't think we care about adds with no sender
                 return

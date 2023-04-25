@@ -124,6 +124,25 @@ class ImageVersions(SerializableAttrs):
     candidates: List[ImageVersion]
 
 
+@dataclass
+class ImageVersionsContainer(SerializableAttrs):
+    image_versions2: Optional[ImageVersions] = None
+    original_width: Optional[int] = None
+    original_height: Optional[int] = None
+
+    @property
+    def best_image(self) -> Optional[ImageVersion]:
+        if not self.image_versions2:
+            return None
+        best: Optional[ImageVersion] = None
+        for version in self.image_versions2.candidates:
+            if version.width == self.original_width and version.height == self.original_height:
+                return version
+            elif not best or (version.width * version.height > best.width * best.height):
+                best = version
+        return best
+
+
 @dataclass(kw_only=True)
 class VideoVersion(SerializableAttrs):
     type: int
@@ -156,12 +175,9 @@ class ExpiredMediaItem(SerializableAttrs):
 
 
 @dataclass(kw_only=True)
-class RegularMediaItem(SerializableAttrs):
+class RegularMediaItem(ImageVersionsContainer, SerializableAttrs):
     id: str
-    image_versions2: Optional[ImageVersions] = None
     video_versions: Optional[List[VideoVersion]] = None
-    original_width: Optional[int] = None
-    original_height: Optional[int] = None
     media_type: MediaType
     media_id: Optional[int] = None
     organic_tracking_token: Optional[str] = None
@@ -169,18 +185,6 @@ class RegularMediaItem(SerializableAttrs):
     create_mode_attribution: Optional[CreateModeAttribution] = None
     is_commercial: Optional[bool] = None
     commerciality_status: Optional[str] = None  # TODO enum? commercial
-
-    @property
-    def best_image(self) -> Optional[ImageVersion]:
-        if not self.image_versions2:
-            return None
-        best: Optional[ImageVersion] = None
-        for version in self.image_versions2.candidates:
-            if version.width == self.original_width and version.height == self.original_height:
-                return version
-            elif not best or (version.width * version.height > best.width * best.height):
-                best = version
-        return best
 
     @property
     def best_video(self) -> Optional[VideoVersion]:
@@ -589,6 +593,12 @@ class MentionedEntity(SerializableAttrs):
 
 
 @dataclass(kw_only=True)
+class ThreadImage(ImageVersionsContainer, SerializableAttrs):
+    id: int
+    media_type: int
+
+
+@dataclass(kw_only=True)
 class ThreadItem(SerializableAttrs):
     item_id: Optional[str] = None
     user_id: Optional[int] = None
@@ -603,6 +613,7 @@ class ThreadItem(SerializableAttrs):
     client_context: Optional[str] = None
     show_forward_attribution: Optional[bool] = None
     action_log: Optional[ThreadItemActionLog] = None
+    thread_image: Optional[ThreadImage] = None
     auxiliary_text: Optional[str] = None
     auxiliary_text_source_type: Optional[int] = None
     message_item_type: Optional[str] = None

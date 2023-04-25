@@ -58,7 +58,7 @@ from mauigpapi.types import (
     ReelShareType,
     RegularMediaItem,
     Thread,
-    ThreadImageCandidate,
+    ThreadImage,
     ThreadItem,
     ThreadItemType,
     ThreadUser,
@@ -1892,33 +1892,35 @@ class Portal(DBPortal, BasePortal):
 
         return ""
 
-    async def _get_thread_avatar(self, source: u.User, thread: Thread) -> Optional[ContentURI]:
-        if self.is_direct or not thread.thread_image:
-            return None
-        if self.thread_image_id == thread.thread_image.id:
-            return self.avatar_url
-        best: Optional[ThreadImageCandidate] = None
-        for candidate in thread.thread_image.image_versions2.candidates:
-            if best is None or candidate.width > best.width:
-                best = candidate
+    async def update_thread_image(
+        self, source: u.User, thread_image: ThreadImage, sender: p.Puppet | None = None
+    ) -> bool:
+        if (
+            self.is_direct
+            or not thread_image
+            or (self.thread_image_id == thread_image.id and self.avatar_set)
+        ):
+            return False
+
+        best = thread_image.best_image
         if not best:
-            return None
+            return False
         data, mimetype = await self._download_instagram_file(source, best.url)
         if not data:
-            return None
+            return False
+        self.thread_image_id = thread_image.id
+        self.avatar_set = False
         mxc = await self.main_intent.upload_media(
             data=data,
             mime_type=mimetype,
-            filename=str(thread.thread_image.id),
+            filename=str(thread_image.id),
             async_upload=self.config["homeserver.async_media"],
         )
-        self.thread_image_id = thread.thread_image.id
-        return mxc
+        return await self._update_photo(mxc, sender=sender)
 
     async def update_info(self, thread: Thread, source: u.User) -> None:
         changed = await self._update_name(self._get_thread_name(thread))
-        if thread_avatar := await self._get_thread_avatar(source, thread):
-            changed = await self._update_photo(thread_avatar)
+        changed = await self.update_thread_image(source, thread.thread_image) or changed
         changed = await self._update_participants(thread.users, source) or changed
         if changed:
             await self.update_bridge_info()
@@ -1947,13 +1949,14 @@ class Portal(DBPortal, BasePortal):
             return True
         return False
 
-    async def _update_photo(self, photo_mxc: ContentURI) -> bool:
+    async def _update_photo(self, photo_mxc: ContentURI, sender: p.Puppet | None = None) -> bool:
         if self.avatar_url == photo_mxc and (self.avatar_set or not self.set_dm_room_metadata):
             return False
         self.avatar_url = photo_mxc
         self.avatar_set = False
         if self.mxid and self.set_dm_room_metadata:
             try:
+                # TODO use sender intent
                 await self.main_intent.set_room_avatar(self.mxid, photo_mxc)
                 self.avatar_set = True
             except Exception:

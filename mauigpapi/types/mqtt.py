@@ -110,6 +110,7 @@ class MessageSyncMessage(ThreadItem, SerializableAttrs):
     # These come from parsing the path
     admin_user_id: Optional[int] = None
     approval_required_for_new_members: Optional[bool] = None
+    is_thread_image: Optional[bool] = None
     has_seen: Optional[int] = None
     thread_id: Optional[str] = None
 

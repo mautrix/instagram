@@ -318,6 +318,8 @@ class AndroidMQTT:
             subitem_key = rest[0]
             if subitem_key == "approval_required_for_new_members":
                 additional["approval_required_for_new_members"] = True
+            elif subitem_key == "thread_image":
+                additional["is_thread_image"] = True
             elif subitem_key == "participants" and len(rest) > 2 and rest[2] == "has_seen":
                 additional["has_seen"] = int(rest[1])
             elif subitem_key == "items":

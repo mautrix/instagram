@@ -21,7 +21,7 @@ import attr
 from mautrix.types import SerializableAttrs
 
 from .account import BaseResponseUser
-from .thread_item import ThreadItem
+from .thread_item import ThreadImage, ThreadItem
 
 
 @dataclass
@@ -45,28 +45,6 @@ class ThreadUserLastSeenAt(SerializableAttrs):
     @property
     def timestamp_ms(self) -> int:
         return int(self.timestamp) // 1000
-
-
-@dataclass
-class ThreadImageCandidate(SerializableAttrs):
-    width: int
-    height: int
-    url: str
-    url_expiration_timestamp_us: int
-
-
-@dataclass
-class ThreadImageCandidates(SerializableAttrs):
-    candidates: List[ThreadImageCandidate]
-
-
-@dataclass
-class ThreadImage(SerializableAttrs):
-    id: int
-    media_type: int
-    image_versions2: ThreadImageCandidates
-    original_width: int
-    original_height: int
 
 
 @dataclass(kw_only=True)
