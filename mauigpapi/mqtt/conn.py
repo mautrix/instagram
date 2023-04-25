@@ -961,6 +961,7 @@ class AndroidMQTT:
         client_context: str | None = None,
         replied_to_item_id: str | None = None,
         replied_to_client_context: str | None = None,
+        mentioned_user_ids: list[int] | None = None,
     ) -> Awaitable[CommandResponse]:
         args = {
             "text": text,
@@ -972,6 +973,9 @@ class AndroidMQTT:
                 "link_urls": json.dumps(urls or []),
             }
             item_type = ThreadItemType.LINK
+        if mentioned_user_ids:
+            args["mentioned_user_ids"] = json.dumps([str(x) for x in mentioned_user_ids])
+            args["sampled"] = True
         return self.send_item(
             thread_id,
             **args,

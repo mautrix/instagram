@@ -100,7 +100,7 @@ from mautrix.types import (
 from mautrix.util import background_task, ffmpeg
 from mautrix.util.message_send_checkpoint import MessageSendCheckpointStatus
 
-from . import matrix as m, puppet as p, user as u
+from . import formatter as fmt, matrix as m, puppet as p, user as u
 from .config import Config
 from .db import Backfill, Message as DBMessage, Portal as DBPortal, Reaction as DBReaction
 
@@ -582,7 +582,10 @@ class Portal(DBPortal, BasePortal):
             return
 
         if message.msgtype in (MessageType.EMOTE, MessageType.TEXT, MessageType.NOTICE):
-            text = message.body
+            if message.format == Format.HTML:
+                text, reply_to["mentioned_user_ids"] = await fmt.matrix_to_instagram(message)
+            else:
+                text = message.body
             if message.msgtype == MessageType.EMOTE:
                 text = f"/me {text}"
             self.log.trace(f"Sending Matrix text from {event_id} with request ID {request_id}")

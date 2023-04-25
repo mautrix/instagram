@@ -128,13 +128,17 @@ class Puppet(DBPuppet, BasePuppet):
         )
 
     async def update_info(self, info: BaseResponseUser, source: u.User) -> None:
-        update = await self.update_contact_info(info)
+        update = False
+        if info.username and self.username != info.username:
+            self.username = info.username
+            update = True
+        update = await self.update_contact_info() or update
         update = await self._update_name(info) or update
         update = await self._update_avatar(info, source) or update
         if update:
             await self.update()
 
-    async def update_contact_info(self, info: BaseResponseUser | None = None) -> bool:
+    async def update_contact_info(self) -> bool:
         if not self.bridge.homeserver_software.is_hungry:
             return False
 
@@ -147,8 +151,8 @@ class Puppet(DBPuppet, BasePuppet):
                 "com.beeper.bridge.service": self.bridge.beeper_service_name,
                 "com.beeper.bridge.network": self.bridge.beeper_network_name,
             }
-            if info and info.username:
-                contact_info["com.beeper.bridge.identifiers"] = [f"instagram:{info.username}"]
+            if self.username:
+                contact_info["com.beeper.bridge.identifiers"] = [f"instagram:{self.username}"]
 
             await self.default_mxid_intent.beeper_update_profile(contact_info)
             self.contact_info_set = True

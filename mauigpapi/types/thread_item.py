@@ -575,6 +575,19 @@ class FetchedClipInfo(SerializableAttrs):
     status: str
 
 
+@dataclass
+class TextEntities(SerializableAttrs):
+    mentioned_user_ids: List[int] = attr.ib(factory=lambda: [])
+
+
+@dataclass
+class MentionedEntity(SerializableAttrs):
+    fbid: str
+    offset: int
+    length: int
+    interop_user_type: int
+
+
 @dataclass(kw_only=True)
 class ThreadItem(SerializableAttrs):
     item_id: Optional[str] = None
@@ -585,6 +598,8 @@ class ThreadItem(SerializableAttrs):
     new_reaction: Optional[Reaction] = None
 
     text: Optional[str] = None
+    text_entities: Optional[TextEntities] = None
+    mentioned_entities: List[MentionedEntity] = None
     client_context: Optional[str] = None
     show_forward_attribution: Optional[bool] = None
     action_log: Optional[ThreadItemActionLog] = None
