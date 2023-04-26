@@ -1267,19 +1267,18 @@ class Portal(DBPortal, BasePortal):
         caption_formatted_body = (
             f"<blockquote>{escaped_caption_text}</blockquote>" if escaped_caption_text else ""
         )
-        if media.target_url:
+        if media.target_url and media.target_url.startswith("https://"):
             caption_body = (
                 f"> {caption_text}\n\n{media.target_url}" if caption_text else media.target_url
             )
-        else:
-            caption_body = f"> {caption_text}"
-        if media.target_url:
             target_url_pretty = str(URL(media.target_url).with_query(None)).replace(
                 "https://www.", ""
             )
             caption_formatted_body += (
                 f'<p><a href="{media.target_url}">{target_url_pretty}</a></p>'
             )
+        else:
+            caption_body = f"> {caption_text}" if caption_text else ""
         if post_caption_text:
             caption_formatted_body += f"<p>{html.escape(post_caption_text)}</p>"
             caption_body += f"\n\n{post_caption_text}"
@@ -1299,7 +1298,11 @@ class Portal(DBPortal, BasePortal):
             content.external_url = media.target_url
             caption.external_url = media.target_url
 
-        if content is None:
+        if not caption_body:
+            if content is None:
+                return []
+            return [(EventType.ROOM_MESSAGE, content)]
+        elif content is None:
             return [(EventType.ROOM_MESSAGE, caption)]
         elif self.bridge.config["bridge.caption_in_message"]:
             if isinstance(content, TextMessageEventContent):
