@@ -84,6 +84,7 @@ class ThreadItemType(ExtensibleEnum):
     XMA_REEL_MENTION = "xma_reel_mention"
     XMA_CLIP = "xma_clip"
     EXPIRED_PLACEHOLDER = "expired_placeholder"
+    AVATAR_STICKER = "avatar_sticker"
 
 
 @dataclass(kw_only=True)
@@ -509,7 +510,7 @@ class DirectMediaShareItem(SerializableAttrs):
 class XMAMediaShareItem(SerializableAttrs):
     xma_layout_type: int
 
-    title_text: str
+    title_text: Optional[str] = None
 
     target_url: Optional[str] = None
 
@@ -521,6 +522,11 @@ class XMAMediaShareItem(SerializableAttrs):
     preview_url_mime_type: Optional[str] = None
     preview_width: Optional[int] = None
     preview_height: Optional[int] = None
+
+    # For avatar_stickers
+    is_sharable: Optional[bool] = None
+    is_borderless: Optional[bool] = None
+    should_respect_server_preview_size: Optional[bool] = None
 
     @property
     def reel_share_clip_id(self) -> Optional[int]:
@@ -633,6 +639,7 @@ class ThreadItem(SerializableAttrs):
     xma_reel_mention: Optional[List[XMAMediaShareItem]] = None
     xma_clip: Optional[List[XMAMediaShareItem]] = None
     xma_profile: Optional[List[XMAMediaProfileShareItem]] = None
+    avatar_sticker: Optional[List[XMAMediaShareItem]] = None
     reel_share: Optional[ReelShareItem] = None
     story_share: Optional[StoryShareItem] = None
     location: Optional[Location] = None

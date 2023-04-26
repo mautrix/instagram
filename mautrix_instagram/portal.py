@@ -1028,6 +1028,7 @@ class Portal(DBPortal, BasePortal):
             or item.xma_reel_mention
             or item.xma_clip
             or item.generic_xma
+            or item.avatar_sticker
         ):
             media_data = (
                 item.xma_media_share
@@ -1036,6 +1037,7 @@ class Portal(DBPortal, BasePortal):
                 or item.xma_reel_mention
                 or item.xma_clip
                 or item.generic_xma
+                or item.avatar_sticker
             )[0]
             method = self._reupload_instagram_xma
         elif item.media:
@@ -1205,6 +1207,7 @@ class Portal(DBPortal, BasePortal):
             or item.xma_reel_mention
             or item.xma_clip
             or item.generic_xma
+            or item.avatar_sticker
         )
         media = xma_list[0]
         if len(xma_list) != 1:
@@ -1685,6 +1688,7 @@ class Portal(DBPortal, BasePortal):
             or item.xma_story_share
             or item.xma_clip
             or item.generic_xma
+            or item.avatar_sticker
         ):
             return await self._convert_instagram_xma_media_share(source, intent, item)
 
