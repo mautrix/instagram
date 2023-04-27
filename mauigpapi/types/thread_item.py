@@ -507,6 +507,13 @@ class DirectMediaShareItem(SerializableAttrs):
 
 
 @dataclass
+class PreviewURLInfo(SerializableAttrs):
+    url: str
+    width: int
+    height: int
+
+
+@dataclass
 class XMAMediaShareItem(SerializableAttrs):
     xma_layout_type: int
 
@@ -520,6 +527,7 @@ class XMAMediaShareItem(SerializableAttrs):
 
     preview_url: Optional[str] = None
     preview_url_mime_type: Optional[str] = None
+    preview_url_info: Optional[PreviewURLInfo] = None
     preview_width: Optional[int] = None
     preview_height: Optional[int] = None
 

@@ -867,10 +867,17 @@ class Portal(DBPortal, BasePortal):
     async def _reupload_instagram_xma(
         self, source: u.User, media: XMAMediaShareItem, intent: IntentAPI
     ) -> MediaMessageEventContent:
-        url = media.preview_url
-        info = ImageInfo(
-            mimetype=media.preview_url_mime_type,
-        )
+        if media.preview_url:
+            url = media.preview_url
+            info = ImageInfo(mimetype=media.preview_url_mime_type)
+        elif media.preview_url_info:
+            url = media.preview_url_info.url
+            info = ImageInfo(
+                height=media.preview_url_info.height,
+                width=media.preview_url_info.width,
+            )
+        else:
+            raise ValueError("XMA media has now preview URL")
         reuploaded_image = await self._reupload_instagram_file(
             source, url, MessageType.IMAGE, info, intent
         )
@@ -1214,7 +1221,7 @@ class Portal(DBPortal, BasePortal):
             self.log.warning(f"Item {item.item_id} has multiple xma media share parts")
         if media.xma_layout_type not in (0, 4):
             self.log.warning(f"Unrecognized xma layout type {media.xma_layout_type}")
-        if media.preview_url:
+        if media.preview_url or media.preview_url_info:
             _, content = await self._convert_instagram_media(source, intent, item)
         else:
             content = None
@@ -1288,6 +1295,10 @@ class Portal(DBPortal, BasePortal):
                 f"<p>{html.escape(item.auxiliary_text)}</p>{caption_formatted_body}"
             )
             caption_body = f"{item.auxiliary_text}\n\n{caption_body}"
+        elif len(xma_list) > 1:
+            caption_formatted_body = f"<p>Sent {len(xma_list)} items</p>{caption_formatted_body}"
+            caption_body = f"Sent {len(xma_list)} items\n\n{caption_body}"
+
         caption = TextMessageEventContent(
             msgtype=MessageType.TEXT,
             body=caption_body,
