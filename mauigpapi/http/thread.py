@@ -167,6 +167,18 @@ class ThreadAPI(BaseAndroidAPI):
             f"/api/v1/direct_v2/threads/{thread_id}/items/{item_id}/seen/", data=data
         )
 
+    async def send_delivery_receipt(
+        self, thread_id: str, sender_id: int | str, item_id: str
+    ) -> None:
+        data = {
+            "thread_id": thread_id,
+            "_uuid": self.state.device.uuid,
+            "sender_ig_id": str(sender_id),
+            "dr_disable": "1",
+            "item_id": item_id,
+        }
+        await self.std_http_post("/api/v1/direct_v2/delivery_receipt/", data=data)
+
     async def create_group_thread(self, recipient_users: list[int | str]) -> Thread:
         return await self.std_http_post(
             "/api/v1/direct_v2/create_group_thread/",
