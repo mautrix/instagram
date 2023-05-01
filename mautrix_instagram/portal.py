@@ -1642,15 +1642,6 @@ class Portal(DBPortal, BasePortal):
         self.log.debug(
             f"Handling Instagram message {item.item_id} ({item.client_context}) by {item.user_id}"
         )
-        if not self.mxid:
-            thread = await source.client.get_thread(item.thread_id)
-            mxid = await self.create_matrix_room(source, thread.thread)
-            if not mxid:
-                # Failed to create
-                return
-
-            if self.config["bridge.backfill.enable"] and self.config["bridge.backfill.msc2716"]:
-                await self.enqueue_immediate_backfill(source, 0)
 
         intent = sender.intent_for(self)
         background_task.create(intent.set_typing(self.mxid, timeout=0))
