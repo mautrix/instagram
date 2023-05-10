@@ -98,6 +98,7 @@ from mautrix.types import (
     VideoInfo,
 )
 from mautrix.util import background_task, ffmpeg
+from mautrix.util.bridge_state import BridgeStateEvent
 from mautrix.util.message_send_checkpoint import MessageSendCheckpointStatus
 
 from . import formatter as fmt, matrix as m, puppet as p, user as u
@@ -652,6 +653,14 @@ class Portal(DBPortal, BasePortal):
         self.log.trace(f"Got response to message send {request_id}: {resp}")
         if resp.status != "ok" or not resp.payload:
             self.log.warning(f"Failed to handle {event_id}: {resp}")
+            if resp.exception == "ThreadUserIdDoesNotExist":
+                await orig_sender.send_bridge_notice(
+                    f"Got fatal message send error: {e}",
+                    important=True,
+                    state_event=BridgeStateEvent.UNKNOWN_ERROR,
+                    error_code="ig-thread-user-id-does-not-exist",
+                    error_message=resp.error_message,
+                )
             raise Exception(f"Sending message failed: {resp.error_message}")
         else:
             self._msgid_dedup.appendleft(resp.payload.item_id)
