@@ -149,7 +149,6 @@ class MatrixHandler(BaseMatrixHandler):
         if not message:
             return
         user.log.debug(f"Marking {message.item_id} in {portal.thread_id} as read")
-        # await user.client.mark_seen(portal.thread_id, message.item_id)
         await user.mqtt.mark_seen(portal.thread_id, message.item_id)
 
     @staticmethod
