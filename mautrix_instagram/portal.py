@@ -2618,6 +2618,17 @@ class Portal(DBPortal, BasePortal):
             if self.is_direct:
                 invites.append(self.az.bot_mxid)
 
+        if self.set_dm_room_metadata:
+            self.name_set = bool(self.name)
+            if self.avatar_url is not None:
+                initial_state.append(
+                    {
+                        "type": str(EventType.ROOM_AVATAR),
+                        "content": {"url": self.avatar_url},
+                    }
+                )
+                self.avatar_set = True
+
         creation_content = {}
         if not self.config["bridge.federate_rooms"]:
             creation_content["m.federate"] = False
