@@ -637,7 +637,7 @@ class ProvisioningAPI:
             return self._login_required_error(user, username, e, after=f"{after}/success")
         except Exception as e:
             return await self._unknown_error(user, username, e, after=f"{after}/success")
-        track(user, "$login_success")
+        track(user, "$login_success", {"after": after})
         await user.connect(user=resp.user)
         return web.json_response(
             data={
