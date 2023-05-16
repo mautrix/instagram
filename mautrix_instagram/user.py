@@ -150,6 +150,7 @@ class User(DBUser, BaseUser):
         BaseUser.__init__(self)
         self._notice_room_lock = asyncio.Lock()
         self._notice_send_lock = asyncio.Lock()
+        self.command_status = None
         perms = self.config.get_permissions(mxid)
         self.relay_whitelisted, self.is_whitelisted, self.is_admin, self.permission_level = perms
         self.client = None
@@ -372,6 +373,8 @@ class User(DBUser, BaseUser):
             self.client.setup_http(self.state.cookies.jar)
         if self.mqtt:
             self.mqtt.setup_proxy()
+        if self.command_status:
+            self.command_status["api"].setup_http()
 
     # TODO this stuff could probably be moved to mautrix-python
     async def get_notice_room(self) -> RoomID:
