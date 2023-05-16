@@ -800,10 +800,16 @@ class AndroidMQTT:
                     "MQTT disconnected before PUBACK - wait a hot minute, we should get "
                     "the response after we auto reconnect"
                 )
-            self.log.trace(
+            self.log.debug(
                 f"Request published to {RealtimeTopic.SEND_MESSAGE}, "
                 f"waiting for response {RealtimeTopic.SEND_MESSAGE_RESPONSE}"
             )
+            # If we don't have a response in req timeout / 2, force reconnect
+            reconnect_handle = self._loop.call_later(
+                REQUEST_RESPONSE_TIMEOUT / 2,
+                lambda: self._loop.create_task(self._reconnect()),
+            )
+            fut.add_done_callback(lambda _: reconnect_handle.cancel())
             try:
                 resp = await asyncio.wait_for(fut, timeout=REQUEST_RESPONSE_TIMEOUT)
             except asyncio.TimeoutError:
