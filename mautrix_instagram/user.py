@@ -29,6 +29,7 @@ from mauigpapi.errors import (
     IGConsentRequiredError,
     IGNotLoggedInError,
     IGRateLimitError,
+    IGResponseError,
     IGUnknownError,
     IGUserIDNotFoundError,
     IrisSubscribeError,
@@ -257,6 +258,7 @@ class User(DBUser, BaseUser):
             log=self.api_log,
             proxy_handler=self.proxy_handler,
             on_proxy_update=self.on_proxy_update,
+            on_response_error=self.on_response_error,
         )
 
         if not user:
@@ -375,6 +377,11 @@ class User(DBUser, BaseUser):
             self.mqtt.setup_proxy()
         if self.command_status:
             self.command_status["api"].setup_http(self.command_status["state"].cookies.jar)
+
+    async def on_response_error(self, err: IGResponseError) -> None:
+        if isinstance(err, IGNotLoggedInError):
+            self.log.warning(f"Noticed logout in API error response: {err}")
+            await self.logout(error=err)
 
     # TODO this stuff could probably be moved to mautrix-python
     async def get_notice_room(self) -> RoomID:

@@ -82,11 +82,13 @@ class BaseAndroidAPI:
         log: TraceLogger | None = None,
         proxy_handler: ProxyHandler | None = None,
         on_proxy_update: Callable[[], Awaitable[None]] | None = None,
+        on_response_error: Callable[[IGResponseError], Awaitable[None]] | None = None,
     ) -> None:
         self.log = log or logging.getLogger("mauigpapi.http")
 
         self.proxy_handler = proxy_handler
         self.on_proxy_update = on_proxy_update
+        self.on_response_error = on_response_error
         self.setup_http(cookie_jar=state.cookies.jar)
 
         self.state = state
@@ -239,22 +241,25 @@ class BaseAndroidAPI:
         if body.get("status", "fail") == "ok":
             return body
         else:
-            await self._raise_response_error(resp)
+            err = await self._get_response_error(resp)
+            if self.on_response_error:
+                await self.on_response_error(err)
+            raise err
 
-    async def _raise_response_error(self, resp: ClientResponse) -> None:
+    async def _get_response_error(self, resp: ClientResponse) -> IGResponseError:
         try:
             data = await resp.json()
         except json.JSONDecodeError:
             data = {}
 
         if data.get("spam", False):
-            raise IGActionSpamError(resp, data)
+            return IGActionSpamError(resp, data)
         elif data.get("two_factor_required", False):
-            raise IGLoginTwoFactorRequiredError(resp, data)
+            return IGLoginTwoFactorRequiredError(resp, data)
         elif resp.status == 404:
-            raise IGNotFoundError(resp, data)
+            return IGNotFoundError(resp, data)
         elif resp.status == 429:
-            raise IGRateLimitError(resp, data)
+            return IGRateLimitError(resp, data)
 
         message = data.get("message")
         if isinstance(message, str):
@@ -271,47 +276,47 @@ class BaseAndroidAPI:
                         "Failed to deserialize challenge_context %s",
                         err.body.challenge.challenge_context,
                     )
-                raise err
+                return err
             elif message == "checkpoint_required":
-                raise IGCheckpointError(resp, data)
+                return IGCheckpointError(resp, data)
             elif message == "consent_required":
-                raise IGConsentRequiredError(resp, data)
+                return IGConsentRequiredError(resp, data)
             elif message == "user_has_logged_out":
-                raise IGUserHasLoggedOutError(resp, data)
+                return IGUserHasLoggedOutError(resp, data)
             elif message == "login_required":
-                raise IGLoginRequiredError(resp, data)
+                return IGLoginRequiredError(resp, data)
             elif message.lower() == "not authorized to view user":
-                raise IGPrivateUserError(resp, data)
+                return IGPrivateUserError(resp, data)
 
         error_type = data.get("error_type")
         if error_type == "sentry_block":
-            raise IGSentryBlockError(resp, data)
+            return IGSentryBlockError(resp, data)
         elif error_type == "inactive_user":
-            raise IGInactiveUserError(resp, data)
+            return IGInactiveUserError(resp, data)
         elif error_type == "bad_password":
-            raise IGLoginBadPasswordError(resp, data)
+            return IGLoginBadPasswordError(resp, data)
         elif error_type == "unusable_password":
-            raise IGLoginUnusablePasswordError(resp, data)
+            return IGLoginUnusablePasswordError(resp, data)
         elif error_type == "invalid_user":
-            raise IGLoginInvalidUserError(resp, data)
+            return IGLoginInvalidUserError(resp, data)
         elif error_type == "sms_code_validation_code_invalid":
-            raise IGBad2FACodeError(resp, data)
+            return IGBad2FACodeError(resp, data)
         elif error_type == "invalid_nonce":
-            raise IG2FACodeExpiredError(resp, data)
+            return IG2FACodeExpiredError(resp, data)
         elif error_type == "fb_no_contact_point_found":
-            raise IGFBNoContactPointFoundError(resp, data)
+            return IGFBNoContactPointFoundError(resp, data)
         elif error_type == "fb_email_taken":
-            raise IGFBEmailTaken(resp, data)
+            return IGFBEmailTaken(resp, data)
         elif error_type == "sso_disabled":
-            raise IGFBSSODisabled(resp, data)
+            return IGFBSSODisabled(resp, data)
         elif error_type == "rate_limit_error":
-            raise IGRateLimitError(resp, data)
+            return IGRateLimitError(resp, data)
 
         exception_name = data.get("exception_name")
         if exception_name == "UserInvalidCredentials":
-            raise IGLoginInvalidCredentialsError(resp, data)
+            return IGLoginInvalidCredentialsError(resp, data)
 
-        raise IGResponseError(resp, data)
+        return IGResponseError(resp, data)
 
     def _handle_response_headers(self, resp: ClientResponse) -> None:
         fields = {

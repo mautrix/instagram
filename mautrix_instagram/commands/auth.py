@@ -54,6 +54,7 @@ async def get_login_state(user: u.User, seed: str) -> tuple[AndroidAPI, AndroidS
             log=user.api_log,
             proxy_handler=user.proxy_handler,
             on_proxy_update=user.on_proxy_update,
+            on_response_error=user.on_response_error,
         )
         await api.get_mobile_config()
         user.command_status = {
