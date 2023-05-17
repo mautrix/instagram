@@ -374,7 +374,7 @@ class User(DBUser, BaseUser):
         if self.mqtt:
             self.mqtt.setup_proxy()
         if self.command_status:
-            self.command_status["api"].setup_http()
+            self.command_status["api"].setup_http(self.command_status["state"].cookies.jar)
 
     # TODO this stuff could probably be moved to mautrix-python
     async def get_notice_room(self) -> RoomID:
