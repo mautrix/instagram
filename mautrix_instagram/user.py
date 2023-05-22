@@ -378,7 +378,7 @@ class User(DBUser, BaseUser):
             self.command_status["api"].setup_http(self.command_status["state"].cookies.jar)
 
     async def on_response_error(self, err: IGResponseError) -> None:
-        if isinstance(err, IGNotLoggedInError):
+        if isinstance(err, IGNotLoggedInError) and (await self.is_logged_in()):
             self.log.warning(f"Noticed logout in API error response: {err}")
             await self.logout(error=err)
 
