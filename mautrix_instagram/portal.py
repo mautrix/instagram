@@ -1147,8 +1147,8 @@ class Portal(DBPortal, BasePortal):
                 f"{external_url}"
             )
             caption_formatted_body = (
-                f"<blockquote><strong>{share_item.caption.user.username}</strong>"
-                f" {html.escape(share_item.caption.text)}</blockquote>"
+                f"<strong>{share_item.caption.user.username}</strong>"
+                f" {html.escape(share_item.caption.text)}"
                 f'<a href="{external_url}">instagram.com/p/{share_item.code}</a>'
             )
         else:
