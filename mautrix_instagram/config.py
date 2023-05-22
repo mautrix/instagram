@@ -98,6 +98,7 @@ class Config(BaseBridgeConfig):
         copy("bridge.disable_bridge_notices")
         copy("bridge.caption_in_message")
         copy("bridge.bridge_notices")
+        copy("bridge.bridge_matrix_typing")
 
         copy("bridge.provisioning.enabled")
         copy("bridge.provisioning.prefix")

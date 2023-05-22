@@ -794,6 +794,8 @@ class Portal(DBPortal, BasePortal):
         await self._handle_matrix_typing(users - old_typing, TypingStatus.TEXT)
 
     async def _handle_matrix_typing(self, users: set[UserID], status: TypingStatus) -> None:
+        if not self.config["bridge.bridge_matrix_typing"]:
+            return
         for mxid in users:
             user = await u.User.get_by_mxid(mxid, create=False)
             if (

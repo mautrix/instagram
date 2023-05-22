@@ -311,6 +311,10 @@ bridge:
     # Should Matrix m.notice-type messages be bridged?
     bridge_notices: true
 
+    # Should Matrix typing notices be sent to Instagram? Typing notifications
+    # from Instagram will still be bridged.
+    bridge_matrix_typing: true
+
     # Provisioning API part of the web server for automated portal creation and fetching information.
     # Used by things like mautrix-manager (https://github.com/tulir/mautrix-manager).
     provisioning:
