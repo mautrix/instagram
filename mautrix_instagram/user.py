@@ -345,7 +345,6 @@ class User(DBUser, BaseUser):
                 await req.mark_done()
             except IGNotLoggedInError as e:
                 self.log.exception("User got logged out during backfill loop")
-                await self.logout(error=e)
                 break
             except (IGChallengeError, IGConsentRequiredError) as e:
                 self.log.exception("User got a challenge during backfill loop")
@@ -687,7 +686,6 @@ class User(DBUser, BaseUser):
                 break
             except IGNotLoggedInError as e:
                 self.log.exception("Got not logged in error while syncing")
-                await self.logout(error=e)
                 return
             except IGRateLimitError as e:
                 self.log.error(
@@ -851,7 +849,6 @@ class User(DBUser, BaseUser):
                     # The sync was successful. Exit the loop.
                     return
                 except IGNotLoggedInError as e:
-                    await self.logout(error=e)
                     return
                 except Exception:
                     self.log.exception(
@@ -900,7 +897,6 @@ class User(DBUser, BaseUser):
                 await asyncio.sleep(60)
             except IGNotLoggedInError as e:
                 self.log.warning(f"Failed to reconnect to Instagram: {e}, logging out")
-                await self.logout(error=e)
                 return
             except (IGChallengeError, IGConsentRequiredError) as e:
                 await self._handle_checkpoint(e, on="reconnect")
