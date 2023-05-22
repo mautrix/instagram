@@ -654,13 +654,7 @@ class Portal(DBPortal, BasePortal):
         if resp.status != "ok" or not resp.payload:
             self.log.warning(f"Failed to handle {event_id}: {resp}")
             if resp.exception == "ThreadUserIdDoesNotExist":
-                await orig_sender.send_bridge_notice(
-                    f"Got fatal message send error: {resp.exception}",
-                    important=True,
-                    state_event=BridgeStateEvent.UNKNOWN_ERROR,
-                    error_code="ig-thread-user-id-does-not-exist",
-                    error_message=resp.error_message,
-                )
+                await orig_sender.logout()
             raise Exception(f"Sending message failed: {resp.error_message}")
         else:
             self._msgid_dedup.appendleft(resp.payload.item_id)
