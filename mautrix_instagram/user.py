@@ -898,9 +898,7 @@ class User(DBUser, BaseUser):
             except (IGChallengeError, IGConsentRequiredError) as e:
                 await self._handle_checkpoint(e, on="reconnect")
                 return
-            except IGUnknownError as e:
-                if "non-JSON body" not in e:
-                    raise
+            except IGUnknownError:
                 errors += 1
                 if errors > 10:
                     raise
