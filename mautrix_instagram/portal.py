@@ -1137,7 +1137,7 @@ class Portal(DBPortal, BasePortal):
         _, content = await self._convert_instagram_media(source, intent, item)
 
         external_url = f"https://www.instagram.com/p/{share_item.code}/"
-        if share_item.caption:
+        if share_item.caption and item_type_name != "clip":
             caption_body = (
                 f"> {share_item.caption.user.username}: {share_item.caption.text}\n\n"
                 f"{external_url}"
