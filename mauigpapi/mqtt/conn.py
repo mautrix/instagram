@@ -502,6 +502,9 @@ class AndroidMQTT:
                 self._on_realtime_sub(message.payload)
             elif topic == RealtimeTopic.SEND_MESSAGE_RESPONSE:
                 self._handle_send_response(message)
+            elif topic == RealtimeTopic.UNKNOWN_PP:
+                self.log.warning("Reconnecting after receiving /pp message")
+                background_task.create(self._reconnect())
             else:
                 try:
                     waiter = self._response_waiters.pop(topic)
