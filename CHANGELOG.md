@@ -1,3 +1,24 @@
+# v0.3.0 (2023-05-31)
+
+* Improved handling of some message types.
+* Added automatic retrying for sending videos to give Instagram servers more
+  time to transcode the video.
+* Added support for @-mentioning users from Matrix.
+* Added support for bridging incoming avatar stickers.
+* Added automatic fetching of shared reel videos to bridge full video instead
+  of only the thumbnail image.
+* Added real-time bridging of group avatar changes from Instagram.
+* Added option to disable sending typing notifications to Instagram.
+* Added notice message when receiving video calls.
+* Added options to automatically ratchet/delete megolm sessions to minimize
+  access to old messages.
+* Added option to not set room name/avatar even in encrypted rooms.
+* Redid backfill system to support MSC2716.
+  * Note that using Synapse's MSC2716 implementation is not recommended, and
+    the bridge can still backfill messages without MSC2716.
+* Implemented appservice pinging using MSC2659.
+* Possibly improved MQTT connection handling.
+
 # v0.2.3 (2022-12-14)
 
 * Added support for "mentioned in comment" messages.
