@@ -1220,8 +1220,20 @@ class Portal(DBPortal, BasePortal):
             self.log.warning(f"Item {item.item_id} has multiple xma media share parts")
         if media.xma_layout_type not in (0, 4):
             self.log.warning(f"Unrecognized xma layout type {media.xma_layout_type}")
+
         if media.preview_url or media.preview_url_info:
             _, content = await self._convert_instagram_media(source, intent, item)
+
+            if item.xma_story_share:
+                content["com.beeper.relation_preview_type"] = "story"
+            elif item.xma_reel_share:
+                if item.message_item_type == "reaction":
+                    content["com.beeper.relation_preview_type"] = "story_reaction"
+                elif item.message_item_type == "text":
+                    content["com.beeper.relation_preview_type"] = "story_reply"
+                    content["com.beeper.raw_reply_text"] = item.text
+            elif item.xma_reel_mention:
+                content["com.beeper.relation_preview_type"] = "story_mention"
         else:
             content = None
 
