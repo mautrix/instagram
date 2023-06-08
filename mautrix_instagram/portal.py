@@ -1085,7 +1085,7 @@ class Portal(DBPortal, BasePortal):
         except ValueError as e:
             content = TextMessageEventContent(body=str(e), msgtype=MessageType.NOTICE)
         except Exception:
-            self.log.warning("Failed to upload media", exc_info=True)
+            self.log.warning("Failed to reupload media from Instagram to Matrix", exc_info=True)
             content = TextMessageEventContent(
                 body="Attachment not available: failed to copy file", msgtype=MessageType.NOTICE
             )
