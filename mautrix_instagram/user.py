@@ -960,7 +960,7 @@ class User(DBUser, BaseUser):
                 error_code="ig-connection-error-maybe-auth",
             )
             self.mqtt.disconnect()
-            background_task.create(self.fetch_user_and_reconnect())
+            background_task.create(self.fetch_user_and_reconnect(sleep_first=60))
         except Exception as e:
             self.log.exception("Fatal error in listener, reconnecting in 5 minutes")
             await self.send_bridge_notice(
