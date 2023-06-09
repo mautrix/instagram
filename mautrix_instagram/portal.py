@@ -556,7 +556,6 @@ class Portal(DBPortal, BasePortal):
     ) -> None:
         sender, is_relay = await self.get_relay_sender(orig_sender, f"message {event_id}")
         assert sender, "user is not logged in"
-        await sender.ensure_connected()
 
         if is_relay:
             await self.apply_relay_message_format(orig_sender, message)
@@ -753,8 +752,6 @@ class Portal(DBPortal, BasePortal):
             await self._send_bridge_success(sender, redaction_event_id, EventType.ROOM_REDACTION)
 
     async def _handle_matrix_redaction(self, sender: u.User, event_id: EventID) -> None:
-        await sender.ensure_connected()
-
         reaction = await DBReaction.get_by_mxid(event_id, self.mxid)
         if reaction:
             try:

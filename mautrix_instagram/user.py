@@ -233,18 +233,6 @@ class User(DBUser, BaseUser):
     def is_connected(self) -> bool:
         return bool(self.client) and bool(self.mqtt) and self._is_connected
 
-    async def ensure_connected(self, max_wait_seconds: int = 5) -> None:
-        sleep_interval = 0.1
-        max_attempts = max_wait_seconds / sleep_interval
-        attempts = 0
-        while True:
-            if self.is_connected:
-                return
-            attempts += 1
-            if attempts > max_attempts:
-                raise Exception("You're not connected to instagram")
-            await asyncio.sleep(sleep_interval)
-
     async def connect(self, user: CurrentUser | None = None) -> None:
         if not self.state:
             await self.push_bridge_state(
