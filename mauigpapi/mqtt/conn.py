@@ -670,7 +670,11 @@ class AndroidMQTT:
 
     def maybe_reset_keepalive(self):
         # Reset the keepalive back to the default value if we have no pending publish/receive
-        if not self._response_waiters and not self._publish_waiters:
+        if (
+            not self._response_waiters
+            and not self._publish_waiters
+            and not self._message_response_waiter
+        ):
             self._client._keepalive = DEFAULT_KEEPALIVE
 
     def publish(self, topic: RealtimeTopic, payload: str | bytes | dict) -> asyncio.Future:
@@ -794,12 +798,13 @@ class AndroidMQTT:
                 f"Request publish to {RealtimeTopic.SEND_MESSAGE} queued, "
                 f"waiting for response {RealtimeTopic.SEND_MESSAGE_RESPONSE}"
             )
-            fut.add_done_callback(lambda _: self.maybe_reset_keepalive())
             try:
                 resp = await asyncio.wait_for(fut, timeout=REQUEST_TIMEOUT)
             except asyncio.TimeoutError:
                 self.log.error(f"Request with ID {client_context} timed out!")
                 raise
+            finally:
+                self.maybe_reset_keepalive()
             return CommandResponse.parse_json(resp.payload.decode("utf-8"))
 
     def send_item(
