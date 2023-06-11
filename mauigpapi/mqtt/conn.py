@@ -301,6 +301,7 @@ class AndroidMQTT:
         self.log.trace(f"Got publish confirmation for {mid}")
         if not waiter.done():
             waiter.set_result(None)
+        self.maybe_reset_keepalive()
 
     # region Incoming event parsing
 
@@ -524,6 +525,8 @@ class AndroidMQTT:
         except Exception:
             self.log.exception("Error in incoming MQTT message handler")
             self.log.trace("Errored MQTT payload: %s", message.payload)
+        finally:
+            self.maybe_reset_keepalive()
 
     # endregion
 
@@ -690,7 +693,6 @@ class AndroidMQTT:
         fut = self._loop.create_future()
         timeout_handle = self._loop.call_later(REQUEST_TIMEOUT, self._publish_cancel_later, fut)
         fut.add_done_callback(lambda _: timeout_handle.cancel())
-        fut.add_done_callback(lambda _: self.maybe_reset_keepalive())
         self._publish_waiters[info.mid] = fut
         return fut
 
@@ -712,7 +714,6 @@ class AndroidMQTT:
                 timeout or REQUEST_TIMEOUT, self._request_cancel_later, fut
             )
             fut.add_done_callback(lambda _: timeout_handle.cancel())
-            fut.add_done_callback(lambda _: self.maybe_reset_keepalive())
             return await fut
 
     async def iris_subscribe(self, seq_id: int, snapshot_at_ms: int) -> None:
@@ -803,8 +804,6 @@ class AndroidMQTT:
             except asyncio.TimeoutError:
                 self.log.error(f"Request with ID {client_context} timed out!")
                 raise
-            finally:
-                self.maybe_reset_keepalive()
             return CommandResponse.parse_json(resp.payload.decode("utf-8"))
 
     def send_item(
