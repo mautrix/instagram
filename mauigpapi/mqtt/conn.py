@@ -294,7 +294,7 @@ class AndroidMQTT:
 
     def _on_publish_handler(self, client: MQTToTClient, _: Any, mid: int) -> None:
         try:
-            waiter = self._publish_waiters[mid]
+            waiter = self._publish_waiters.pop(mid)
         except KeyError:
             self.log.trace(f"Got publish confirmation for {mid}, but no waiters")
             return
