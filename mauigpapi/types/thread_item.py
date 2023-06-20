@@ -85,6 +85,9 @@ class ThreadItemType(ExtensibleEnum):
     XMA_CLIP = "xma_clip"
     EXPIRED_PLACEHOLDER = "expired_placeholder"
     AVATAR_STICKER = "avatar_sticker"
+    PHOTO_ATTACHMENT = "photo_attachment"
+    VIDEO_ATTACHMENT = "video_attachment"
+    VOICE_ATTACHMENT = "voice_attachment"
 
 
 @dataclass(kw_only=True)

@@ -427,9 +427,7 @@ class Portal(DBPortal, BasePortal):
                 mime_type = "image/jpeg"
 
         self.log.debug(f"Uploading photo from {event_id} (mime: {mime_type})")
-        upload_resp = await sender.client.upload_photo(
-            data, mime=mime_type, width=width, height=height
-        )
+        upload_resp = await sender.client.upload(data, mimetype=mime_type)
         self.log.debug(f"Broadcasting uploaded photo with request ID {request_id}")
         retry_num = 0
         max_retries = 4
@@ -437,10 +435,12 @@ class Portal(DBPortal, BasePortal):
             try:
                 return await sender.client.broadcast(
                     self.thread_id,
-                    ThreadItemType.CONFIGURE_PHOTO,
+                    ThreadItemType.PHOTO_ATTACHMENT,
                     client_context=request_id,
-                    upload_id=upload_resp.upload_id,
+                    attachment_fbid=str(upload_resp.media_id),
                     allow_full_aspect_ratio="true",
+                    ae_dual_send="false",
+                    btt_dual_send="false",
                 )
             except IGResponseError as e:
                 if e.response.status == 503 and retry_num < max_retries:
@@ -459,28 +459,6 @@ class Portal(DBPortal, BasePortal):
                 else:
                     raise e
 
-    async def _needs_conversion(
-        self,
-        data: bytes,
-        mime_type: str,
-    ) -> bool:
-        if mime_type != "video/mp4":
-            self.log.info(f"Will convert: mime_type is {mime_type}")
-            return True
-        # Comment this out for now, as it seems like retrying on 500
-        # might be sufficient to fix the video upload problems
-        # (but keep it handy in case it turns out videos are still failing)
-        # else:
-        #     probe = await ffmpeg.probe_bytes(data, input_mime=mime_type, logger=self.log)
-        #     is_there_correct_stream = any(
-        #         "pix_fmt" in stream and stream["pix_fmt"] == "yuv420p"
-        #         for stream in probe["streams"]
-        #     )
-        #     if not is_there_correct_stream:
-        #         self.log.info(f"Will convert: no yuv420p stream found")
-        #         return True
-        #     return False
-
     async def _handle_matrix_video(
         self,
         sender: u.User,
@@ -492,7 +470,7 @@ class Portal(DBPortal, BasePortal):
         width: int | None = None,
         height: int | None = None,
     ) -> CommandResponse:
-        if await self._needs_conversion(data, mime_type):
+        if mime_type != "video/mp4":
             self.log.debug(f"Converting video in {event_id} from {mime_type} to mp4")
             data = await ffmpeg.convert_bytes(
                 data,
@@ -512,9 +490,7 @@ class Portal(DBPortal, BasePortal):
             )
 
         self.log.debug(f"Uploading video from {event_id}")
-        _, upload_id = await sender.client.upload_mp4(
-            data, duration_ms=duration, width=width, height=height
-        )
+        upload_resp = await sender.client.upload(data, mimetype="video/mp4")
         self.log.debug(f"Broadcasting uploaded video with request ID {request_id}")
         retry_num = 0
         max_retries = 4
@@ -522,10 +498,12 @@ class Portal(DBPortal, BasePortal):
             try:
                 return await sender.client.broadcast(
                     self.thread_id,
-                    ThreadItemType.CONFIGURE_VIDEO,
+                    ThreadItemType.VIDEO_ATTACHMENT,
                     client_context=request_id,
-                    upload_id=upload_id,
-                    video_result="",
+                    attachment_fbid=str(upload_resp.media_id),
+                    video_result=str(upload_resp.media_id),
+                    ae_dual_send="false",
+                    btt_dual_send="false",
                 )
             except IGResponseError as e:
                 if e.response.status == 500 and retry_num < max_retries:
@@ -561,13 +539,15 @@ class Portal(DBPortal, BasePortal):
             )
 
         self.log.debug(f"Uploading audio from {event_id}")
-        _, upload_id = await sender.client.upload_mp4(data, audio=True, duration_ms=duration)
+        upload_resp = await sender.client.upload(data, mimetype="audio/mp4")
         self.log.debug(f"Broadcasting uploaded audio with request ID {request_id}")
         return await sender.client.broadcast(
             self.thread_id,
-            ThreadItemType.SHARE_VOICE,
+            ThreadItemType.VOICE_ATTACHMENT,
             client_context=request_id,
-            upload_id=upload_id,
+            attachment_fbid=str(upload_resp.media_id),
+            # TODO upload_id?
+            ae_dual_send="false",
             waveform=json.dumps([(part or 0) / 1024 for part in waveform], separators=(",", ":")),
             waveform_sampling_frequency_hz="10",
         )
