@@ -889,7 +889,7 @@ class Portal(DBPortal, BasePortal):
             try:
                 fetched_clip = await source.client.fetch_clip(reel_clip_id)
                 reuploaded_video = await self._reupload_instagram_media(
-                    source, fetched_clip.media, intent
+                    source, fetched_clip, intent
                 )
             except Exception:
                 self.log.exception(f"Failed to fetch clip {reel_clip_id}, using fallback")

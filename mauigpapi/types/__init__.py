@@ -74,6 +74,7 @@ from .thread_item import (
     CreativeConfig,
     ExpiredMediaItem,
     FetchedClipInfo,
+    FetchedClipsInfo,
     ImageVersion,
     ImageVersions,
     LinkContext,
