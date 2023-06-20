@@ -431,13 +431,33 @@ class Portal(DBPortal, BasePortal):
             data, mime=mime_type, width=width, height=height
         )
         self.log.debug(f"Broadcasting uploaded photo with request ID {request_id}")
-        return await sender.client.broadcast(
-            self.thread_id,
-            ThreadItemType.CONFIGURE_PHOTO,
-            client_context=request_id,
-            upload_id=upload_resp.upload_id,
-            allow_full_aspect_ratio="true",
-        )
+        retry_num = 0
+        max_retries = 4
+        while True:
+            try:
+                return await sender.client.broadcast(
+                    self.thread_id,
+                    ThreadItemType.CONFIGURE_PHOTO,
+                    client_context=request_id,
+                    upload_id=upload_resp.upload_id,
+                    allow_full_aspect_ratio="true",
+                )
+            except IGResponseError as e:
+                if e.response.status == 503 and retry_num < max_retries:
+                    self.log.warning("Received 503 on image broadcast, retrying in 5 seconds")
+                    sender.send_remote_checkpoint(
+                        status=MessageSendCheckpointStatus.WILL_RETRY,
+                        event_id=event_id,
+                        room_id=self.mxid,
+                        event_type=EventType.ROOM_MESSAGE,
+                        message_type=MessageType.IMAGE,
+                        error=e,
+                        retry_num=retry_num,
+                    )
+                    await asyncio.sleep(5)
+                    retry_num += 1
+                else:
+                    raise e
 
     async def _needs_conversion(
         self,
@@ -509,7 +529,7 @@ class Portal(DBPortal, BasePortal):
                 )
             except IGResponseError as e:
                 if e.response.status == 500 and retry_num < max_retries:
-                    self.log.warning("Received 500 on broadcast, retrying in 5 seconds")
+                    self.log.warning("Received 500 on video broadcast, retrying in 5 seconds")
                     sender.send_remote_checkpoint(
                         status=MessageSendCheckpointStatus.WILL_RETRY,
                         event_id=event_id,
