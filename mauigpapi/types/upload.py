@@ -21,18 +21,5 @@ from mautrix.types import SerializableAttrs
 
 
 @dataclass
-class FinishUploadResponse(SerializableAttrs):
-    status: str
-
-
-@dataclass
-class UploadPhotoResponse(SerializableAttrs):
-    upload_id: str
-    status: str
-    xsharing_nonces: Any
-
-
-@dataclass
-class UploadVideoResponse(SerializableAttrs):
-    status: str
-    xsharing_nonces: Any
+class FacebookUploadResponse(SerializableAttrs):
+    media_id: int

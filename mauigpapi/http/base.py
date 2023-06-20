@@ -112,6 +112,25 @@ class BaseAndroidAPI:
         return {"signed_body": f"SIGNATURE.{req}"}
 
     @property
+    def _rupload_headers(self) -> dict[str, str]:
+        headers = {
+            "user-agent": self.state.user_agent,
+            "accept-language": self.state.device.language.replace("_", "-"),
+            "authorization": self.state.session.authorization,
+            "x-mid": self.state.cookies.get_value("mid"),
+            "ig-u-shbid": self.state.session.shbid,
+            "ig-u-shbts": self.state.session.shbts,
+            "ig-u-ds-user-id": self.state.session.ds_user_id,
+            "ig-u-rur": self.state.session.rur,
+            "ig-intended-user-id": self.state.session.ds_user_id or "0",
+            "x-fb-http-engine": "Liger",
+            "x-fb-client-ip": "True",
+            "x-fb-server-cluster": "True",
+            "accept-encoding": "gzip",
+        }
+        return {k: v for k, v in headers.items() if v is not None}
+
+    @property
     def _headers(self) -> dict[str, str]:
         headers = {
             "x-ads-opt-out": str(int(self.state.session.ads_opt_out)),
@@ -137,23 +156,10 @@ class BaseAndroidAPI:
             "x-ig-capabilities": self.state.application.CAPABILITIES,
             "x-ig-app-id": self.state.application.FACEBOOK_ANALYTICS_APPLICATION_ID,
             "priority": "u=3",
-            "user-agent": self.state.user_agent,
-            "accept-language": self.state.device.language.replace("_", "-"),
-            "authorization": self.state.session.authorization,
-            "x-mid": self.state.cookies.get_value("mid"),
             "ig-u-ig-direct-region-hint": self.state.session.region_hint,
-            "ig-u-shbid": self.state.session.shbid,
-            "ig-u-shbts": self.state.session.shbts,
-            "ig-u-ds-user-id": self.state.session.ds_user_id,
-            "ig-u-rur": self.state.session.rur,
-            "ig-intended-user-id": self.state.session.ds_user_id or "0",
             # "ig-client-endpoint": "unknown",
-            "x-fb-http-engine": "Liger",
-            "x-fb-client-ip": "True",
             # "x-fb-rmd": "cached=0;state=NO_MATCH",
-            "x-fb-server-cluster": "True",
-            "x-tigon-is-retry": "False",
-            "accept-encoding": "gzip",
+            **self._rupload_headers,
         }
         return {k: v for k, v in headers.items() if v is not None}
 
@@ -190,11 +196,14 @@ class BaseAndroidAPI:
         headers: dict[str, str] | None = None,
         query: dict[str, str] | None = None,
         response_type: Type[T] | None = JSON,
+        default_headers: bool = True,
+        url_override: URL | None = None,
     ) -> T:
-        headers = {**self._headers, **headers} if headers else self._headers
+        if default_headers:
+            headers = {**self._headers, **headers} if headers else self._headers
         if not raw:
             data = self.sign(data, filter_nulls=filter_nulls)
-        url = self.url.with_path(path).with_query(query or {})
+        url = (url_override or self.url).with_path(path).with_query(query or {})
         resp = await self.proxy_with_retry(
             f"AndroidAPI.std_http_post: {url}",
             lambda: self.http.post(url=url, headers=headers, data=data),
@@ -205,7 +214,7 @@ class BaseAndroidAPI:
             if response_type is str:
                 return await resp.text()
             return None
-        json_data = await self._handle_response(resp)
+        json_data = await self._handle_response(resp, is_external=bool(url_override))
         if response_type is not JSON:
             return response_type.deserialize(json_data)
         return json_data
@@ -228,18 +237,21 @@ class BaseAndroidAPI:
         if response_type is None:
             self._handle_response_headers(resp)
             return None
-        json_data = await self._handle_response(resp)
+        json_data = await self._handle_response(resp, is_external=False)
         if response_type is not JSON:
             return response_type.deserialize(json_data)
         return json_data
 
-    async def _handle_response(self, resp: ClientResponse) -> JSON:
-        self._handle_response_headers(resp)
+    async def _handle_response(self, resp: ClientResponse, is_external: bool) -> JSON:
+        if not is_external:
+            self._handle_response_headers(resp)
         try:
             body = await resp.json()
         except (json.JSONDecodeError, ContentTypeError) as e:
             raise IGUnknownError(resp) from e
-        if body.get("status", "fail") == "ok":
+        if not is_external and body.get("status", "fail") == "ok":
+            return body
+        elif is_external and 200 <= resp.status < 300:
             return body
         else:
             err = await self._get_response_error(resp)
