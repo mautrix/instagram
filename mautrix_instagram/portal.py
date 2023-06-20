@@ -426,11 +426,11 @@ class Portal(DBPortal, BasePortal):
                 data = out.getvalue()
                 mime_type = "image/jpeg"
 
-        self.log.trace(f"Uploading photo from {event_id} (mime: {mime_type})")
+        self.log.debug(f"Uploading photo from {event_id} (mime: {mime_type})")
         upload_resp = await sender.client.upload_photo(
             data, mime=mime_type, width=width, height=height
         )
-        self.log.trace(f"Broadcasting uploaded photo with request ID {request_id}")
+        self.log.debug(f"Broadcasting uploaded photo with request ID {request_id}")
         return await sender.client.broadcast(
             self.thread_id,
             ThreadItemType.CONFIGURE_PHOTO,
@@ -473,6 +473,7 @@ class Portal(DBPortal, BasePortal):
         height: int | None = None,
     ) -> CommandResponse:
         if await self._needs_conversion(data, mime_type):
+            self.log.debug(f"Converting video in {event_id} from {mime_type} to mp4")
             data = await ffmpeg.convert_bytes(
                 data,
                 output_extension=".mp4",
@@ -489,13 +490,12 @@ class Portal(DBPortal, BasePortal):
                 input_mime=mime_type,
                 logger=self.log,
             )
-            self.log.info(f"Uploaded video converted")
 
-        self.log.trace(f"Uploading video from {event_id}")
+        self.log.debug(f"Uploading video from {event_id}")
         _, upload_id = await sender.client.upload_mp4(
             data, duration_ms=duration, width=width, height=height
         )
-        self.log.trace(f"Broadcasting uploaded video with request ID {request_id}")
+        self.log.debug(f"Broadcasting uploaded video with request ID {request_id}")
         retry_num = 0
         max_retries = 4
         while True:
@@ -535,13 +535,14 @@ class Portal(DBPortal, BasePortal):
         duration: int | None = None,
     ) -> CommandResponse:
         if mime_type != "audio/mp4":
+            self.log.debug(f"Converting audio in {event_id} from {mime_type} to mp4")
             data = await ffmpeg.convert_bytes(
                 data, output_extension=".m4a", output_args=("-c:a", "aac"), input_mime=mime_type
             )
 
-        self.log.trace(f"Uploading audio from {event_id}")
+        self.log.debug(f"Uploading audio from {event_id}")
         _, upload_id = await sender.client.upload_mp4(data, audio=True, duration_ms=duration)
-        self.log.trace(f"Broadcasting uploaded audio with request ID {request_id}")
+        self.log.debug(f"Broadcasting uploaded audio with request ID {request_id}")
         return await sender.client.broadcast(
             self.thread_id,
             ThreadItemType.SHARE_VOICE,
