@@ -219,13 +219,13 @@ class Caption(SerializableAttrs):
     # TODO enum-ish thing?
     bit_flags: int
     user: BaseResponseUser
-    did_report_as_spam: bool
-    share_enabled: bool
     media_id: int
 
     # Might not be in all captions
     is_covered: Optional[bool] = None
     private_reply_status: Optional[int] = None
+    # did_report_as_spam: bool
+    # share_enabled: bool
 
 
 @dataclass
