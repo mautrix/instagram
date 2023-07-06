@@ -1192,6 +1192,9 @@ class Portal(DBPortal, BasePortal):
                 }
                 combined["formatted_body"] = combined_formatted_body
 
+            if share_item.caption and item_type_name != "clip":
+                combined["com.beeper.raw_caption_text"] = share_item.caption.text
+
             return [(EventType.ROOM_MESSAGE, combined)]
         else:
             return [
@@ -1264,6 +1267,7 @@ class Portal(DBPortal, BasePortal):
                 f"<strong>{escaped_header_text}</strong>"
                 f"{escaped_caption_text[len(escaped_header_text):]}"
             )
+            content["com.beeper.raw_caption_text"] = escaped_caption_text[len(escaped_header_text):]
         if item.message_item_type == "animated_media":
             anim = await self._reupload_instagram_file(
                 source,
