@@ -1227,6 +1227,7 @@ class Portal(DBPortal, BasePortal):
             elif item.xma_reel_share:
                 if item.message_item_type == "reaction":
                     content["com.beeper.relation_preview_type"] = "story_reaction"
+                    content["com.beeper.raw_reaction"] = item.text
                 elif item.message_item_type == "text":
                     content["com.beeper.relation_preview_type"] = "story_reply"
                     content["com.beeper.raw_reply_text"] = item.text
