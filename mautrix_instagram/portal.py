@@ -1267,9 +1267,8 @@ class Portal(DBPortal, BasePortal):
                 f"<strong>{escaped_header_text}</strong>"
                 f"{escaped_caption_text[len(escaped_header_text):]}"
             )
-            content["com.beeper.raw_caption_text"] = escaped_caption_text[
-                len(escaped_header_text) :
-            ]
+            content["com.beeper.raw_caption_text"] = caption_text[len(header_text) :]
+        content["com.beeper.instagram_post_owner"] = media.header_title_text
         if item.message_item_type == "animated_media":
             anim = await self._reupload_instagram_file(
                 source,
