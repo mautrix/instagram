@@ -1094,7 +1094,6 @@ class Portal(DBPortal, BasePortal):
         await self._add_instagram_reply(content, item.replied_to_message)
         return EventType.ROOM_MESSAGE, content
 
-    # TODO this might be unused
     async def _convert_instagram_media_share(
         self, source: u.User, intent: IntentAPI, item: ThreadItem
     ) -> list[ConvertedMessage]:
@@ -1194,6 +1193,7 @@ class Portal(DBPortal, BasePortal):
 
             if share_item.caption and item_type_name != "clip":
                 combined["com.beeper.raw_caption_text"] = share_item.caption.text
+                combined["com.beeper.instagram_item_username"] = share_item.caption.user.username
 
             return [(EventType.ROOM_MESSAGE, combined)]
         else:
@@ -1701,6 +1701,7 @@ class Portal(DBPortal, BasePortal):
         self, source: u.User, sender: p.Puppet, item: ThreadItem
     ) -> list[ConvertedMessage]:
         intent = sender.intent_for(self)
+        self.log.debug(f"Item: {item}")
         if (
             item.xma_media_share
             or item.xma_reel_share
