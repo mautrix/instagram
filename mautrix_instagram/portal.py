@@ -1701,7 +1701,6 @@ class Portal(DBPortal, BasePortal):
         self, source: u.User, sender: p.Puppet, item: ThreadItem
     ) -> list[ConvertedMessage]:
         intent = sender.intent_for(self)
-        self.log.debug(f"Item: {item}")
         if (
             item.xma_media_share
             or item.xma_reel_share
