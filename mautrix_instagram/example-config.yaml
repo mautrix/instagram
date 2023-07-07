@@ -92,6 +92,8 @@ instagram:
     # logging out, because Instagram is insecure.
     device_seed: generate
 
+    mqtt_keepalive: 60
+
 # Bridge config
 bridge:
     # Localpart template of MXIDs for Instagram users.

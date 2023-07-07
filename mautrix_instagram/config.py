@@ -45,6 +45,7 @@ class Config(BaseBridgeConfig):
         copy("instagram.device_seed")
         if base["instagram.device_seed"] == "generate":
             base["instagram.device_seed"] = self._new_token()
+        copy("instagram.mqtt_keepalive")
 
         copy("bridge.username_template")
         copy("bridge.displayname_template")

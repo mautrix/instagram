@@ -275,6 +275,7 @@ class User(DBUser, BaseUser):
             self.state,
             log=self.ig_base_log.getChild("mqtt").getChild(self.mxid),
             proxy_handler=self.proxy_handler,
+            mqtt_keepalive=self.config["instagram.mqtt_keepalive"],
         )
         self.mqtt.add_event_handler(Connect, self.on_connect)
         self.mqtt.add_event_handler(Disconnect, self.on_disconnect)
