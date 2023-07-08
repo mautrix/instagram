@@ -1191,7 +1191,7 @@ class Portal(DBPortal, BasePortal):
                 }
                 combined["formatted_body"] = combined_formatted_body
 
-            if share_item.caption and item_type_name != "clip":
+            if share_item.caption:
                 combined["com.beeper.raw_caption_text"] = share_item.caption.text
                 combined["com.beeper.instagram_item_username"] = share_item.caption.user.username
 
@@ -1268,7 +1268,7 @@ class Portal(DBPortal, BasePortal):
                 f"{escaped_caption_text[len(escaped_header_text):]}"
             )
             content["com.beeper.raw_caption_text"] = caption_text[len(header_text) :]
-        content["com.beeper.instagram_item_username"] = media.header_title_text
+            content["com.beeper.instagram_item_username"] = media.header_title_text
         if item.message_item_type == "animated_media":
             anim = await self._reupload_instagram_file(
                 source,
