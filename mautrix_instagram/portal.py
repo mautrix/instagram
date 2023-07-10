@@ -1094,7 +1094,6 @@ class Portal(DBPortal, BasePortal):
         await self._add_instagram_reply(content, item.replied_to_message)
         return EventType.ROOM_MESSAGE, content
 
-    # TODO this might be unused
     async def _convert_instagram_media_share(
         self, source: u.User, intent: IntentAPI, item: ThreadItem
     ) -> list[ConvertedMessage]:
@@ -1192,6 +1191,10 @@ class Portal(DBPortal, BasePortal):
                 }
                 combined["formatted_body"] = combined_formatted_body
 
+            if share_item.caption:
+                combined["com.beeper.raw_caption_text"] = share_item.caption.text
+                combined["com.beeper.instagram_item_username"] = share_item.caption.user.username
+
             return [(EventType.ROOM_MESSAGE, combined)]
         else:
             return [
@@ -1227,6 +1230,7 @@ class Portal(DBPortal, BasePortal):
             elif item.xma_reel_share:
                 if item.message_item_type == "reaction":
                     content["com.beeper.relation_preview_type"] = "story_reaction"
+                    content["com.beeper.raw_reaction"] = item.text
                 elif item.message_item_type == "text":
                     content["com.beeper.relation_preview_type"] = "story_reply"
                     content["com.beeper.raw_reply_text"] = item.text
@@ -1263,6 +1267,8 @@ class Portal(DBPortal, BasePortal):
                 f"<strong>{escaped_header_text}</strong>"
                 f"{escaped_caption_text[len(escaped_header_text):]}"
             )
+            content["com.beeper.raw_caption_text"] = caption_text[len(header_text) :]
+            content["com.beeper.instagram_item_username"] = media.header_title_text
         if item.message_item_type == "animated_media":
             anim = await self._reupload_instagram_file(
                 source,
