@@ -1195,6 +1195,9 @@ class Portal(DBPortal, BasePortal):
                 combined["com.beeper.raw_caption_text"] = share_item.caption.text
                 combined["com.beeper.instagram_item_username"] = share_item.caption.user.username
 
+            if item.direct_media_share and item.direct_media_share.media_share_type == "tag":
+                combined["com.beeper.relation_preview_type"] = "post_mention"
+
             return [(EventType.ROOM_MESSAGE, combined)]
         else:
             return [
@@ -1227,6 +1230,7 @@ class Portal(DBPortal, BasePortal):
 
             if item.xma_story_share:
                 content["com.beeper.relation_preview_type"] = "story"
+                content["com.beeper.instagram_item_username"] = media.header_title_text
             elif item.xma_reel_share:
                 if item.message_item_type == "reaction":
                     content["com.beeper.relation_preview_type"] = "story_reaction"
@@ -1236,6 +1240,16 @@ class Portal(DBPortal, BasePortal):
                     content["com.beeper.raw_reply_text"] = item.text
             elif item.xma_reel_mention:
                 content["com.beeper.relation_preview_type"] = "story_mention"
+                # You mentioned them
+                if item.user_id == source.igpk:
+                    mention = await p.Puppet.get_by_pk(self.other_user_pk)
+                    if mention:
+                        content["com.beeper.instagram_mention"] = mention.username
+                # They mentioned you
+                else:
+                    owner = await p.Puppet.get_by_pk(item.user_id)
+                    if owner:
+                        content["com.beeper.instagram_item_username"] = owner.username
         else:
             content = None
 
