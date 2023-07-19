@@ -1193,6 +1193,7 @@ class Portal(DBPortal, BasePortal):
 
             if share_item.caption:
                 combined["com.beeper.raw_caption_text"] = share_item.caption.text
+                combined["com.beeper.instagram_item_username"] = share_item.caption.user.username
 
             if share_item.user:
                 combined["com.beeper.instagram_item_username"] = share_item.user.username
