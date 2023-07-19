@@ -1531,6 +1531,8 @@ class Portal(DBPortal, BasePortal):
         content = TextMessageEventContent(
             msgtype=MessageType.NOTICE, body=item.placeholder.message
         )
+        if content.body == "Update to the latest version of Instagram to view this message.":
+            content.body = "This message type is not currently supported"
         content["com.beeper.linkpreviews"] = []
         await self._add_instagram_reply(content, item.replied_to_message)
         return EventType.ROOM_MESSAGE, content
