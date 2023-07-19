@@ -1195,8 +1195,13 @@ class Portal(DBPortal, BasePortal):
                 combined["com.beeper.raw_caption_text"] = share_item.caption.text
                 combined["com.beeper.instagram_item_username"] = share_item.caption.user.username
 
+            if share_item.user:
+                combined["com.beeper.instagram_item_username"] = share_item.user.username
+
             if item.direct_media_share and item.direct_media_share.media_share_type == "tag":
                 combined["com.beeper.relation_preview_type"] = "post_mention"
+            elif item_type_name == "clip":
+                combined["com.beeper.relation_preview_type"] = "reel"
 
             return [(EventType.ROOM_MESSAGE, combined)]
         else:
