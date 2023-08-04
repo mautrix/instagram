@@ -81,7 +81,6 @@ ACTIVITY_INDICATOR_REGEX = re.compile(
 INBOX_THREAD_REGEX = re.compile(r"/direct_v2/inbox/threads/([\w_]+)")
 
 REQUEST_TIMEOUT = 60 * 3
-DEFAULT_KEEPALIVE = 60
 REQUEST_KEEPALIVE = 5
 
 
@@ -112,6 +111,7 @@ class AndroidMQTT:
         state: AndroidState,
         log: TraceLogger | None = None,
         proxy_handler: ProxyHandler | None = None,
+        mqtt_keepalive: int = 60,
     ) -> None:
         self._graphql_subs = set()
         self._skywalker_subs = set()
@@ -144,7 +144,8 @@ class AndroidMQTT:
         # mqtt.max_queued_messages_set(0)  # Unlimited messages can be queued
         # mqtt.message_retry_set(20)  # Retry sending for at least 20 seconds
         # mqtt.reconnect_delay_set(min_delay=1, max_delay=120)
-        self._client.connect_async("edge-mqtt.facebook.com", 443, keepalive=60)
+        self._default_keepalive = mqtt_keepalive
+        self._client.connect_async("edge-mqtt.facebook.com", 443, keepalive=mqtt_keepalive)
         self._client.on_message = self._on_message_handler
         self._client.on_publish = self._on_publish_handler
         self._client.on_connect = self._on_connect_handler
@@ -679,7 +680,7 @@ class AndroidMQTT:
             and not self._publish_waiters
             and not self._message_response_waiter
         ):
-            self._client._keepalive = DEFAULT_KEEPALIVE
+            self._client._keepalive = self._default_keepalive
 
     def publish(self, topic: RealtimeTopic, payload: str | bytes | dict) -> asyncio.Future:
         if isinstance(payload, dict):

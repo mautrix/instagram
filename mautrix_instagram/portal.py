@@ -1100,7 +1100,6 @@ class Portal(DBPortal, BasePortal):
         await self._add_instagram_reply(content, item.replied_to_message)
         return EventType.ROOM_MESSAGE, content
 
-    # TODO this might be unused
     async def _convert_instagram_media_share(
         self, source: u.User, intent: IntentAPI, item: ThreadItem
     ) -> list[ConvertedMessage]:
@@ -1198,6 +1197,18 @@ class Portal(DBPortal, BasePortal):
                 }
                 combined["formatted_body"] = combined_formatted_body
 
+            if share_item.caption:
+                combined["com.beeper.raw_caption_text"] = share_item.caption.text
+                combined["com.beeper.instagram_item_username"] = share_item.caption.user.username
+
+            if share_item.user:
+                combined["com.beeper.instagram_item_username"] = share_item.user.username
+
+            if item.direct_media_share and item.direct_media_share.media_share_type == "tag":
+                combined["com.beeper.relation_preview_type"] = "post_mention"
+            elif item_type_name == "clip":
+                combined["com.beeper.relation_preview_type"] = "reel"
+
             return [(EventType.ROOM_MESSAGE, combined)]
         else:
             return [
@@ -1230,14 +1241,26 @@ class Portal(DBPortal, BasePortal):
 
             if item.xma_story_share:
                 content["com.beeper.relation_preview_type"] = "story"
+                content["com.beeper.instagram_item_username"] = media.header_title_text
             elif item.xma_reel_share:
                 if item.message_item_type == "reaction":
                     content["com.beeper.relation_preview_type"] = "story_reaction"
+                    content["com.beeper.raw_reaction"] = item.text
                 elif item.message_item_type == "text":
                     content["com.beeper.relation_preview_type"] = "story_reply"
                     content["com.beeper.raw_reply_text"] = item.text
             elif item.xma_reel_mention:
                 content["com.beeper.relation_preview_type"] = "story_mention"
+                # You mentioned them
+                if item.user_id == source.igpk:
+                    mention = await p.Puppet.get_by_pk(self.other_user_pk)
+                    if mention:
+                        content["com.beeper.instagram_mention"] = mention.username
+                # They mentioned you
+                else:
+                    owner = await p.Puppet.get_by_pk(item.user_id)
+                    if owner:
+                        content["com.beeper.instagram_item_username"] = owner.username
         else:
             content = None
 
@@ -1269,6 +1292,8 @@ class Portal(DBPortal, BasePortal):
                 f"<strong>{escaped_header_text}</strong>"
                 f"{escaped_caption_text[len(escaped_header_text):]}"
             )
+            content["com.beeper.raw_caption_text"] = caption_text[len(header_text) :]
+            content["com.beeper.instagram_item_username"] = media.header_title_text
         if item.message_item_type == "animated_media":
             anim = await self._reupload_instagram_file(
                 source,
@@ -1512,6 +1537,8 @@ class Portal(DBPortal, BasePortal):
         content = TextMessageEventContent(
             msgtype=MessageType.NOTICE, body=item.placeholder.message
         )
+        if content.body == "Update to the latest version of Instagram to view this message.":
+            content.body = "This message type is not currently supported"
         content["com.beeper.linkpreviews"] = []
         await self._add_instagram_reply(content, item.replied_to_message)
         return EventType.ROOM_MESSAGE, content
