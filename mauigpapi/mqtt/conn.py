@@ -187,10 +187,8 @@ class AndroidMQTT:
         subscribe_topics = [
             RealtimeTopic.PUBSUB,  # 88
             RealtimeTopic.SUB_IRIS_RESPONSE,  # 135
-            RealtimeTopic.RS_REQ,  # 244
             RealtimeTopic.REALTIME_SUB,  # 149
             RealtimeTopic.REGION_HINT,  # 150
-            RealtimeTopic.RS_RESP,  # 245
             RealtimeTopic.T_RTC_LOG,  # 274
             RealtimeTopic.SEND_MESSAGE_RESPONSE,  # 133
             RealtimeTopic.LARGE_SCALE_FIRE_AND_FORGET_SYNC,  # 279
@@ -218,7 +216,7 @@ class AndroidMQTT:
                 subscribe_topics=subscribe_topic_ids,
                 client_type="cookie_auth",
                 app_id=567067343352427,
-                # region_preference=self.state.session.region_hint or "LLA",
+                region_preference=self.state.session.region_hint or "LLA",
                 device_secret="",
                 client_stack=3,
             ),
@@ -792,6 +790,8 @@ class AndroidMQTT:
             "session_id": f"UFS-{self.state.pigeon_session_id}-0",
             # "device_id": self.state.cookies["ig_did"],
             **kwargs,
+            "btt_dual_send": False,
+            "is_ae_dual_send": False,
         }
         lock_start = time.monotonic()
         async with self._message_response_waiter_lock:
