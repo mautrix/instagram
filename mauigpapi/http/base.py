@@ -143,7 +143,7 @@ class BaseAndroidAPI:
             "x-ig-bandwidth-speed-kbps": "-1.000",
             "x-ig-bandwidth-totalbytes-b": "0",
             "x-ig-bandwidth-totaltime-ms": "0",
-            "x-ig-app-startup-country": self.state.device.language.split("_")[1],
+            # "x-ig-app-startup-country": self.state.device.language.split("_")[1],
             "x-bloks-version-id": self.state.application.BLOKS_VERSION_ID,
             "x-ig-www-claim": self.state.session.ig_www_claim or "0",
             "x-bloks-is-layout-rtl": str(self.state.device.is_layout_rtl).lower(),
@@ -155,10 +155,10 @@ class BaseAndroidAPI:
             "x-fb-connection-type": self.state.device.connection_type,
             "x-ig-capabilities": self.state.application.CAPABILITIES,
             "x-ig-app-id": self.state.application.FACEBOOK_ANALYTICS_APPLICATION_ID,
-            "ig-client-endpoint": "unknown",
-            "x-fb-rmd": "cached=0;state=NO_MATCH",
-            "x-tigon-is-retry": "False",
+            "priority": "u=3",
             "ig-u-ig-direct-region-hint": self.state.session.region_hint,
+            # "ig-client-endpoint": "unknown",
+            # "x-fb-rmd": "cached=0;state=NO_MATCH",
             **self._rupload_headers,
         }
         return {k: v for k, v in headers.items() if v is not None}

@@ -1132,6 +1132,9 @@ class User(DBUser, BaseUser):
             if not sender:
                 # I don't think we care about adds with no sender
                 return
+            background_task.create(
+                self.client.send_delivery_receipt(portal.thread_id, sender.pk, evt.message.item_id)
+            )
             await portal.handle_instagram_item(self, sender, evt.message)
         elif evt.message.op == Operation.REMOVE:
             # Removes don't have a sender, only the message sender can unsend messages anyway
