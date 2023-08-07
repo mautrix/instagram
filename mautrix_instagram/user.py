@@ -114,6 +114,7 @@ class User(DBUser, BaseUser):
     _backfill_loop_task: asyncio.Task | None
     _thread_sync_task: asyncio.Task | None
     _seq_id_save_task: asyncio.Task | None
+    _message_error_login_last_recheck: float
 
     permission_level: str
     username: str | None
@@ -157,6 +158,7 @@ class User(DBUser, BaseUser):
         self.client = None
         self.mqtt = None
         self.username = None
+        self._message_error_login_last_recheck = 0
         self._is_logged_in = False
         self._is_connected = False
         self._is_refreshing = False
@@ -169,6 +171,7 @@ class User(DBUser, BaseUser):
         self._backfill_loop_task = None
         self.remote_typing_status = None
         self._seq_id_save_task = None
+        self._message_error_login_last_recheck = 0
 
         self.proxy_handler = ProxyHandler(
             api_url=self.config["bridge.get_proxy_api_url"],
@@ -267,6 +270,7 @@ class User(DBUser, BaseUser):
         self._is_logged_in = True
         self.igpk = user.pk
         self.username = user.username
+        self._message_error_login_last_recheck = 0
         await self.push_bridge_state(BridgeStateEvent.CONNECTING)
         self._track_metric(METRIC_LOGGED_IN, True)
         self.by_igpk[self.igpk] = self
@@ -1004,7 +1008,32 @@ class User(DBUser, BaseUser):
             self._thread_sync_task.cancel()
             self._thread_sync_task = None
 
-    async def logout(self, error: IGNotLoggedInError | None = None) -> None:
+    async def message_fail_login_check(self) -> None:
+        if self._message_error_login_last_recheck + 300 > time.monotonic():
+            self.log.warning(
+                "Not rechecking login as it's less than 5 minutes since the last check"
+            )
+            return
+        self._message_error_login_last_recheck = time.monotonic()
+        try:
+            user = await self.client.current_user()
+        except Exception as e:
+            if isinstance(e, IGNotLoggedInError):
+                self.log.info(f"Got ThreadUserIdDoesNotExist and whoami failed as expected")
+                # This is handled by on_response_error
+            else:
+                self.log.warning(
+                    f"Got ThreadUserIdDoesNotExist and whoami failed, but with unexpected error",
+                    exc_info=True,
+                )
+                if isinstance(e, IGResponseError):
+                    await self.logout(e)
+        else:
+            self.log.warning(
+                f"Got ThreadUserIdDoesNotExist error, but whoami call is fine ({user.user.pk}"
+            )
+
+    async def logout(self, error: IGResponseError | None = None) -> None:
         await self.stop_listen()
         self.stop_backfill_tasks()
         if self.client and error is None:
@@ -1028,12 +1057,15 @@ class User(DBUser, BaseUser):
             self.igpk = None
         else:
             self.log.debug("Auth error body: %s", error.body.serialize())
+            message = (
+                error.proper_message if isinstance(error, IGNotLoggedInError) else "unknown error"
+            )
             await self.send_bridge_notice(
-                f"You have been logged out of Instagram: {error.proper_message}",
+                f"You have been logged out of Instagram: {message}",
                 important=True,
                 state_event=BridgeStateEvent.BAD_CREDENTIALS,
                 error_code="ig-auth-error",
-                error_message=error.proper_message,
+                error_message=message,
                 info={"cnd_action": "reauth"},
             )
         self.client = None

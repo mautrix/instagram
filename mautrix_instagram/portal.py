@@ -654,7 +654,7 @@ class Portal(DBPortal, BasePortal):
         if resp.status != "ok" or not resp.payload:
             self.log.warning(f"Failed to handle {event_id}: {resp}")
             if resp.exception == "ThreadUserIdDoesNotExist":
-                await orig_sender.logout()
+                await orig_sender.message_fail_login_check()
             raise Exception(f"Sending message failed: {resp.error_message}")
         else:
             self._msgid_dedup.appendleft(resp.payload.item_id)
