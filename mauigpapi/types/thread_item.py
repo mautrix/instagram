@@ -171,6 +171,19 @@ class MediaType(SerializableEnum):
     def human_name(self) -> str:
         return self.name.lower().replace("_", " ")
 
+    @property
+    def articled_alt_human_name(self) -> str:
+        if self == MediaType.IMAGE:
+            return "a photo"
+        elif self == MediaType.VIDEO:
+            return "a video"
+        elif self == MediaType.CAROUSEL:
+            return "photos"
+        elif self == MediaType.AUDIO:
+            return "an audio message"
+        else:
+            return "a media message"
+
 
 @dataclass(kw_only=True)
 class ExpiredMediaItem(SerializableAttrs):

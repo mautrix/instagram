@@ -1074,7 +1074,7 @@ class Portal(DBPortal, BasePortal):
             raise ValueError("Attachment not available: unsupported media type")
         elif isinstance(media_data, ExpiredMediaItem):
             self.log.debug(f"Expired media in item {item}")
-            raise ValueError("Attachment not available: media expired")
+            raise ValueError(f"Sent {media_data.media_type.articled_alt_human_name}")
         return method, media_data
 
     async def _convert_instagram_media(
