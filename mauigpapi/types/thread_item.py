@@ -606,11 +606,6 @@ class PlaceholderItem(SerializableAttrs):
 @dataclass
 class FetchedClipInfo(SerializableAttrs):
     media: MediaShareItem
-
-
-@dataclass
-class FetchedClipsInfo(SerializableAttrs):
-    clips_items: List[FetchedClipInfo]
     status: str
 
 

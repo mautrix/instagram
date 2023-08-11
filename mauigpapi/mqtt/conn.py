@@ -187,11 +187,12 @@ class AndroidMQTT:
         subscribe_topics = [
             RealtimeTopic.PUBSUB,  # 88
             RealtimeTopic.SUB_IRIS_RESPONSE,  # 135
+            RealtimeTopic.RS_REQ,  # 244
             RealtimeTopic.REALTIME_SUB,  # 149
             RealtimeTopic.REGION_HINT,  # 150
+            RealtimeTopic.RS_RESP,  # 245
             RealtimeTopic.T_RTC_LOG,  # 274
             RealtimeTopic.SEND_MESSAGE_RESPONSE,  # 133
-            RealtimeTopic.LARGE_SCALE_FIRE_AND_FORGET_SYNC,  # 279
             RealtimeTopic.MESSAGE_SYNC,  # 146
             RealtimeTopic.LIGHTSPEED_RESPONSE,  # 179
             RealtimeTopic.UNKNOWN_PP,  # 34
@@ -216,7 +217,7 @@ class AndroidMQTT:
                 subscribe_topics=subscribe_topic_ids,
                 client_type="cookie_auth",
                 app_id=567067343352427,
-                region_preference=self.state.session.region_hint or "LLA",
+                # region_preference=self.state.session.region_hint or "LLA",
                 device_secret="",
                 client_stack=3,
             ),
@@ -230,7 +231,7 @@ class AndroidMQTT:
                 "platform": "android",
                 "ig_mqtt_route": "django",
                 "pubsub_msg_type_blacklist": "direct, typing_type",
-                # "auth_cache_enabled": "1",
+                "auth_cache_enabled": "1",
             },
         )
         return zlib.compress(cfg.to_thrift(), level=9)
@@ -783,15 +784,9 @@ class AndroidMQTT:
             "thread_id": thread_id,
             "client_context": client_context,
             "offline_threading_id": client_context,
-            "mutation_token": client_context,
             "action": action.value,
-            "is_shh_mode": "0",
-            "sampled": False,
-            "session_id": f"UFS-{self.state.pigeon_session_id}-0",
             # "device_id": self.state.cookies["ig_did"],
             **kwargs,
-            "btt_dual_send": False,
-            "is_ae_dual_send": False,
         }
         lock_start = time.monotonic()
         async with self._message_response_waiter_lock:
@@ -916,15 +911,7 @@ class AndroidMQTT:
         target_item_type: ThreadItemType = ThreadItemType.TEXT,
         shh_mode: bool = False,
         client_context: str | None = None,
-        original_message_client_context: str | None = None,
     ) -> Awaitable[CommandResponse]:
-        kwargs = (
-            {
-                "original_message_client_context": original_message_client_context,
-            }
-            if original_message_client_context
-            else {}
-        )
         return self.send_item(
             thread_id,
             reaction_status=reaction_status.value,
@@ -933,15 +920,10 @@ class AndroidMQTT:
             target_item_type=target_item_type.value,
             emoji=emoji,
             item_id=item_id,
-            reaction_action_source=(
-                "double_tap" if reaction_status == ReactionStatus.CREATED else "action_menu"
-            ),
+            reaction_action_source="double_tap",
             shh_mode=shh_mode,
             item_type=ThreadItemType.REACTION,
             client_context=client_context,
-            super_react_type="none",
-            send_attribution="direct_thread",
-            **kwargs,
         )
 
     def send_user_story(
@@ -993,9 +975,6 @@ class AndroidMQTT:
             client_context=client_context,
             replied_to_item_id=replied_to_item_id,
             replied_to_client_context=replied_to_client_context,
-            send_attribution="direct_thread",
-            send_silently=False,
-            is_x_transport_forward=False,
         )
 
     def mark_seen(

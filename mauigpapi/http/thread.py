@@ -25,8 +25,7 @@ from ..types import (
     CommandResponse,
     DMInboxResponse,
     DMThreadResponse,
-    FetchedClipsInfo,
-    MediaShareItem,
+    FetchedClipInfo,
     Thread,
     ThreadAction,
     ThreadItemType,
@@ -140,50 +139,11 @@ class ThreadAPI(BaseAndroidAPI):
             f"/api/v1/direct_v2/threads/{thread_id}/", query=query, response_type=DMThreadResponse
         )
 
-    # /threads/.../get_items/ with urlencoded form body:
-    # visual_message_return_type:     unseen
-    # _uuid:                          device uuid
-    # original_message_client_contexts:["client context"]
-    # item_ids:                       [item id]
-
-    async def get_thread_participant_requests(self, thread_id: str, page_size: int = 10):
-        return await self.std_http_get(
-            f"/api/v1/direct_v2/threads/{thread_id}/participant_requests/",
-            query={"page_size": str(page_size)},
-        )
-
-    async def mark_seen(
-        self, thread_id: str, item_id: str, client_context: str | None = None
-    ) -> None:
-        if not client_context:
-            client_context = self.state.gen_client_context()
-        data = {
-            "thread_id": thread_id,
-            "action": "mark_seen",
-            "client_context": client_context,
-            "_uuid": self.state.device.uuid,
-            "offline_threading_id": client_context,
-        }
-        await self.std_http_post(
-            f"/api/v1/direct_v2/threads/{thread_id}/items/{item_id}/seen/", data=data
-        )
-
-    async def send_delivery_receipt(
-        self, thread_id: str, sender_id: int | str, item_id: str
-    ) -> None:
-        data = {
-            "thread_id": thread_id,
-            "_uuid": self.state.device.uuid,
-            "sender_ig_id": str(sender_id),
-            "dr_disable": "1",
-            "item_id": item_id,
-        }
-        await self.std_http_post("/api/v1/direct_v2/delivery_receipt/", data=data)
-
     async def create_group_thread(self, recipient_users: list[int | str]) -> Thread:
         return await self.std_http_post(
             "/api/v1/direct_v2/create_group_thread/",
             data={
+                "_csrftoken": self.state.cookies.csrf_token,
                 "_uuid": self.state.device.uuid,
                 "_uid": self.state.session.ds_user_id,
                 "recipient_users": json.dumps(
@@ -214,17 +174,10 @@ class ThreadAPI(BaseAndroidAPI):
             },
         )
 
-    async def delete_item(
-        self, thread_id: str, item_id: str, orig_client_context: str | None = None
-    ) -> None:
+    async def delete_item(self, thread_id: str, item_id: str) -> None:
         await self.std_http_post(
             f"/api/v1/direct_v2/threads/{thread_id}/items/{item_id}/delete/",
-            data={
-                "is_shh_mode": "0",
-                "send_attribution": "direct_thread",
-                "_uuid": self.state.device.uuid,
-                "original_message_client_context": orig_client_context,
-            },
+            data={"_csrftoken": self.state.cookies.csrf_token, "_uuid": self.state.device.uuid},
         )
 
     async def _broadcast(
@@ -243,12 +196,12 @@ class ThreadAPI(BaseAndroidAPI):
             "thread_ids": f"[{thread_id}]",
             "is_shh_mode": "0",
             "client_context": client_context,
+            "_csrftoken": self.state.cookies.csrf_token,
             "device_id": self.state.device.id,
             "mutation_token": client_context,
             "_uuid": self.state.device.uuid,
             **kwargs,
             "offline_threading_id": client_context,
-            "is_x_transport_forward": "false",
         }
         return await self.std_http_post(
             f"/api/v1/direct_v2/threads/broadcast/{item_type}/",
@@ -269,15 +222,9 @@ class ThreadAPI(BaseAndroidAPI):
             thread_id, item_type.value, CommandResponse, signed, client_context, **kwargs
         )
 
-    async def fetch_clip(self, media_id: int) -> MediaShareItem:
-        return (
-            (
-                await self.std_http_get(
-                    f"/api/v1/clips/item/",
-                    query={"clips_media_ids": json.dumps([str(media_id)])},
-                    response_type=FetchedClipsInfo,
-                )
-            )
-            .clips_items[0]
-            .media
+    async def fetch_clip(self, media_id: int) -> FetchedClipInfo:
+        return await self.std_http_get(
+            f"/api/v1/clips/item/",
+            query={"clips_media_id": str(media_id)},
+            response_type=FetchedClipInfo,
         )

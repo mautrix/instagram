@@ -344,7 +344,6 @@ _topic_map: dict[str, str] = {
     "/rs_req": "244",
     "/rs_resp": "245",
     "/t_rtc_log": "274",
-    "/ig_large_scale_fire_and_forget_sync": "279",
 }
 
 _reverse_topic_map: dict[str, str] = {value: key for key, value in _topic_map.items()}
@@ -367,7 +366,6 @@ class RealtimeTopic(Enum):
     RS_REQ = "/rs_req"
     RS_RESP = "/rs_resp"
     T_RTC_LOG = "/t_rtc_log"
-    LARGE_SCALE_FIRE_AND_FORGET_SYNC = "/ig_large_scale_fire_and_forget_sync"
 
     @property
     def encoded(self) -> str:
