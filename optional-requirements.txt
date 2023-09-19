@@ -13,7 +13,7 @@ pysocks
 aiohttp-socks
 
 #/imageconvert
-pillow>=4,<10
+pillow>=10.0.1,<11
 
 #/sqlite
 aiosqlite>=0.16,<0.20
