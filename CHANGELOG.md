@@ -1,3 +1,12 @@
+# v0.3.1 (2023-09-19)
+
+* **Security:** Updated Pillow to 10.0.1.
+* Added support for double puppeting with arbitrary `as_token`s.
+  See [docs](https://docs.mau.fi/bridges/general/double-puppeting.html#appservice-method-new) for more info.
+* Updated attachment upload API as the old one was slow.
+* Changed error for expired media to look more like what Instagram shows and
+  less like the bridge is broken.
+
 # v0.3.0 (2023-05-31)
 
 * Improved handling of some message types.
