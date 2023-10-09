@@ -53,7 +53,7 @@ from mautrix.util.logging import TraceLogger
 
 from .. import user as u
 from ..commands.auth import get_login_state
-from .segment import init as init_segment, track
+from .analytics import init as init_analytics, track
 
 
 class ProvisioningAPI:
@@ -64,14 +64,15 @@ class ProvisioningAPI:
         self,
         shared_secret: str,
         device_seed: str,
-        segment_key: str | None,
-        segment_user_id: str | None,
+        analytics_host: str | None,
+        analytics_token: str | None,
+        analytics_user_id: str | None,
     ) -> None:
         self.app = web.Application()
         self.shared_secret = shared_secret
         self.device_seed = device_seed
-        if segment_key:
-            init_segment(segment_key, segment_user_id)
+        if analytics_host and analytics_token:
+            init_analytics(analytics_host, analytics_token, analytics_user_id)
         self.app.router.add_get("/api/whoami", self.status)
         self.app.router.add_options("/api/login", self.login_options)
         self.app.router.add_options("/api/login/2fa", self.login_options)
