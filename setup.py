@@ -1,6 +1,6 @@
 import setuptools
 
-from mautrix_instagram.get_version import git_tag, git_revision, version, linkified_version
+from mautrix_instagram.get_version import git_revision, git_tag, linkified_version, version
 
 with open("requirements.txt") as reqs:
     install_requires = reqs.read().splitlines()

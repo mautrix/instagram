@@ -106,8 +106,16 @@ class Config(BaseBridgeConfig):
         copy("bridge.provisioning.shared_secret")
         if base["bridge.provisioning.shared_secret"] == "generate":
             base["bridge.provisioning.shared_secret"] = self._new_token()
-        copy("bridge.provisioning.segment_key")
-        copy("bridge.provisioning.segment_user_id")
+
+        copy("analytics.host")
+        if "appservice.provisioning.segment_key" in self:
+            base["analytics.token"] = self["appservice.provisioning.segment_key"]
+        else:
+            copy("analytics.token")
+        if "appservice.provisioning.segment_user_id" in self:
+            base["analytics.user_id"] = self["appservice.provisioning.segment_user_id"]
+        else:
+            copy("analytics.user_id")
 
         copy("bridge.command_prefix")
 

@@ -70,6 +70,15 @@ appservice:
     as_token: "This value is generated when generating the registration"
     hs_token: "This value is generated when generating the registration"
 
+# Segment-compatible analytics endpoint for tracking some events, like provisioning API login and encryption errors.
+analytics:
+    # Hostname of the tracking server. The path is hardcoded to /v1/track
+    host: api.segment.io
+    # API key to send with tracking requests. Tracking is disabled if this is null.
+    token: null
+    # Optional user ID for tracking events. If null, defaults to using Matrix user ID.
+    user_id: null
+
 # Prometheus telemetry config. Requires prometheus-client to be installed.
 metrics:
     enabled: false
@@ -335,10 +344,6 @@ bridge:
         # The shared secret to authorize users of the API.
         # Set to "generate" to generate and save a new token.
         shared_secret: generate
-        # Segment API key to enable analytics tracking for web server endpoints. Set to null to disable.
-        segment_key: null
-        # Optional user_id to use when sending Segment events. If null, defaults to using mxID.
-        segment_user_id: null
 
     # The prefix for commands. Only required in non-management rooms.
     command_prefix: "!ig"
