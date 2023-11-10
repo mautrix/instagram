@@ -9,6 +9,7 @@ __pycache__
 /dist
 /*.egg-info
 /.eggs
+/start
 
 /config.yaml
 /registration.yaml
