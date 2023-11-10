@@ -24,11 +24,11 @@ from mautrix.types import SerializableAttrs, SerializableEnum
 @dataclass(kw_only=True)
 class FriendshipStatus(SerializableAttrs):
     following: bool
-    outgoing_request: bool
     is_bestie: bool
     is_restricted: bool
     blocking: Optional[bool] = None
     incoming_request: Optional[bool] = None
+    outgoing_request: Optional[bool] = None
     is_private: Optional[bool] = None
 
 
