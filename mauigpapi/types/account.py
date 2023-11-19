@@ -52,7 +52,7 @@ class BaseResponseUser(UserIdentifier, SerializableAttrs):
     # TODO enum? only present for self
     reel_auto_archive: Optional[str] = None
     # Only present for not-self
-    friendship_status: Optional[FriendshipStatus] = None
+    # friendship_status: Optional[FriendshipStatus] = None
     # Not exactly sure when this is present
     latest_reel_media: Optional[int] = None
     has_highlight_reels: bool = False
