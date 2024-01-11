@@ -21,7 +21,7 @@ import json
 import logging
 import time
 
-from aiohttp import ClientResponse, ClientSession, ContentTypeError, CookieJar
+from aiohttp import ClientResponse, ClientSession, CookieJar
 from yarl import URL
 
 from mautrix.types import JSON, Serializable
@@ -246,8 +246,8 @@ class BaseAndroidAPI:
         if not is_external:
             self._handle_response_headers(resp)
         try:
-            body = await resp.json()
-        except (json.JSONDecodeError, ContentTypeError) as e:
+            body = await resp.json(content_type=None)
+        except json.JSONDecodeError as e:
             raise IGUnknownError(resp) from e
         if not is_external and body.get("status", "fail") == "ok":
             return body
@@ -261,7 +261,7 @@ class BaseAndroidAPI:
 
     async def _get_response_error(self, resp: ClientResponse) -> IGResponseError:
         try:
-            data = await resp.json()
+            data = await resp.json(content_type=None)
         except json.JSONDecodeError:
             data = {}
 
