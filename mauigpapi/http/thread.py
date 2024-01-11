@@ -153,6 +153,22 @@ class ThreadAPI(BaseAndroidAPI):
             response_type=Thread,
         )
 
+    async def mark_seen(
+        self, thread_id: str, item_id: str, client_context: str | None = None
+    ) -> None:
+        if not client_context:
+            client_context = self.state.gen_client_context()
+        data = {
+            "thread_id": thread_id,
+            "action": "mark_seen",
+            "client_context": client_context,
+            "_uuid": self.state.device.uuid,
+            "offline_threading_id": client_context,
+        }
+        await self.std_http_post(
+            f"/api/v1/direct_v2/threads/{thread_id}/items/{item_id}/seen/", data=data
+        )
+
     async def approve_thread(self, thread_id: int | str) -> None:
         await self.std_http_post(
             f"/api/v1/direct_v2/threads/{thread_id}/approve/",
