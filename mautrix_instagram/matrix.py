@@ -148,8 +148,8 @@ class MatrixHandler(BaseMatrixHandler):
             message = await DBMessage.get_last(portal.mxid)
         if not message:
             return
-        user.log.debug(f"Marking {message.item_id} in {portal.thread_id} as read")
-        await user.mqtt.mark_seen(portal.thread_id, message.item_id)
+        # user.log.debug(f"Marking {message.item_id} in {portal.thread_id} as read")
+        # await user.mqtt.mark_seen(portal.thread_id, message.item_id)
 
     @staticmethod
     async def handle_typing(room_id: RoomID, typing: list[UserID]) -> None:
